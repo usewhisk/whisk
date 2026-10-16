@@ -28,7 +28,7 @@ checkout summary, a route preview), call it directly:
 import { decideRoute, isBridgeRoute } from "@usewhisk/core";
 
 const route = decideRoute({
-  sourceChain: "Arc_Testnet",
+  sourceChain: "Ethereum_Sepolia",
   destinationChain: "Base_Sepolia",
 });
 
@@ -65,7 +65,7 @@ To turn it off:
 ```tsx
 const config = createWhiskConfig({
   wallets: [evm({ projectId })],
-  chains: ["Arc_Testnet", "Base_Sepolia"],
+  chains: ["Ethereum_Sepolia", "Base_Sepolia"],
   useForwarder: false,
 });
 ```

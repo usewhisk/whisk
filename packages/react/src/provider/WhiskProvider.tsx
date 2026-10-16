@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useMemo, type ReactNode } from "react";
+import { useContext, useMemo, type CSSProperties, type ReactNode } from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -14,25 +14,50 @@ import {
 import { createWhisk, ConfigError } from "@usewhisk/core";
 import type { WhiskClientConfig } from "../config/types.js";
 import type { SolanaConfig } from "../config/adapters/solana.js";
+import type { StarknetConfig } from "../config/adapters/starknet.js";
+import type { StellarConfig } from "../config/adapters/stellar.js";
 import { createDefaultResolver } from "../resolvers/index.js";
+import { resolveTheme } from "../theme/index.js";
+import type { WhiskThemeInput } from "../theme/index.js";
 import { WhiskContext, type WhiskContextValue } from "./context.js";
+import { StellarWalletProvider } from "./stellarContext.js";
+import { StarknetWalletProvider } from "./starknetContext.js";
+import { WhiskCloudProvider } from "../cloud/context.js";
 
 export type WhiskProviderProps = {
   config: WhiskClientConfig;
-  /** `"system"` (default) defers to `prefers-color-scheme`. SSR-safe. */
-  theme?: "light" | "dark" | "system";
+  /**
+   * Theme to apply to the widget.
+   *
+   * - `"system"` (default) defers to `prefers-color-scheme`. SSR-safe.
+   * - `"light"` or `"dark"` apply the matching preset.
+   * - `"wine"`, `"indigo"`, `"emerald"`, `"monochrome"` apply named palettes.
+   * - A {@link WhiskTheme} object gives full control over every variable.
+   */
+  theme?: WhiskThemeInput;
   /** Reuse a host-app QueryClient. Outer `<QueryClientProvider>` is auto-detected. */
   queryClient?: QueryClient;
   children: ReactNode;
 };
 
+/**
+ * Root provider for every Whisk widget and hook.
+ *
+ * Composes wagmi (EVM) + Wallet Standard via `@solana/wallet-adapter-react`
+ * (Solana) + TanStack Query around the engine. Each ecosystem is mounted
+ * only when its factory is present in `config.wallets`, so EVM-only apps
+ * don't pay for the Solana tree and vice versa.
+ *
+ * When an outer `WagmiProvider` or `QueryClientProvider` is already
+ * mounted, this provider detects and reuses them — host-app contexts
+ * always win.
+ */
 export function WhiskProvider({
   config,
   theme = "system",
   queryClient: externalQueryClient,
   children,
 }: WhiskProviderProps) {
-  // Stable engine per provider mount — preserves App Kit's internal caches.
   const engine = useMemo(
     () =>
       createWhisk({
@@ -61,9 +86,18 @@ export function WhiskProvider({
 
   const evmFactory = config.wallets.find((w) => w.kind === "evm");
   const solanaFactory = config.wallets.find((w) => w.kind === "solana");
-  const solanaConfig = solanaFactory?.config as SolanaConfig | undefined;
+  const stellarFactory = config.wallets.find((w) => w.kind === "stellar");
+  const starknetFactory = config.wallets.find((w) => w.kind === "starknet");
+  const solanaConfig =
+    (solanaFactory?.config as SolanaConfig | undefined) ?? undefined;
+  const stellarConfig =
+    (stellarFactory?.config as StellarConfig | undefined) ?? undefined;
+  const starknetConfig =
+    (starknetFactory?.config as StarknetConfig | undefined) ?? undefined;
 
-  // `useQueryClient` throws outside a provider, but the hook itself still runs every render.
+  // `useContext` is a hook — call it unconditionally so its slot in the
+  // call tree is stable. `useQueryClient` throws when no provider is in
+  // scope, so wrap it in try/catch.
   const outerWagmiConfig = useContext(WagmiContext);
   const hasOuterWagmi = !!outerWagmiConfig;
 
@@ -74,9 +108,15 @@ export function WhiskProvider({
     outerQueryClient = undefined;
   }
 
-  if (!evmFactory && !hasOuterWagmi) {
+  if (
+    !evmFactory &&
+    !hasOuterWagmi &&
+    !solanaFactory &&
+    !stellarFactory &&
+    !starknetFactory
+  ) {
     throw new ConfigError(
-      "WhiskProvider: include evm() in config.wallets, OR mount this provider inside an existing <WagmiProvider>. EVM hooks require a wagmi context to run.",
+      "WhiskProvider: include evm(), solana(), stellar(), and/or starknet() in config.wallets, or mount this provider inside an existing wallet context.",
     );
   }
 
@@ -90,25 +130,48 @@ export function WhiskProvider({
     [externalQueryClient],
   );
 
-  const themeAttr = theme === "system" ? undefined : theme;
+  const resolved = resolveTheme(theme);
+  const themeAttr = resolved?.colorMode;
+  const inlineStyle = resolved?.vars as CSSProperties | undefined;
 
   let inner: ReactNode = (
     <div
       data-whisk=""
       data-whisk-theme={themeAttr}
-      className={theme === "dark" ? "dark" : undefined}
+      className={themeAttr === "dark" ? "dark" : undefined}
+      style={inlineStyle}
     >
       {children}
     </div>
   );
 
+  // Starknet wallet tree — get-starknet-core is a plain kit, wrapped in
+  // our own React context.
+  if (starknetConfig) {
+    inner = (
+      <StarknetWalletProvider config={starknetConfig}>
+        {inner}
+      </StarknetWalletProvider>
+    );
+  }
+
+  // Stellar wallet tree — wraps the existing inner. The kit is a plain
+  // class, not a provider; we surface its state via React context.
+  if (stellarConfig) {
+    inner = (
+      <StellarWalletProvider config={stellarConfig}>
+        {inner}
+      </StellarWalletProvider>
+    );
+  }
+
+  // Solana wallet tree — wraps the existing inner. Modern Solana wallets
+  // advertise via Wallet Standard, so an empty `wallets={[]}` is correct
+  // and avoids dragging in per-wallet bundles.
   if (solanaConfig) {
     inner = (
       <ConnectionProvider endpoint={solanaConfig.endpoint}>
-        <WalletProvider
-          wallets={solanaConfig.wallets}
-          autoConnect={solanaConfig.autoConnect}
-        >
+        <WalletProvider wallets={[]} autoConnect={solanaConfig.autoConnect}>
           {inner}
         </WalletProvider>
       </ConnectionProvider>
@@ -126,6 +189,13 @@ export function WhiskProvider({
   }
 
   return (
-    <WhiskContext.Provider value={contextValue}>{inner}</WhiskContext.Provider>
+    <WhiskContext.Provider value={contextValue}>
+      <WhiskCloudProvider
+        appId={config.appId}
+        {...(config.cloudBaseUrl ? { baseUrl: config.cloudBaseUrl } : {})}
+      >
+        {inner}
+      </WhiskCloudProvider>
+    </WhiskContext.Provider>
   );
 }

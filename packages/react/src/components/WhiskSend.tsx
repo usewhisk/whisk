@@ -3,509 +3,712 @@
 import {
   useCallback,
   useEffect,
-  useRef,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
-import type { Chain, Quote, Token, WhiskState } from "@usewhisk/core";
-import type { SwapState } from "../hooks/useWhiskSwap.js";
-import { useWhisk } from "../hooks/useWhisk.js";
-import { useWhiskContext } from "../hooks/useWhiskContext.js";
-import { useManualMint } from "../hooks/useManualMint.js";
-import { usePreflight } from "../hooks/usePreflight.js";
-import { useTabLock } from "../hooks/useTabLock.js";
-import { Badge } from "./ui/Badge.js";
-import { FlaskConical } from "lucide-react";
-import { AccountChip, NetworkPill } from "./ui/AccountChip.js";
-import { Card } from "./ui/Card.js";
-import { Footer } from "./ui/Footer.js";
+import { useAccount } from "wagmi";
+import { useWallet } from "@solana/wallet-adapter-react";
 import {
-  ConnectStep,
-  InputStep,
-  ReviewStep,
-  SendingStep,
-  ResultStep,
-} from "./steps/index.js";
-import { SwapTab } from "./swap/SwapTab.js";
-
-export type WhiskSendTab = "transfer" | "swap";
+  chainInfo,
+  isBridgeRoute,
+  isSendRoute,
+  type Chain,
+  type Quote,
+  type ResolvedRecipient,
+  type SendFailure,
+  type SendSuccess,
+  type WhiskAdapter,
+} from "@usewhisk/core";
+import { Card } from "./ui/Card.js";
+import { Button } from "./ui/Button.js";
+import { ChainPicker } from "./ui/ChainPicker.js";
+import { ConnectModal } from "./ui/ConnectModal.js";
+import { FieldBox } from "./ui/FieldBox.js";
+import { PoweredByWhisk } from "./ui/PoweredByWhisk.js";
+import { useWhiskContext } from "../hooks/useWhiskContext.js";
+import { useWhiskEngine } from "../hooks/useWhiskEngine.js";
+import { useEvmAdapter } from "../hooks/useEvmAdapter.js";
+import { useSolanaAdapter } from "../hooks/useSolanaAdapter.js";
+import { useStarknetAdapter } from "../hooks/useStarknetAdapter.js";
+import { useStellarAdapter } from "../hooks/useStellarAdapter.js";
+import { useStarknetWallet } from "../provider/starknetContext.js";
+import { useStellarWallet } from "../provider/stellarContext.js";
+import { useWhiskCloud } from "../cloud/context.js";
 
 export type WhiskSendProps = {
-  onSuccess?: (result: { quote: Quote; finalTxHash?: string }) => void;
-  onError?: (error: Error) => void;
-  onStateChange?: (state: WhiskState) => void;
-
-  onSwapSuccess?: (result: {
-    txHash?: string;
-    explorerUrl?: string;
-    amountOut?: string;
-  }) => void;
-  onSwapError?: (error: Error) => void;
-  onSwapStateChange?: (state: SwapState) => void;
-
-  // Setting any of these locks the corresponding field.
-  amount?: string;
-  recipient?: string;
-  sourceChain?: Chain;
-  destinationChain?: Chain;
-
+  /**
+   * Restrict the visible tabs. Defaults to `["send", "bridge"]`. Pass a
+   * single-element array to hide the other tab entirely.
+   */
+  tabs?: ReadonlyArray<"send" | "bridge">;
+  /** Override the rendered title. */
+  title?: string;
+  /** Optional copy shown under the title. */
+  description?: ReactNode;
+  /**
+   * Seed the amount field. The user can still edit it. Use `amount`
+   * (below) to lock the field to a specific value.
+   */
   defaultAmount?: string;
+  /** Lock the amount field to this value (input is read-only). */
+  amount?: string;
+  /** Seed the recipient input. */
   defaultRecipient?: string;
-
-  onAmountChange?: (value: string) => void;
-  onRecipientChange?: (value: string) => void;
-  onSourceChainChange?: (chain: Chain) => void;
-  onDestinationChainChange?: (chain: Chain) => void;
-
-  /** Defaults to `["transfer", "swap"]` when `kitKey` is set, else `["transfer"]`. */
-  tabs?: WhiskSendTab[];
-  defaultTab?: WhiskSendTab;
-  /** Circle Console key. Swap tab is hidden when omitted. */
-  kitKey?: string;
-  swapDefaultChain?: Chain;
-  swapDefaultTokenIn?: Token;
-  swapDefaultTokenOut?: Token;
-
-  /** @default false */
-  showFooter?: boolean;
-  className?: string;
+  /** Lock the recipient input to this value. */
+  recipient?: string;
+  /** Seed the source chain. */
+  defaultSourceChain?: Chain;
+  /** Lock the source chain. */
+  sourceChain?: Chain;
+  /** Seed the destination chain (Bridge tab). */
+  defaultDestinationChain?: Chain;
+  /** Lock the destination chain. */
+  destinationChain?: Chain;
+  /** Fires once a transfer settles successfully. */
+  onSuccess?: (result: SendSuccess) => void;
+  /** Fires when the engine returns a failure. */
+  onFailure?: (result: SendFailure) => void;
 };
 
+type TabKind = "send" | "bridge";
+
+function ecosystemFor(chain: Chain): "evm" | "solana" | "stellar" | "starknet" {
+  const kind = chainInfo(chain).kind;
+  if (kind === "solana") return "solana";
+  if (kind === "stellar") return "stellar";
+  if (kind === "starknet") return "starknet";
+  return "evm";
+}
+
+/**
+ * Whisk's drop-in USDC widget. Two tabs:
+ *
+ *   Send    — same-chain USDC transfer
+ *   Bridge  — CCTP V2 Fast Transfer (cross-chain)
+ *
+ * Both share recipient + amount inputs. Bridge adds a destination
+ * picker. The widget tracks both an EVM adapter (via wagmi) and a
+ * Solana adapter (via Wallet Standard) and uses whichever matches the
+ * source chain's ecosystem. Cross-ecosystem bridges error cleanly
+ * today and land in S5.
+ */
 export function WhiskSend({
-  onSuccess,
-  onError,
-  onStateChange,
-  onSwapSuccess,
-  onSwapError,
-  onSwapStateChange,
-  amount,
-  recipient,
-  sourceChain,
-  destinationChain,
+  tabs = ["send", "bridge"],
+  title = "Send USDC",
+  description,
   defaultAmount,
+  amount: controlledAmount,
   defaultRecipient,
-  onAmountChange,
-  onRecipientChange,
-  onSourceChainChange,
-  onDestinationChainChange,
-  tabs,
-  defaultTab,
-  kitKey,
-  swapDefaultChain,
-  swapDefaultTokenIn,
-  swapDefaultTokenOut,
-  showFooter = false,
-  className,
+  recipient: controlledRecipient,
+  defaultSourceChain,
+  sourceChain: controlledSourceChain,
+  defaultDestinationChain,
+  destinationChain: controlledDestinationChain,
+  onSuccess,
+  onFailure,
 }: WhiskSendProps) {
-  const { state, actions, connected, address } = useWhisk();
-  const { engine } = useWhiskContext();
-  const { manualMint } = useManualMint();
-  const mode = engine.config.mode ?? "testnet";
+  const { config } = useWhiskContext();
+  const engine = useWhiskEngine();
+  const evmAdapter = useEvmAdapter();
+  const solanaAdapter = useSolanaAdapter();
+  const stellarAdapter = useStellarAdapter();
+  const starknetAdapter = useStarknetAdapter();
+  const evm = useAccount();
+  const solana = useWallet();
+  const stellar = useStellarWallet();
+  const starknet = useStarknetWallet();
+  const cloud = useWhiskCloud();
+  const [showConnect, setShowConnect] = useState(false);
 
-  // Remember the chains the user picked, so a reset after a successful send
-  // re-seeds InputStep with their last selection instead of the config default.
-  // Lives here (above InputStep) so it survives InputStep unmounts.
-  const [rememberedSource, setRememberedSource] = useState<Chain | undefined>(
-    undefined,
+  const availableTabs = useMemo<TabKind[]>(
+    () => (tabs.length ? Array.from(tabs) : ["send", "bridge"]),
+    [tabs],
   );
-  const [rememberedDest, setRememberedDest] = useState<Chain | undefined>(
-    undefined,
-  );
+  const [tab, setTab] = useState<TabKind>(availableTabs[0] ?? "send");
 
-  const handleSourceChainChange = useCallback(
-    (chain: Chain) => {
-      setRememberedSource(chain);
-      onSourceChainChange?.(chain);
+  // Pick defaults from the prop → config → first chain.
+  const firstChain = config.chains[0];
+  const [sourceChainState, setSourceChain] = useState<Chain>(
+    defaultSourceChain ??
+      config.defaultSourceChain ??
+      firstChain ??
+      ("Ethereum" as Chain),
+  );
+  const sourceChain = controlledSourceChain ?? sourceChainState;
+
+  const [destinationChainState, setDestinationChain] = useState<Chain>(
+    defaultDestinationChain ??
+      config.defaultDestinationChain ??
+      config.chains.find((c) => c !== sourceChain) ??
+      sourceChain,
+  );
+  const destinationChain = controlledDestinationChain ?? destinationChainState;
+
+  const [recipientState, setRecipient] = useState(defaultRecipient ?? "");
+  const recipient = controlledRecipient ?? recipientState;
+
+  const [amountState, setAmount] = useState(defaultAmount ?? "");
+  const amount = controlledAmount ?? amountState;
+
+  // Controlled inputs shouldn't accept user edits — they'd fail-silent.
+  // Wrap the setters so calls become no-ops when the prop is set.
+  const onSourceChange = useCallback(
+    (v: Chain) => {
+      if (controlledSourceChain === undefined) setSourceChain(v);
     },
-    [onSourceChainChange],
+    [controlledSourceChain],
   );
-  const handleDestinationChainChange = useCallback(
-    (chain: Chain) => {
-      setRememberedDest(chain);
-      onDestinationChainChange?.(chain);
+  const onDestinationChange = useCallback(
+    (v: Chain) => {
+      if (controlledDestinationChain === undefined) setDestinationChain(v);
     },
-    [onDestinationChainChange],
+    [controlledDestinationChain],
+  );
+  const onRecipientChange = useCallback(
+    (v: string) => {
+      if (controlledRecipient === undefined) setRecipient(v);
+    },
+    [controlledRecipient],
+  );
+  const onAmountChange = useCallback(
+    (v: string) => {
+      if (controlledAmount === undefined) setAmount(v);
+    },
+    [controlledAmount],
   );
 
-  const reviewQuote = state.kind === "review" ? state.quote : undefined;
-  const preflight = usePreflight(reviewQuote, address);
+  const [resolved, setResolved] = useState<ResolvedRecipient | null>(null);
+  const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<SendSuccess | SendFailure | null>(null);
 
-  const sendingRoute =
-    state.kind === "review"
-      ? state.quote.route
-      : state.kind === "sending"
-        ? state.quote.route
-        : undefined;
-  const sendingSource =
-    sendingRoute?.kind === "send"
-      ? sendingRoute.chain
-      : sendingRoute?.kind === "bridge"
-        ? sendingRoute.sourceChain
-        : undefined;
-  const lockScope =
-    address && sendingSource ? `${address}:${sendingSource}` : undefined;
-  const tabLock = useTabLock(lockScope);
+  const destinationForTab = tab === "send" ? sourceChain : destinationChain;
+  const sourceEcosystem = useMemo(
+    () => ecosystemFor(sourceChain),
+    [sourceChain],
+  );
 
-  const guardedSend = useCallback(async () => {
-    if (!tabLock.acquire()) return;
-    await actions.send();
-  }, [tabLock, actions]);
+  // Pick the source adapter that matches the source chain's ecosystem.
+  const adapter: WhiskAdapter | null =
+    sourceEcosystem === "solana"
+      ? solanaAdapter
+      : sourceEcosystem === "stellar"
+        ? stellarAdapter
+        : sourceEcosystem === "starknet"
+          ? starknetAdapter
+          : evmAdapter;
 
-  const wasSendingRef = useRef(false);
-  useEffect(() => {
-    if (state.kind === "sending") {
-      wasSendingRef.current = true;
-    } else if (wasSendingRef.current) {
-      wasSendingRef.current = false;
-      tabLock.release();
-    }
-  }, [state.kind, tabLock]);
-
-  useEffect(() => {
-    onStateChange?.(state);
-  }, [state, onStateChange]);
-
-  useEffect(() => {
-    if (state.kind === "succeeded") {
-      onSuccess?.({
-        quote: state.quote,
-        finalTxHash: state.finalTxHash,
-      });
-    } else if (state.kind === "failed") {
-      onError?.(state.error);
-    }
-  }, [state, onSuccess, onError]);
-
-  // Auto-resolve a host-pinned `recipient` so the user doesn't have to click
-  // Continue. Keyed on recipient + destination, not a one-shot flag: the quote
-  // bridges to `recipient.chain`, so changing the destination has to re-resolve
-  // or the quote stays stuck on the original chain. Skipped mid-send and on
-  // terminal states so we don't interrupt or wipe a completed transfer.
-  const autoResolveKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!connected) return;
-    if (!recipient) return;
-    if (
-      state.kind === "sending" ||
-      state.kind === "succeeded" ||
-      state.kind === "failed"
-    ) {
-      return;
-    }
-    const target = destinationChain ?? sourceChain ?? undefined;
-    if (!target) return;
-    const key = `${recipient}::${target}`;
-    if (autoResolveKeyRef.current === key) return;
-    autoResolveKeyRef.current = key;
-    void actions.resolve(recipient, target);
+  // For cross-ecosystem bridges, the engine also needs a destination
+  // adapter for the manual mint (EVM→Solana, EVM→Stellar, Solana→Stellar,
+  // Stellar→EVM, Stellar→Solana). EVM→EVM and Solana→EVM go through
+  // Iris's Forwarder and don't need one.
+  const destinationEcosystem = useMemo(
+    () => ecosystemFor(destinationForTab),
+    [destinationForTab],
+  );
+  const destinationAdapter: WhiskAdapter | null = useMemo(() => {
+    if (destinationEcosystem === sourceEcosystem) return null;
+    if (destinationEcosystem === "solana") return solanaAdapter;
+    if (destinationEcosystem === "stellar") return stellarAdapter;
+    if (destinationEcosystem === "starknet") return starknetAdapter;
+    return evmAdapter;
   }, [
-    connected,
-    state.kind,
-    recipient,
-    destinationChain,
-    sourceChain,
-    actions,
+    destinationEcosystem,
+    sourceEcosystem,
+    evmAdapter,
+    solanaAdapter,
+    stellarAdapter,
+    starknetAdapter,
   ]);
 
-  const visibleTabs: WhiskSendTab[] =
-    tabs ?? (kitKey ? ["transfer", "swap"] : ["transfer"]);
-  const showTabs = visibleTabs.length > 1;
-  const initialTab: WhiskSendTab = defaultTab ?? visibleTabs[0] ?? "transfer";
-
-  const transferContent = renderTransfer(
-    state,
-    actions,
-    manualMint,
-    preflight,
-    tabLock.isLockedByOther,
-    guardedSend,
-    {
-      amount,
-      recipient,
-      sourceChain,
-      destinationChain,
-      defaultAmount,
-      defaultRecipient,
-      initialSourceChain: rememberedSource,
-      initialDestinationChain: rememberedDest,
-      onAmountChange,
-      onRecipientChange,
-      onSourceChainChange: handleSourceChainChange,
-      onDestinationChainChange: handleDestinationChainChange,
-    },
+  // Surface every chain in `config.chains` as a destination candidate —
+  // cross-ecosystem bridges are first-class now.
+  const destinationCandidates = useMemo(
+    () => config.chains.filter((c) => c !== sourceChain),
+    [config.chains, sourceChain],
   );
 
-  const swapContent = (
-    <SwapTab
-      kitKey={kitKey}
-      defaultChain={swapDefaultChain}
-      defaultTokenIn={swapDefaultTokenIn}
-      defaultTokenOut={swapDefaultTokenOut}
-      onStateChange={onSwapStateChange}
-      onSuccess={onSwapSuccess}
-      onError={onSwapError}
-    />
-  );
+  // If the user flips source between ecosystems, the destination may
+  // no longer be valid. Snap to the first valid candidate.
+  useEffect(() => {
+    if (
+      destinationCandidates.length > 0 &&
+      !destinationCandidates.includes(destinationChain)
+    ) {
+      setDestinationChain(destinationCandidates[0]!);
+    }
+  }, [destinationCandidates, destinationChain]);
 
-  // Whisk is testnet-only today. When a dev configures mainnet mode, render
-  // a clear "coming soon" notice instead of letting the engine try real-money
-  // flows against not-yet-ready upstream services. Headless hooks still work
-  // for devs prepping their integration; this gate is the UI layer only.
-  if (mode === "mainnet") {
-    return (
-      <Card
-        className={className}
-        style={{
-          maxWidth: "26rem",
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.875rem",
-          textAlign: "center",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <Badge variant="warning">
-            <FlaskConical size={11} strokeWidth={2.5} />
-            Mainnet coming soon
-          </Badge>
-        </div>
-        <h2 style={{ margin: 0, fontSize: "1.0625rem", fontWeight: 600 }}>
-          Whisk is testnet-only today
-        </h2>
-        <p className="whisk-help" style={{ margin: 0, textAlign: "center" }}>
-          Mainnet support is in development. To use the widget right now, set{" "}
-          <code>mode: "testnet"</code> on your config or list testnet chains
-          (Arc Testnet, Base Sepolia, etc.).
-        </p>
-        {showFooter ? <Footer /> : null}
-      </Card>
-    );
+  // Resolve the recipient input — addresses pass through verbatim, ENS
+  // names hit the resolver. Debounced via a small delay so we don't
+  // hammer the RPC on every keystroke.
+  useEffect(() => {
+    setResolved(null);
+    setRecipientError(null);
+    const trimmed = recipient.trim();
+    if (!trimmed) return;
+    let cancelled = false;
+    const id = setTimeout(async () => {
+      try {
+        const r = await engine.resolve(trimmed, destinationForTab);
+        if (!cancelled) setResolved(r);
+      } catch (err) {
+        if (!cancelled) {
+          setRecipientError(
+            err instanceof Error ? err.message : "Could not resolve recipient.",
+          );
+        }
+      }
+    }, 320);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [recipient, destinationForTab, engine]);
+
+  // Quote the transfer whenever inputs change and we have a resolved
+  // recipient. Same-chain quotes are free; bridge quotes hit Iris.
+  useEffect(() => {
+    setQuote(null);
+    setQuoteError(null);
+    if (!resolved || !amount.trim() || !adapter) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const q = await engine.quote({
+          sourceChain,
+          destinationChain: destinationForTab,
+          recipient: resolved,
+          amount,
+          adapter,
+        });
+        if (!cancelled) setQuote(q);
+      } catch (err) {
+        if (!cancelled) {
+          setQuoteError(
+            err instanceof Error ? err.message : "Could not build a quote.",
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter, amount, destinationForTab, engine, resolved, sourceChain]);
+
+  // Reset the result panel when the user edits any input after a
+  // success / failure — they're starting a new transfer.
+  useEffect(() => {
+    setResult(null);
+  }, [tab, sourceChain, destinationChain, recipient, amount]);
+
+  async function handleSubmit() {
+    if (!adapter || !resolved || !quote) return;
+    setSubmitting(true);
+    setResult(null);
+    try {
+      const r = await engine.send({
+        sourceChain,
+        destinationChain: destinationForTab,
+        recipient: resolved,
+        amount,
+        adapter,
+        ...(destinationAdapter && { destinationAdapter }),
+        quote,
+      });
+      setResult(r);
+      if (r.kind === "success") {
+        // Fire-and-forget usage event to Whisk Cloud. Client swallows
+        // errors — this never blocks the user's success screen.
+        void cloud.client?.emit({
+          kind: tab === "send" ? "send" : "bridge",
+          sourceChain,
+          destinationChain: destinationForTab,
+          amountUsdc: amount,
+          ...(r.finalTxHash ? { txHash: r.finalTxHash } : {}),
+        });
+        onSuccess?.(r);
+      } else onFailure?.(r);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  return (
-    <Card
-      className={className}
-      style={{
-        maxWidth: "26rem",
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        gap: "1rem",
-      }}
-    >
-      {/* Top row: Testnet pill on the left (mainnet renders nothing — absence is
-          the signal that real money is moving) + account chip + network pill
-          on the right when connected. One row, space-between. */}
-      {mode === "testnet" || (connected && state.kind !== "disconnected") ? (
-        <div className="whisk-top-row" aria-label="Mode and account">
-          <div className="whisk-top-row__slot">
-            {mode === "testnet" ? (
-              <Badge variant="warning">
-                <FlaskConical size={11} strokeWidth={2.5} />
-                Testnet
-              </Badge>
-            ) : null}
-          </div>
-          <div className="whisk-top-row__slot whisk-top-row__slot--end">
-            {connected && state.kind !== "disconnected" ? (
-              <>
-                <NetworkPill />
-                <AccountChip explorerChain={sourceChain} />
-              </>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+  const isSourceWalletConnected =
+    sourceEcosystem === "solana"
+      ? solana.connected
+      : sourceEcosystem === "stellar"
+        ? !!stellar?.address
+        : sourceEcosystem === "starknet"
+          ? !!starknet?.address
+          : evm.isConnected;
+  const sourceAddress =
+    sourceEcosystem === "solana"
+      ? solana.publicKey?.toBase58()
+      : sourceEcosystem === "stellar"
+        ? (stellar?.address ?? undefined)
+        : sourceEcosystem === "starknet"
+          ? (starknet?.address ?? undefined)
+          : evm.address;
+  const sourceNetworkLabel =
+    sourceEcosystem === "solana"
+      ? solana.wallet?.adapter.name
+      : sourceEcosystem === "stellar"
+        ? (stellar?.selectedWalletId ?? undefined)
+        : sourceEcosystem === "starknet"
+          ? (starknet?.wallet?.name ?? undefined)
+          : evm.chain?.name;
 
-      {!connected || state.kind === "disconnected" ? (
-        <ConnectStep />
-      ) : (
-        <>
-          {showTabs ? (
-            <Tabs.Root defaultValue={initialTab} className="whisk-tabs">
-              <Tabs.List
-                className="whisk-tabs__list"
-                aria-label="Whisk operations"
-              >
-                {visibleTabs.includes("transfer") ? (
-                  <Tabs.Trigger
-                    value="transfer"
-                    className="whisk-tabs__trigger"
-                  >
-                    Transfer
-                  </Tabs.Trigger>
-                ) : null}
-                {visibleTabs.includes("swap") ? (
-                  <Tabs.Trigger value="swap" className="whisk-tabs__trigger">
-                    Swap
-                  </Tabs.Trigger>
-                ) : null}
-              </Tabs.List>
-              {visibleTabs.includes("transfer") ? (
-                <Tabs.Content value="transfer" className="whisk-tabs__content">
-                  {transferContent}
-                </Tabs.Content>
+  const canSubmit =
+    isSourceWalletConnected &&
+    !!adapter &&
+    !!resolved &&
+    !!quote &&
+    !submitting;
+
+  return (
+    <Card className="whisk-send">
+      <header className="whisk-header">
+        <div>
+          <h2 className="whisk-header__mark">{title}</h2>
+          {description ? (
+            <p className="whisk-header__tag">{description}</p>
+          ) : null}
+        </div>
+        <div className="whisk-top-row__slot whisk-top-row__slot--end">
+          {isSourceWalletConnected && sourceAddress ? (
+            <button
+              type="button"
+              className="whisk-account-chip"
+              onClick={() => setShowConnect(true)}
+            >
+              <span className="whisk-account-chip__avatar" aria-hidden />
+              <span className="whisk-account-chip__address">
+                {shortenAddress(sourceAddress)}
+              </span>
+              {sourceNetworkLabel ? (
+                <span className="whisk-network-pill">{sourceNetworkLabel}</span>
               ) : null}
-              {visibleTabs.includes("swap") ? (
-                <Tabs.Content value="swap" className="whisk-tabs__content">
-                  {swapContent}
-                </Tabs.Content>
-              ) : null}
-            </Tabs.Root>
-          ) : visibleTabs[0] === "swap" ? (
-            swapContent
+            </button>
           ) : (
-            transferContent
+            <Button variant="primary" onClick={() => setShowConnect(true)}>
+              Connect wallet
+            </Button>
           )}
-        </>
+        </div>
+      </header>
+
+      {availableTabs.length > 1 ? (
+        <Tabs.Root
+          value={tab}
+          onValueChange={(v) => setTab(v as TabKind)}
+          className="whisk-tabs"
+        >
+          <Tabs.List className="whisk-tabs__list">
+            {availableTabs.map((t) => (
+              <Tabs.Trigger key={t} value={t} className="whisk-tabs__trigger">
+                {t === "send" ? "Send" : "Bridge"}
+              </Tabs.Trigger>
+            ))}
+          </Tabs.List>
+          <Tabs.Content value={tab} className="whisk-tabs__content">
+            <TransferForm
+              tab={tab}
+              chains={config.chains}
+              destinationCandidates={destinationCandidates}
+              sourceChain={sourceChain}
+              destinationChain={destinationChain}
+              onSourceChange={onSourceChange}
+              onDestinationChange={onDestinationChange}
+              recipient={recipient}
+              onRecipientChange={onRecipientChange}
+              recipientHint={
+                resolved?.displayName
+                  ? `${resolved.displayName} → ${shortenAddress(resolved.address)}`
+                  : resolved
+                    ? shortenAddress(resolved.address)
+                    : undefined
+              }
+              recipientError={recipientError}
+              amount={amount}
+              onAmountChange={onAmountChange}
+              quote={quote}
+              quoteError={quoteError}
+              {...(cloud.verify?.bps !== undefined
+                ? { protocolBps: cloud.verify.bps }
+                : {})}
+            />
+          </Tabs.Content>
+        </Tabs.Root>
+      ) : (
+        <TransferForm
+          tab={tab}
+          chains={config.chains}
+          destinationCandidates={destinationCandidates}
+          sourceChain={sourceChain}
+          destinationChain={destinationChain}
+          onSourceChange={setSourceChain}
+          onDestinationChange={setDestinationChain}
+          recipient={recipient}
+          onRecipientChange={setRecipient}
+          recipientHint={
+            resolved?.displayName
+              ? `${resolved.displayName} → ${shortenAddress(resolved.address)}`
+              : resolved
+                ? shortenAddress(resolved.address)
+                : undefined
+          }
+          recipientError={recipientError}
+          amount={amount}
+          onAmountChange={setAmount}
+          quote={quote}
+          quoteError={quoteError}
+          {...(cloud.verify?.bps !== undefined
+            ? { protocolBps: cloud.verify.bps }
+            : {})}
+        />
       )}
 
-      {showFooter ? <Footer /> : null}
+      {result ? <ResultPanel result={result} /> : null}
+
+      <Button
+        variant="primary"
+        onClick={
+          isSourceWalletConnected ? handleSubmit : () => setShowConnect(true)
+        }
+        disabled={isSourceWalletConnected && !canSubmit}
+      >
+        {!isSourceWalletConnected
+          ? "Connect wallet"
+          : submitting
+            ? "Sending…"
+            : tab === "bridge"
+              ? "Bridge USDC"
+              : "Send USDC"}
+      </Button>
+
+      <ConnectModal open={showConnect} onOpenChange={setShowConnect} />
+
+      <PoweredByWhisk />
     </Card>
   );
 }
 
-type ControlledFieldProps = Pick<
-  WhiskSendProps,
-  | "amount"
-  | "recipient"
-  | "sourceChain"
-  | "destinationChain"
-  | "defaultAmount"
-  | "defaultRecipient"
-  | "onAmountChange"
-  | "onRecipientChange"
-> & {
-  initialSourceChain?: Chain;
-  initialDestinationChain?: Chain;
-  onSourceChainChange?: (chain: Chain) => void;
-  onDestinationChainChange?: (chain: Chain) => void;
+type TransferFormProps = {
+  tab: TabKind;
+  chains: ReadonlyArray<Chain>;
+  destinationCandidates: ReadonlyArray<Chain>;
+  sourceChain: Chain;
+  destinationChain: Chain;
+  onSourceChange: (c: Chain) => void;
+  onDestinationChange: (c: Chain) => void;
+  recipient: string;
+  onRecipientChange: (v: string) => void;
+  recipientHint: string | undefined;
+  recipientError: string | null;
+  amount: string;
+  onAmountChange: (v: string) => void;
+  quote: Quote | null;
+  quoteError: string | null;
+  /** Take-rate in basis points from the appId JWT. Display-only. */
+  protocolBps?: number | undefined;
 };
 
-function renderTransfer(
-  state: WhiskState,
-  actions: ReturnType<typeof useWhisk>["actions"],
-  manualMint: ReturnType<typeof useManualMint>["manualMint"],
-  preflight: ReturnType<typeof usePreflight>,
-  tabLockedByOther: boolean,
-  guardedSend: () => Promise<void>,
-  fields: ControlledFieldProps,
-): ReactNode {
-  switch (state.kind) {
-    case "disconnected":
-      // Parent gates this; defensive case for switch exhaustiveness.
-      return null;
-    case "idle":
-      return (
-        <InputStep
-          busy={false}
-          onResolve={actions.resolve}
-          onQuote={actions.quote}
-          {...fields}
-        />
-      );
-    case "resolving":
-      return (
-        <InputStep
-          busy
-          onResolve={actions.resolve}
-          onQuote={actions.quote}
-          {...fields}
-        />
-      );
-    case "resolved":
-      return (
-        <InputStep
-          busy={false}
-          resolvedRecipient={state.recipient}
-          onResolve={actions.resolve}
-          onQuote={actions.quote}
-          {...fields}
-        />
-      );
-    case "quoting":
-      return (
-        <InputStep
-          busy
-          resolvedRecipient={state.recipient}
-          onResolve={actions.resolve}
-          onQuote={actions.quote}
-          {...fields}
-        />
-      );
-    case "review":
-      return (
-        <ReviewStep
-          quote={state.quote}
-          busy={false}
-          onConfirm={guardedSend}
-          onBack={actions.back}
-          preflight={preflight}
-          tabLockedByOther={tabLockedByOther}
-        />
-      );
-    case "sending":
-      return <SendingStep steps={state.steps} activeStep={state.currentStep} />;
-    case "succeeded":
-      return (
-        <ResultStep
-          kind="success"
-          quote={state.quote}
-          steps={state.steps}
-          finalTxHash={state.finalTxHash}
-          onReset={actions.reset}
-        />
-      );
-    case "failed": {
-      // Mid-flight: burn ok, mint pending. `raw` is set only on bridge failures
-      // (same-chain sends leave it undefined, which naturally excludes them).
-      const steps = state.steps ?? [];
-      const burnStep = steps.find(
-        (s) => s.name === "burn" && s.state === "success",
-      );
-      const mintedAlready = steps.some(
-        (s) => s.name === "mint" && s.state === "success",
-      );
-      const canRetry =
-        Boolean(burnStep) && !mintedAlready && state.raw !== undefined;
+function TransferForm({
+  tab,
+  chains,
+  destinationCandidates,
+  sourceChain,
+  destinationChain,
+  onSourceChange,
+  onDestinationChange,
+  recipient,
+  onRecipientChange,
+  recipientHint,
+  recipientError,
+  amount,
+  onAmountChange,
+  quote,
+  quoteError,
+  protocolBps,
+}: TransferFormProps) {
+  return (
+    <div className="whisk-form">
+      <FieldBox
+        label="From"
+        suffix={
+          <ChainPicker
+            value={sourceChain}
+            onChange={onSourceChange}
+            chains={chains}
+            ariaLabel="Source chain"
+          />
+        }
+        readOnly
+        value=""
+        aria-label="Source chain selector"
+      />
 
-      // Direct MessageTransmitter path — last-resort escape hatch when retry keeps failing.
-      const route = state.quote?.route;
-      const sourceChain =
-        route?.kind === "bridge" ? route.sourceChain : undefined;
-      const destinationChain =
-        route?.kind === "bridge" ? route.destinationChain : undefined;
-      const canManualMint =
-        canRetry &&
-        burnStep?.txHash !== undefined &&
-        sourceChain !== undefined &&
-        destinationChain !== undefined;
-
-      const onManualMint = canManualMint
-        ? () =>
-            manualMint({
-              destinationChain: destinationChain!,
-              burnSourceChain: sourceChain!,
-              burnTxHash: burnStep!.txHash!,
-            })
-        : undefined;
-
-      return (
-        <ResultStep
-          kind="failure"
-          error={state.error}
-          steps={state.steps}
-          onReset={actions.reset}
-          onRetry={canRetry ? actions.retry : undefined}
-          onManualMint={onManualMint}
+      {tab === "bridge" ? (
+        <FieldBox
+          label="To chain"
+          suffix={
+            <ChainPicker
+              value={destinationChain}
+              onChange={onDestinationChange}
+              chains={destinationCandidates}
+              ariaLabel="Destination chain"
+            />
+          }
+          readOnly
+          value=""
+          aria-label="Destination chain selector"
         />
-      );
-    }
-    default: {
-      const _: never = state;
-      return null;
-    }
+      ) : null}
+
+      <FieldBox
+        label="Recipient"
+        placeholder="0x… or name.eth"
+        value={recipient}
+        onChange={(e) => onRecipientChange(e.target.value)}
+        variant="mono"
+        help={recipientHint}
+        {...(recipientError ? { error: recipientError } : {})}
+        autoComplete="off"
+        spellCheck={false}
+      />
+
+      <FieldBox
+        label="Amount"
+        placeholder="0.00"
+        value={amount}
+        onChange={(e) => onAmountChange(e.target.value)}
+        variant="amount"
+        suffix={<span className="whisk-fieldbox__label">USDC</span>}
+        inputMode="decimal"
+        {...(quoteError ? { error: quoteError } : {})}
+      />
+
+      {quote ? <QuoteSummary quote={quote} protocolBps={protocolBps} /> : null}
+    </div>
+  );
+}
+
+function QuoteSummary({
+  quote,
+  protocolBps,
+}: {
+  quote: Quote;
+  protocolBps?: number | undefined;
+}) {
+  const bridge = isBridgeRoute(quote.route);
+  const isSend = isSendRoute(quote.route);
+  // Protocol fee is display-only in Phase 1 — the appId JWT tells us
+  // the tier's bps but the widget doesn't actually collect it. When
+  // Phase 2 lands, this value flows into the burn math on top.
+  const protocolFee =
+    protocolBps && protocolBps > 0
+      ? ((Number(quote.amountIn) * protocolBps) / 10_000).toFixed(4)
+      : null;
+  return (
+    <div className="whisk-summary" aria-live="polite">
+      <SummaryRow
+        label={isSend ? "Recipient receives" : "Recipient gets"}
+        value={`${quote.amountOut} ${quote.token}`}
+      />
+      {bridge ? (
+        <SummaryRow
+          label="You pay"
+          value={`${quote.amountIn} ${quote.token}`}
+        />
+      ) : null}
+      {quote.fees.entries.length > 0
+        ? quote.fees.entries.map((entry, i) => (
+            <SummaryRow
+              key={`${entry.kind}-${i}`}
+              label={entry.description ?? labelForKind(entry.kind)}
+              value={`${entry.amount} ${entry.token}`}
+              muted
+            />
+          ))
+        : null}
+      {protocolFee ? (
+        <SummaryRow
+          label={`Whisk protocol fee · ${protocolBps} bps`}
+          value={`${protocolFee} ${quote.token}`}
+          muted
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  muted,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="whisk-summary__row">
+      <span
+        className={
+          muted ? "whisk-summary__label-muted" : "whisk-summary__label"
+        }
+      >
+        {label}
+      </span>
+      <span className="whisk-summary__value">{value}</span>
+    </div>
+  );
+}
+
+function labelForKind(kind: string): string {
+  switch (kind) {
+    case "protocol":
+      return "Protocol fee";
+    case "forwarder":
+      return "Destination mint fee";
+    case "custom":
+      return "Merchant fee";
+    case "gas":
+      return "Network fee";
+    case "provider":
+      return "Provider fee";
+    default:
+      return "Fee";
   }
+}
+
+function ResultPanel({ result }: { result: SendSuccess | SendFailure }) {
+  if (result.kind === "success") {
+    return (
+      <div className="whisk-banner whisk-banner--info" role="status">
+        <strong>Sent.</strong>{" "}
+        {result.finalTxHash
+          ? `Tx ${shortenHash(result.finalTxHash)}.`
+          : "Transfer submitted."}
+      </div>
+    );
+  }
+  return (
+    <div className="whisk-banner whisk-banner--error" role="alert">
+      <strong>Failed.</strong> {result.error.message}
+    </div>
+  );
+}
+
+function shortenAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function shortenHash(hash: string): string {
+  return `${hash.slice(0, 10)}…${hash.slice(-6)}`;
 }

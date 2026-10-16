@@ -24,19 +24,20 @@ Open the page and you'll see a "Connect wallet" card. Connect a
 wallet and the widget walks through the rest:
 
 <Steps>
-  <Step>Pick a source chain, paste a recipient, type an amount.</Step>
   <Step>
-    Whisk resolves the recipient (raw address or ENS name) against the
-    destination chain.
+    Pick source + destination chain, paste a recipient, type an amount.
   </Step>
   <Step>
-    It builds a quote (same-chain transfer or CCTP bridge) and shows the fee
+    Whisk resolves the recipient (raw address, ENS name, or non-EVM address)
+    against the destination chain.
+  </Step>
+  <Step>
+    It builds a quote (same-chain transfer or CCTP V2 bridge) and shows the fee
     breakdown.
   </Step>
   <Step>
-    The user confirms. Whisk submits the transaction and renders a step rail{" "}
-    <br />
-    (`authorize → burn → wait → mint`) for bridges.
+    The user confirms. Whisk submits the transaction and renders a step rail —
+    `authorize → burn → attest → mint` for bridges.
   </Step>
   <Step>
     On success, you get a result card with the final tx hash and an explorer
@@ -46,65 +47,56 @@ wallet and the widget walks through the rest:
 
 ## Listening to the flow
 
-Three callbacks cover most analytics needs. They're stable, so you
-can include them in `useEffect` deps without re-rendering:
+Two callbacks cover most analytics needs. Both fire once per attempt
+and pass the full `SendSuccess` / `SendFailure` result:
 
 ```tsx
 <WhiskSend
-  onSuccess={({ quote, finalTxHash }) => {
+  onSuccess={({ finalTxHash, steps }) => {
     analytics.track("whisk.send.success", {
-      amount: quote.amountIn,
-      route: quote.route.kind,
       tx: finalTxHash,
+      stepCount: steps.length,
     });
   }}
-  onError={(error) => {
+  onFailure={({ error, steps }) => {
+    const failedStep = steps.find((s) => s.state === "error");
     analytics.track("whisk.send.error", {
       code: error.name,
-      message: error.message,
+      failedOn: failedStep?.name,
     });
   }}
-  onStateChange={(state) => {
-    console.log("[whisk]", state.kind);
-  }}
 />
 ```
 
-`onStateChange` fires on every transition, including transient ones
-like `resolving` and `quoting`. If you only care about terminal
-states, gate it:
+For step-by-step observability during a send (e.g., a custom
+progress rail), reach for the [`useWhisk`](/docs/hooks/use-whisk)
+hook, which exposes the full step list plus every state transition.
+
+## Restricting tabs
+
+`<WhiskSend>` renders two tabs by default: **Send** (same-chain
+transfer) and **Bridge** (cross-chain via CCTP V2). Restrict to one
+tab when the surface should be single-purpose:
 
 ```tsx
-onStateChange={(state) => {
-  if (state.kind === "success" || state.kind === "error") {
-    /* … */
-  }
-}}
+{
+  /* Bridge-only widget for a cross-chain landing page. */
+}
+<WhiskSend tabs={["bridge"]} />;
+
+{
+  /* Send-only for a same-chain checkout. */
+}
+<WhiskSend tabs={["send"]} />;
 ```
-
-## Adding swap
-
-If you have a Circle Console kit key, pass it through and the swap
-tab appears next to transfer. Without the key, the swap tab hides
-itself:
-
-```tsx
-<WhiskSend
-  kitKey={process.env.NEXT_PUBLIC_CIRCLE_KIT_KEY}
-  tabs={["transfer", "swap"]}
-  defaultTab="transfer"
-/>
-```
-
-The two tabs share the same connection state, so connecting a wallet
-once unlocks both surfaces.
 
 ## Where this falls short
 
 `<WhiskSend>` is opinionated about layout; it's a card, it's
 centred, it owns its width. If you need a different shape (sidebar
-wizard, full-page checkout, sheet from the bottom), drop down to the
-primitives. See [Components → Primitives](/docs/components/primitives).
+wizard, full-page checkout, sheet from the bottom), drop down to
+the primitives. See [Components →
+Primitives](/docs/components/primitives).
 
 ## Next
 

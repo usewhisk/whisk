@@ -37,3 +37,11 @@ export {
 } from "./cctp.js";
 
 export type { ReceiveMessageCall } from "./cctp.js";
+
+export {
+  deriveReceiptView,
+  describeReceiptChains,
+  RECEIPT_STAGE_LABELS,
+  RECEIPT_STAGE_HELP,
+} from "./receipt.js";
+export type { ReceiptInput, ReceiptStage, ReceiptView } from "./receipt.js";

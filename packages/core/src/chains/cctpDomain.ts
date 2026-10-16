@@ -29,6 +29,8 @@ const DOMAIN_MAP: Partial<Record<Chain, number>> = {
   Sonic_Testnet: 13,
   World_Chain: 14,
   World_Chain_Sepolia: 14,
+  Monad: 15,
+  Monad_Testnet: 15,
   Sei: 16,
   Sei_Testnet: 16,
   XDC: 18,
@@ -40,6 +42,8 @@ const DOMAIN_MAP: Partial<Record<Chain, number>> = {
   Plume: 22,
   Plume_Testnet: 22,
   Arc_Testnet: 26,
+  Edge_Testnet: 28,
+  Morph_Testnet: 30,
 };
 
 export function cctpDomainFor(chain: Chain): number | undefined {

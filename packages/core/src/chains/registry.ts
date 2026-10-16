@@ -20,9 +20,15 @@ export type ChainInfo = {
 
 const EVM_RE = /^0x[a-fA-F0-9]{40}$/;
 const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+/** Stellar strkey — `G…`, `M…`, or `C…`. Base32 with checksum. */
+const STELLAR_RE = /^[GMC][A-Z2-7]{55,68}$/;
+/** Starknet felt252 — `0x` + 1..64 hex chars. */
+const STARKNET_RE = /^0x[a-fA-F0-9]{1,64}$/;
 
 const EVM_HINT = "0x… (40 hex chars)";
 const SOL_HINT = "Base58 (32–44 chars)";
+const STELLAR_HINT = "G…, M…, or C… (Stellar strkey)";
+const STARKNET_HINT = "0x… (Starknet felt252)";
 
 const CHAINS: ReadonlyArray<ChainInfo> = [
   /* ─── Mainnets ─────────────────────────────────────────────────────── */
@@ -207,6 +213,31 @@ const CHAINS: ReadonlyArray<ChainInfo> = [
     usdcAddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   },
   {
+    chain: "Starknet",
+    label: "Starknet",
+    kind: "starknet",
+    network: "mainnet",
+    nativeSymbol: "ETH",
+    explorerTxBase: "https://voyager.online/tx/",
+    explorerAddressBase: "https://voyager.online/contract/",
+    addressRegex: STARKNET_RE,
+    addressHint: STARKNET_HINT,
+    usdcAddress:
+      "0x033068F6539f8e6e6b131e6B2B814e6c34A5224bC66947c47DaB9dFeE93b35fb",
+  },
+  {
+    chain: "Stellar",
+    label: "Stellar",
+    kind: "stellar",
+    network: "mainnet",
+    nativeSymbol: "XLM",
+    explorerTxBase: "https://stellar.expert/explorer/public/tx/",
+    explorerAddressBase: "https://stellar.expert/explorer/public/account/",
+    addressRegex: STELLAR_RE,
+    addressHint: STELLAR_HINT,
+    usdcAddress: "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+  },
+  {
     chain: "Sonic",
     label: "Sonic",
     kind: "evm",
@@ -328,6 +359,19 @@ const CHAINS: ReadonlyArray<ChainInfo> = [
     usdcAddress: "0x6d7f141b6819C2c9CC2f818e6ad549E7Ca090F8f",
   },
   {
+    chain: "Edge_Testnet",
+    label: "Edge Testnet",
+    kind: "evm",
+    network: "testnet",
+    nativeSymbol: "ETH",
+    explorerTxBase: "https://edge-testnet.explorer.alchemy.com/tx/",
+    explorerAddressBase: "https://edge-testnet.explorer.alchemy.com/address/",
+    addressRegex: EVM_RE,
+    addressHint: EVM_HINT,
+    evmChainId: 33_431,
+    usdcAddress: "0x2d9F7CAD728051AA35Ecdc472a14cf8cDF5CFD6B",
+  },
+  {
     chain: "Ethereum_Sepolia",
     label: "Ethereum Sepolia",
     kind: "evm",
@@ -392,6 +436,20 @@ const CHAINS: ReadonlyArray<ChainInfo> = [
     addressRegex: EVM_RE,
     addressHint: EVM_HINT,
     evmChainId: 10_143,
+    usdcAddress: "0x534b2f3A21130d7a60830c2Df862319e593943A3",
+  },
+  {
+    chain: "Morph_Testnet",
+    label: "Morph Hoodi",
+    kind: "evm",
+    network: "testnet",
+    nativeSymbol: "ETH",
+    explorerTxBase: "https://explorer-hoodi.morph.network/tx/",
+    explorerAddressBase: "https://explorer-hoodi.morph.network/address/",
+    addressRegex: EVM_RE,
+    addressHint: EVM_HINT,
+    evmChainId: 2_910,
+    usdcAddress: "0x7433b41C6c5e1d58D4Da99483609520255ab661B",
   },
   {
     chain: "Optimism_Sepolia",
@@ -458,6 +516,31 @@ const CHAINS: ReadonlyArray<ChainInfo> = [
     addressRegex: SOL_RE,
     addressHint: SOL_HINT,
     usdcAddress: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  },
+  {
+    chain: "Starknet_Sepolia",
+    label: "Starknet Sepolia",
+    kind: "starknet",
+    network: "testnet",
+    nativeSymbol: "ETH",
+    explorerTxBase: "https://sepolia.voyager.online/tx/",
+    explorerAddressBase: "https://sepolia.voyager.online/contract/",
+    addressRegex: STARKNET_RE,
+    addressHint: STARKNET_HINT,
+    usdcAddress:
+      "0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343",
+  },
+  {
+    chain: "Stellar_Testnet",
+    label: "Stellar Testnet",
+    kind: "stellar",
+    network: "testnet",
+    nativeSymbol: "XLM",
+    explorerTxBase: "https://stellar.expert/explorer/testnet/tx/",
+    explorerAddressBase: "https://stellar.expert/explorer/testnet/account/",
+    addressRegex: STELLAR_RE,
+    addressHint: STELLAR_HINT,
+    usdcAddress: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   },
   {
     chain: "Sonic_Testnet",

@@ -1,0 +1,86 @@
+{
+  "name": "@usewhisk/cctp",
+  "version": "0.1.0",
+  "description": "CCTP V2 protocol layer for Whisk. Direct contracts + Iris API integration.",
+  "license": "MIT",
+  "author": "SignorDev (https://github.com/Signor1)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Signor1/whisk.git",
+    "directory": "packages/cctp"
+  },
+  "homepage": "https://github.com/Signor1/whisk#readme",
+  "bugs": {
+    "url": "https://github.com/Signor1/whisk/issues"
+  },
+  "keywords": [
+    "whisk",
+    "cctp",
+    "cctp-v2",
+    "circle",
+    "usdc",
+    "stablecoin",
+    "bridge",
+    "cross-chain",
+    "iris"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./chains": {
+      "types": "./dist/chains.d.ts",
+      "import": "./dist/chains.js",
+      "require": "./dist/chains.cjs"
+    },
+    "./abi": {
+      "types": "./dist/abi.d.ts",
+      "import": "./dist/abi.js",
+      "require": "./dist/abi.cjs"
+    },
+    "./iris": {
+      "types": "./dist/iris.d.ts",
+      "import": "./dist/iris.js",
+      "require": "./dist/iris.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.4.0",
+    "@solana/web3.js": "^1.95.0",
+    "@solana/spl-token": "^0.4.0",
+    "@stellar/stellar-sdk": "^14.1.1",
+    "starknet": "^7.0.0",
+    "viem": "^2.23.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,103 +1,89 @@
 "use client";
 
-import {
-  Check,
-  X,
-  KeyRound,
-  Send,
-  Flame,
-  ScrollText,
-  Sparkles,
-} from "lucide-react";
 import type { Step, StepName } from "@usewhisk/core";
 import { cn } from "../../lib/cn.js";
 
-/**
- * User-facing labels for each lifecycle step.
- *
- * `approve` → "Authorize" rather than "Approve token". On EVM with
- * USDC the underlying call IS an ERC-20 approve, but on Solana the
- * step is a permit-style signature, and on permit-supporting chains
- * the call may actually be `permit` not `approve`. "Authorize" is the
- * neutral term that reads correctly for every backend path.
- *
- * `transfer` → "Submit" — generic, doesn't pretend the user is doing
- * anything beyond confirming the on-chain submission.
- */
-const STEP_LABELS: Record<StepName, string> = {
-  approve: "Authorize",
-  transfer: "Submit",
-  burn: "Burn on source",
-  fetchAttestation: "Wait for confirmation",
+export type StepRailProps = {
+  steps: ReadonlyArray<Step>;
+  /** Override the default step label copy. */
+  labels?: Partial<Record<StepName, string>>;
+};
+
+const DEFAULT_LABELS: Record<StepName, string> = {
+  approve: "Approve USDC",
+  transfer: "Transfer",
+  burn: "Burn on source chain",
+  fetchAttestation: "Confirm attestation",
   mint: "Mint on destination",
 };
 
-const STEP_ICONS: Record<StepName, typeof KeyRound> = {
-  approve: KeyRound,
-  transfer: Send,
-  burn: Flame,
-  fetchAttestation: ScrollText,
-  mint: Sparkles,
-};
-
-export type StepRailProps = {
-  steps: ReadonlyArray<Step>;
-  /** Name of the step currently in flight. */
-  activeStep?: Step["name"];
-};
-
 /**
- * Vertical list of bridge / send lifecycle steps with live state. Each
- * step gets a thematic icon when idle/active and switches to a check or
- * x once it lands in a terminal state.
+ * Vertical step rail that mirrors a `Step[]` from the engine or from
+ * `deriveReceiptView`. Each step renders a state-coloured dot plus a
+ * label; the first `pending` step is marked active (animated pulse).
  */
-export function StepRail({ steps, activeStep }: StepRailProps) {
+export function StepRail({ steps, labels }: StepRailProps) {
+  const activeIndex = steps.findIndex((s) => s.state === "pending");
   return (
     <ol className="whisk-step-rail" aria-label="Transfer progress">
-      {steps.map((step) => {
-        const Icon = STEP_ICONS[step.name];
-        const isActive = step.state === "pending" && activeStep === step.name;
+      {steps.map((step, i) => {
+        const isActive = i === activeIndex;
+        const label =
+          labels?.[step.name] ?? DEFAULT_LABELS[step.name] ?? step.name;
+        const cls = cn(
+          "whisk-step",
+          step.state === "success" && "whisk-step--success",
+          step.state === "error" && "whisk-step--error",
+          isActive && "whisk-step--active",
+        );
         return (
-          <li
-            key={step.name}
-            className={cn(
-              "whisk-step",
-              step.state === "success" && "whisk-step--success",
-              step.state === "error" && "whisk-step--error",
-              isActive && "whisk-step--active",
-            )}
-          >
-            <span className="whisk-step__dot" aria-hidden="true">
-              {step.state === "success" ? (
-                <Check size={10} strokeWidth={3} />
-              ) : step.state === "error" ? (
-                <X size={10} strokeWidth={3} />
-              ) : null}
+          <li key={`${step.name}-${i}`} className={cls}>
+            <span className="whisk-step__dot" aria-hidden>
+              {step.state === "success" ? <CheckIcon /> : null}
+              {step.state === "error" ? <XIcon /> : null}
             </span>
-            <Icon
-              size={14}
-              strokeWidth={2}
-              style={{ opacity: 0.7 }}
-              aria-hidden="true"
-            />
-            <span style={{ flex: 1 }}>{STEP_LABELS[step.name]}</span>
-            {step.txHash ? (
-              <a
-                href={step.explorerUrl ?? "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="whisk-help"
-                style={{
-                  marginTop: 0,
-                  textDecoration: "none",
-                }}
-              >
-                tx ↗
-              </a>
-            ) : null}
+            <span>
+              {label}
+              {step.forwarded ? " (forwarder)" : null}
+            </span>
           </li>
         );
       })}
     </ol>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M2.5 6.5L5 9L9.5 3.5" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M3 3l6 6M9 3L3 9" />
+    </svg>
   );
 }

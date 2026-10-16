@@ -1,298 +1,128 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useAccount } from "wagmi";
 import {
-  clearInflight,
-  deserializeError,
-  initialState,
-  loadInflight,
-  reduce,
-  saveInflight,
-  serializeError,
-  toWhiskError,
+  ConfigError,
   type Chain,
+  type EvmAdapter,
+  type Quote,
+  type QuoteParams,
   type ResolvedRecipient,
-  type Step,
-  type Token,
-  type WalletKind,
-  type WhiskAction,
-  type WhiskState,
+  type SendListeners,
+  type SendParams,
+  type SendResult,
+  type WhiskEngine,
 } from "@usewhisk/core";
-import { useWhiskContext } from "./useWhiskContext.js";
-import { useWhiskAdapter } from "./useWhiskAdapter.js";
-import { useWhiskAccount } from "./useWhiskAccount.js";
+import { useEvmAdapter } from "./useEvmAdapter.js";
+import { useWhiskEngine } from "./useWhiskEngine.js";
 
-export type WhiskActions = {
-  resolve: (input: string, chain: Chain) => Promise<void>;
-  quote: (
-    recipient: ResolvedRecipient,
-    amount: string,
-    sourceChain: Chain,
-    token?: Token,
-  ) => Promise<void>;
-  back: () => void;
-  send: () => Promise<void>;
-  /** Resume a mid-flight bridge failure. Only valid when `raw` is preserved on `failed`. */
-  retry: () => Promise<void>;
+export type UseWhiskResult = {
+  /** Engine constructed by `<WhiskProvider>`. */
+  engine: WhiskEngine;
+  /** Live adapter — `null` until the user connects an EVM wallet. */
+  adapter: EvmAdapter | null;
+  /** Connected account address. */
+  address: `0x${string}` | undefined;
+  /** True when an EVM wallet is connected. */
+  isConnected: boolean;
+
+  /** Resolve an address-or-name input into a `ResolvedRecipient`. */
+  resolve: (input: string, chain: Chain) => Promise<ResolvedRecipient>;
+
+  /** Build a quote for the current adapter. Throws if not connected. */
+  quote: (params: Omit<QuoteParams, "adapter">) => Promise<Quote>;
+
+  /** Execute a send / bridge. Throws if not connected. */
+  send: (
+    params: Omit<SendParams, "adapter">,
+    listeners?: SendListeners,
+  ) => Promise<SendResult>;
+
+  /** True while a send is in flight. */
+  isSending: boolean;
+  /** Latest engine result. `SendResult` is a tagged union — branch on `kind`. */
+  lastResult: SendResult | null;
+  /** Set when `send` itself throws (network blowup, adapter missing, etc.). */
+  sendError: Error | null;
+  /** Clear the latest result and any error. */
   reset: () => void;
 };
 
-export type UseWhiskResult = {
-  state: WhiskState;
-  actions: WhiskActions;
-  connected: boolean;
-  address: string | undefined;
-};
-
+/**
+ * High-level entry point for custom widgets. Combines the engine, the
+ * adapter, and a mutation-style send state in a single object — the
+ * shape integrators reach for first when they don't need the full
+ * `<WhiskSend>` UI but want the same wiring.
+ *
+ * For ergonomic refunds, prefer `useRefund` — it follows the
+ * wagmi-style `mutate` / `mutateAsync` / `isPending` shape consumers
+ * are already familiar with.
+ */
 export function useWhisk(): UseWhiskResult {
-  const { engine, config } = useWhiskContext();
-  const mode = engine.config.mode ?? "testnet";
-  const account = useWhiskAccount();
-  const [state, dispatch] = useReducer(reduce, initialState);
+  const engine = useWhiskEngine();
+  const adapter = useEvmAdapter();
+  const { address, isConnected } = useAccount();
 
-  const [activeSource, setActiveSource] = useState<Chain | undefined>(
-    config.defaultSourceChain ?? config.chains[0],
-  );
-
-  const adapter = useWhiskAdapter(activeSource);
-
-  const connected = Boolean(account.primary?.isConnected);
-  if (connected && state.kind === "disconnected") {
-    dispatch({ type: "CONNECTED" });
-  }
-  if (!connected && state.kind !== "disconnected") {
-    dispatch({ type: "DISCONNECTED" });
-  }
-
-  // Hydrate mid-flight failure (burn ok, mint pending) from localStorage on fresh mount.
-  // Only fires from `idle` so an active flow is never clobbered.
-  const hydratedKeyRef = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (!adapter) return;
-    if (!activeSource) return;
-    if (state.kind !== "idle") return;
-
-    const key = `${mode}:${adapter.kind}:${adapter.address}:${activeSource}`;
-    if (hydratedKeyRef.current === key) return;
-    hydratedKeyRef.current = key;
-
-    const snapshot = loadInflight(
-      mode,
-      adapter.kind as WalletKind,
-      adapter.address,
-      activeSource,
-    );
-    if (!snapshot) return;
-
-    dispatch({
-      type: "HYDRATE_FAILED",
-      payload: {
-        error: deserializeError(snapshot.error),
-        quote: snapshot.quote,
-        steps: snapshot.steps,
-        raw: snapshot.raw,
-      },
-    });
-  }, [adapter, activeSource, state.kind, mode]);
-
-  const resolve = useCallback<WhiskActions["resolve"]>(
-    async (input, chain) => {
-      dispatch({ type: "RESOLVE_START", input });
-      try {
-        const recipient = await engine.resolve(input, chain);
-        dispatch({ type: "RESOLVE_SUCCESS", recipient });
-      } catch (err) {
-        dispatch({ type: "RESOLVE_FAILURE", error: toWhiskError(err) });
+  const sendMutation = useMutation<
+    SendResult,
+    Error,
+    {
+      params: Omit<SendParams, "adapter">;
+      listeners: SendListeners | undefined;
+    }
+  >({
+    mutationFn: ({ params, listeners }) => {
+      if (!adapter) {
+        throw new ConfigError(
+          "useWhisk.send: no EVM wallet connected. Open the ConnectModal first.",
+        );
       }
+      return engine.send({ ...params, adapter }, listeners);
     },
+  });
+
+  const resolve = useCallback(
+    (input: string, chain: Chain) => engine.resolve(input, chain),
     [engine],
   );
 
-  const quote = useCallback<WhiskActions["quote"]>(
-    async (recipient, amount, sourceChain, token) => {
-      setActiveSource(sourceChain);
-      const adapterForSource = adapter;
-      if (!adapterForSource) return;
-      dispatch({ type: "QUOTE_START", recipient, amount });
-      try {
-        const result = await engine.quote({
-          sourceChain,
-          destinationChain: recipient.chain,
-          recipient,
-          amount,
-          adapter: adapterForSource,
-          token,
-        });
-        dispatch({ type: "QUOTE_SUCCESS", quote: result });
-      } catch (err) {
-        dispatch({ type: "QUOTE_FAILURE", error: toWhiskError(err) });
+  const quote = useCallback(
+    async (params: Omit<QuoteParams, "adapter">): Promise<Quote> => {
+      if (!adapter) {
+        throw new ConfigError(
+          "useWhisk.quote: no EVM wallet connected. Open the ConnectModal first.",
+        );
       }
+      return engine.quote({ ...params, adapter });
     },
     [adapter, engine],
   );
 
-  const back = useCallback<WhiskActions["back"]>(() => {
-    dispatch({ type: "REVIEW_BACK" });
-  }, []);
+  const send = useCallback(
+    (
+      params: Omit<SendParams, "adapter">,
+      listeners?: SendListeners,
+    ): Promise<SendResult> => sendMutation.mutateAsync({ params, listeners }),
+    [sendMutation],
+  );
 
-  const send = useCallback<WhiskActions["send"]>(async () => {
-    if (state.kind !== "review" || !adapter) return;
-    const q = state.quote;
-    dispatch({ type: "SEND_START" });
-    const onStep = (step: Step) => dispatch({ type: "STEP_UPDATE", step });
-    try {
-      const result = await engine.send(
-        {
-          sourceChain:
-            q.route.kind === "send" ? q.route.chain : q.route.sourceChain,
-          destinationChain:
-            q.route.kind === "send" ? q.route.chain : q.route.destinationChain,
-          recipient: q.recipient,
-          // Fall back to amountOut for quotes built before amountBurned existed.
-          amount: q.amountBurned ?? q.amountOut,
-          adapter,
-          quote: q,
-        },
-        { onStep },
-      );
-      if (result.kind === "success") {
-        const sourceChain =
-          q.route.kind === "send" ? q.route.chain : q.route.sourceChain;
-        clearInflight(
-          mode,
-          adapter.kind as WalletKind,
-          adapter.address,
-          sourceChain,
-        );
-        dispatch({
-          type: "SEND_SUCCESS",
-          finalTxHash: result.finalTxHash,
-        });
-      } else {
-        const sourceChain =
-          q.route.kind === "send" ? q.route.chain : q.route.sourceChain;
-        const destinationChain =
-          q.route.kind === "send" ? q.route.chain : q.route.destinationChain;
-        const burned = result.steps.some(
-          (s) => s.name === "burn" && s.state === "success",
-        );
-        const minted = result.steps.some(
-          (s) => s.name === "mint" && s.state === "success",
-        );
-        if (burned && !minted && result.raw !== undefined) {
-          saveInflight({
-            mode,
-            walletKind: adapter.kind as WalletKind,
-            walletAddress: adapter.address,
-            sourceChain,
-            destinationChain,
-            quote: q,
-            steps: result.steps,
-            error: serializeError(result.error),
-            raw: result.raw,
-          });
-        }
-        dispatch({
-          type: "SEND_FAILURE",
-          error: result.error,
-          raw: result.raw,
-        });
-      }
-    } catch (err) {
-      dispatch({ type: "SEND_FAILURE", error: toWhiskError(err) });
-    }
-  }, [adapter, engine, state]);
-
-  const retry = useCallback<WhiskActions["retry"]>(async () => {
-    if (state.kind !== "failed") return;
-    if (!adapter) return;
-    if (!state.quote || !state.steps || state.raw === undefined) return;
-
-    const failedSnapshot = {
-      kind: "failure" as const,
-      error: state.error,
-      steps: state.steps,
-      raw: state.raw,
-    };
-    dispatch({ type: "RETRY_START" });
-    const onStep = (step: Step) => dispatch({ type: "STEP_UPDATE", step });
-    try {
-      const result = await engine.retry(
-        { failed: failedSnapshot, adapter },
-        { onStep },
-      );
-      const q = state.quote;
-      const sourceChain =
-        q && q.route.kind === "send"
-          ? q.route.chain
-          : q?.route.kind === "bridge"
-            ? q.route.sourceChain
-            : undefined;
-      if (result.kind === "success") {
-        if (sourceChain) {
-          clearInflight(
-            mode,
-            adapter.kind as WalletKind,
-            adapter.address,
-            sourceChain,
-          );
-        }
-        dispatch({ type: "SEND_SUCCESS", finalTxHash: result.finalTxHash });
-      } else {
-        const burned = result.steps.some(
-          (s) => s.name === "burn" && s.state === "success",
-        );
-        const minted = result.steps.some(
-          (s) => s.name === "mint" && s.state === "success",
-        );
-        if (burned && !minted && result.raw !== undefined && q && sourceChain) {
-          const destinationChain =
-            q.route.kind === "send" ? q.route.chain : q.route.destinationChain;
-          saveInflight({
-            mode,
-            walletKind: adapter.kind as WalletKind,
-            walletAddress: adapter.address,
-            sourceChain,
-            destinationChain,
-            quote: q,
-            steps: result.steps,
-            error: serializeError(result.error),
-            raw: result.raw,
-          });
-        }
-        dispatch({
-          type: "SEND_FAILURE",
-          error: result.error,
-          raw: result.raw,
-        });
-      }
-    } catch (err) {
-      dispatch({ type: "SEND_FAILURE", error: toWhiskError(err) });
-    }
-  }, [adapter, engine, state]);
-
-  const reset = useCallback<WhiskActions["reset"]>(() => {
-    // Clear persisted snapshot so a refresh doesn't resurrect a just-dismissed failure.
-    if (adapter && activeSource) {
-      clearInflight(
-        mode,
-        adapter.kind as WalletKind,
-        adapter.address,
-        activeSource,
-      );
-    }
-    hydratedKeyRef.current = undefined;
-    dispatch({ type: "RESET" });
-  }, [adapter, activeSource, mode]);
-
-  const actions: WhiskActions = { resolve, quote, back, send, retry, reset };
+  const reset = useCallback(() => {
+    sendMutation.reset();
+  }, [sendMutation]);
 
   return {
-    state,
-    actions,
-    connected,
-    address: account.primary?.address,
+    engine,
+    adapter,
+    address,
+    isConnected,
+    resolve,
+    quote,
+    send,
+    isSending: sendMutation.isPending,
+    lastResult: sendMutation.data ?? null,
+    sendError: sendMutation.error ?? null,
+    reset,
   };
 }
-
-export type { WhiskAction };

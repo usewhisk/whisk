@@ -2,16 +2,33 @@
  * `@usewhisk/core` — framework-agnostic engine, types, errors, and
  * helpers for the Whisk USDC widget.
  *
- * Most apps will consume `@usewhisk/react` instead. Reach for this
- * package directly only when building a Whisk frontend in something other
- * than React, or when running engine logic on a server.
+ * v1 ships: Send (same-chain) and Bridge (CCTP V2 via Forwarder), with
+ * Refund mechanically built on Send/Bridge.
+ *
+ * Most apps will consume `@usewhisk/react`. Reach for this package
+ * directly only when building a Whisk frontend in something other than
+ * React, or when running engine logic on a server.
  */
 
-// Engine
+/* --------------------------------------------------------------------- *
+ *  Engine
+ * --------------------------------------------------------------------- */
+
 export { createWhisk } from "./engine/createWhisk.js";
 export type {
   WhiskEngine,
   WhiskAdapter,
+  EvmAdapter,
+  EvmCall,
+  SendCallsResult,
+  CallReceipt,
+  SolanaAdapter,
+  SolanaExtraSigner,
+  SolanaTransactionReceipt,
+  StarknetAdapter,
+  StarknetTransactionReceipt,
+  StellarAdapter,
+  StellarTransactionReceipt,
   QuoteParams,
   SendParams,
   SendListeners,
@@ -20,14 +37,61 @@ export type {
   SendSuccess,
   SendFailure,
   RetryParams,
-  SwapParams,
-  SwapEstimate,
-  SwapResult,
-  SwapSuccess,
-  SwapFailure,
+  RefundParams,
+  RefundResult,
 } from "./engine/types.js";
 
-// Types
+/** Amount helpers — convert between USDC strings and 6-decimal bigint subunits. */
+export {
+  USDC_DECIMALS,
+  formatUsdcAmount,
+  parseUsdcAmount,
+} from "./engine/amount.js";
+
+/* --------------------------------------------------------------------- *
+ *  Refund correlation primitives
+ *
+ *  Used by `engine.refund` and exposed for merchants who mint refund
+ *  metadata themselves.
+ * --------------------------------------------------------------------- */
+
+export {
+  REFUND_OF_TX_KEY,
+  REFUND_REASON_KEY,
+  buildRefundMetadata,
+  validateRefundInput,
+} from "./refund/index.js";
+export type { RefundInput, RefundPlan } from "./refund/index.js";
+
+/* --------------------------------------------------------------------- *
+ *  Webhook signing + verification
+ *
+ *  HMAC-SHA256 over Stripe-style `${timestamp}.${rawBody}`. Runtime-
+ *  agnostic (Node 18+, Deno, Bun, Workers, Edge / Fluid Compute).
+ *  Server-side only — never put `secret` in client code.
+ * --------------------------------------------------------------------- */
+
+export {
+  signWebhook,
+  verifyWebhook,
+  WHISK_SIGNATURE_HEADER,
+  WHISK_TIMESTAMP_HEADER,
+  WHISK_WEBHOOK_VERSION,
+  DEFAULT_TIMESTAMP_TOLERANCE_MS,
+} from "./webhooks/index.js";
+export type {
+  WebhookEnvelope,
+  SignWebhookOptions,
+  SignWebhookResult,
+  VerifyWebhookOptions,
+  WebhookVerifyResult,
+  WebhookVerifyError,
+} from "./webhooks/index.js";
+
+/* --------------------------------------------------------------------- *
+ *  Types
+ * --------------------------------------------------------------------- */
+
 export type {
   Chain,
   ChainKind,
@@ -51,40 +115,17 @@ export type {
   WhiskState,
   WhiskStateKind,
 } from "./types/index.js";
-export { DEFAULT_TOKEN, isBridgeRoute, isSendRoute } from "./types/index.js";
-
-// Chains
 export {
-  chainInfo,
-  chainByEvmId,
-  allChains,
-  chainsByNetwork,
-  chainsByKind,
-  explorerTxUrl,
-  explorerAddressUrl,
-  supportedTokensFor,
-  tokenAddressFor,
-} from "./chains/index.js";
-export type { ChainInfo, SupportedTokenAlias } from "./chains/index.js";
+  DEFAULT_FEE_BEARER,
+  DEFAULT_TOKEN,
+  isBridgeRoute,
+  isSendRoute,
+} from "./types/index.js";
 
-// Resolvers
-export { addressResolver, composeResolvers } from "./resolvers/index.js";
+/* --------------------------------------------------------------------- *
+ *  Errors
+ * --------------------------------------------------------------------- */
 
-// Routing
-export { decideRoute } from "./routing/index.js";
-
-// Fees
-export {
-  buildCustomFeeEntries,
-  fromAppKitFees,
-  sumFees,
-} from "./fees/index.js";
-
-// State machine
-export { reduce, initialState, initialSteps } from "./state/index.js";
-export type { WhiskAction } from "./state/index.js";
-
-// Errors
 export {
   WhiskError,
   NoAdapterError,
@@ -107,7 +148,76 @@ export type {
   WhiskErrorOptions,
 } from "./errors/index.js";
 
-// Recovery primitives
+/* --------------------------------------------------------------------- *
+ *  Chains, routing, resolvers
+ * --------------------------------------------------------------------- */
+
+export {
+  chainInfo,
+  chainByEvmId,
+  allChains,
+  chainsByNetwork,
+  chainsByKind,
+  explorerTxUrl,
+  explorerAddressUrl,
+  supportedTokensFor,
+  tokenAddressFor,
+} from "./chains/index.js";
+export type { ChainInfo, SupportedTokenAlias } from "./chains/index.js";
+export { cctpDomainFor, chainForCctpDomain } from "./chains/cctpDomain.js";
+export { inferMode, resolveMode } from "./chains/mode.js";
+
+export { decideRoute } from "./routing/index.js";
+
+export { addressResolver, composeResolvers } from "./resolvers/index.js";
+
+/* --------------------------------------------------------------------- *
+ *  Fees
+ *
+ *  `splitCustomFee` + `WHISK_TREASURY_ADDRESS` make the 90/10 merchant
+ *  fee split inspectable. The end user always pays the configured
+ *  `feePolicy.value`; the split decides distribution only.
+ * --------------------------------------------------------------------- */
+
+export {
+  buildCustomFeeEntries,
+  sumFees,
+  sumForwarderFees,
+  sumProtocolFees,
+  BPS_DENOMINATOR,
+  WHISK_TREASURY_ADDRESS,
+  WHISK_TREASURY_BPS,
+  splitCustomFee,
+} from "./fees/index.js";
+export type { CustomFeeSplit } from "./fees/index.js";
+
+/* --------------------------------------------------------------------- *
+ *  State machine
+ * --------------------------------------------------------------------- */
+
+export { reduce, initialState, initialSteps } from "./state/index.js";
+export type { WhiskAction } from "./state/index.js";
+
+/* --------------------------------------------------------------------- *
+ *  Metadata correlation
+ * --------------------------------------------------------------------- */
+
+export {
+  METADATA_MAX_BYTES,
+  METADATA_RESERVED_PREFIX,
+  mergeMetadata,
+  validateMetadata,
+} from "./metadata/index.js";
+export type { WhiskMetadata } from "./metadata/index.js";
+
+/* --------------------------------------------------------------------- *
+ *  Recovery — browser persistence
+ *
+ *  Touches `window.localStorage`. Returns null / false on Node, Workers,
+ *  or any SSR environment. Server consumers can ignore these — CCTP
+ *  recovery is a page-refresh concern, not a server one.
+ * --------------------------------------------------------------------- */
+
 export {
   saveInflight,
   loadInflight,
@@ -117,6 +227,18 @@ export {
   deserializeError,
   INFLIGHT_TTL_MS,
   STORAGE_PREFIX,
+} from "./recovery/index.js";
+export type { InflightSnapshot, WalletKind } from "./recovery/index.js";
+
+/* --------------------------------------------------------------------- *
+ *  Recovery — universal
+ *
+ *  Iris polling, MessageTransmitter helpers, receipt projection. Runs
+ *  on every runtime that exposes `fetch` (Node 18+, Deno, Bun, Workers,
+ *  Edge / Fluid Compute).
+ * --------------------------------------------------------------------- */
+
+export {
   fetchAttestationOnce,
   pollAttestation,
   getIrisBaseUrl,
@@ -129,17 +251,18 @@ export {
   EVM_MAINNET_MESSAGE_TRANSMITTER,
   EVM_TESTNET_MESSAGE_TRANSMITTER,
   SOLANA_MESSAGE_TRANSMITTER,
+  deriveReceiptView,
+  describeReceiptChains,
+  RECEIPT_STAGE_LABELS,
+  RECEIPT_STAGE_HELP,
 } from "./recovery/index.js";
 export type {
-  InflightSnapshot,
-  WalletKind,
   IrisMessage,
   IrisStatus,
   FetchAttestationOptions,
   PollAttestationOptions,
   ReceiveMessageCall,
+  ReceiptInput,
+  ReceiptStage,
+  ReceiptView,
 } from "./recovery/index.js";
-
-// CCTP domain helpers
-export { cctpDomainFor, chainForCctpDomain } from "./chains/cctpDomain.js";
-export { inferMode, resolveMode } from "./chains/mode.js";

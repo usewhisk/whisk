@@ -1,0 +1,181 @@
+---
+title: Issuing refunds
+description: Send funds back to the original payer with a single engine call. Correlation metadata travels with the refund so receipts and webhooks can link it back.
+---
+
+A refund in Whisk is a regular send in reverse, plus
+correlation metadata that links it back to the original
+transfer. Mechanically you sign a USDC transfer from your
+wallet on the chain where you received the original payment,
+back to the customer's address on whichever chain they want
+the refund delivered.
+
+`engine.refund` handles the shape conversion, stamps
+`__refundOfTxHash` (and `__refundReason` if you pass one) onto
+the result metadata, and reuses the same lifecycle events as a
+normal send. The step rail, error handling, and
+mid-flight recovery all behave identically.
+
+## When to use which surface
+
+| Where the refund originates                                     | Reach for                                 |
+| --------------------------------------------------------------- | ----------------------------------------- |
+| Customer support dashboard (merchant user signs from a browser) | `useRefund` + your own admin UI           |
+| Server-side cron / fulfilment service                           | `engine.refund` with a Circle DCW adapter |
+| One-off operator script                                         | `engine.refund` directly                  |
+
+Both surfaces validate the same way and produce the same
+metadata. The hook just wraps the engine call in a React state
+machine with the wallet-adapter dance.
+
+## Server-side refund
+
+For most production integrations the refund is initiated by
+your backend, not the customer. Hand the engine an adapter around
+your merchant signing key and call `refund`:
+
+```ts title="server/refund.ts"
+import { createWhisk } from "@usewhisk/core";
+import { createEvmAdapter } from "./adapter.js"; // your viem wrapper
+
+const merchantAdapter = createEvmAdapter({
+  chain: "Ethereum_Sepolia",
+  privateKey: process.env.MERCHANT_PRIVATE_KEY! as `0x${string}`,
+});
+
+const engine = createWhisk({
+  chains: ["Ethereum_Sepolia", "Base_Sepolia"],
+});
+
+export async function issueRefund(order: {
+  originalTxHash: string;
+  payerAddress: string;
+  payerChain: "Base_Sepolia";
+  merchantChain: "Ethereum_Sepolia";
+  amount: string;
+  reason: string;
+}) {
+  return engine.refund({
+    originalTxHash: order.originalTxHash,
+    originalDestinationChain: order.merchantChain,
+    refundDestinationChain: order.payerChain,
+    originalSenderAddress: order.payerAddress,
+    amount: order.amount,
+    reason: order.reason,
+    merchantAdapter,
+  });
+}
+```
+
+The merchant chain (where you received the original payment)
+is the **source** of the refund. The payer's chain is the
+**destination**. Whisk's quote layer handles same-ecosystem and
+cross-ecosystem routing — you don't need to branch on
+EVM vs Solana.
+
+## Admin dashboard (browser-signed)
+
+For a merchant admin UI where a human operator approves and
+signs each refund, `useRefund` is the React surface. The
+adapter rebuilds when the operator's wallet connects:
+
+```tsx title="components/RefundButton.tsx"
+"use client";
+
+import { useRefund } from "@usewhisk/react";
+import type { Chain } from "@usewhisk/core";
+
+export function RefundButton({ order }) {
+  const merchantChain: Chain = "Ethereum_Sepolia";
+  const { state, isReady, refund } = useRefund(merchantChain);
+
+  return (
+    <button
+      disabled={!isReady || state.kind === "refunding"}
+      onClick={() =>
+        refund({
+          originalTxHash: order.txHash,
+          originalDestinationChain: merchantChain,
+          refundDestinationChain: order.payerChain,
+          originalSenderAddress: order.payerAddress,
+          amount: order.amount,
+          reason: "customer_request",
+        })
+      }
+    >
+      {state.kind === "refunding" ? "Refunding…" : "Refund"}
+    </button>
+  );
+}
+```
+
+The hook enforces one invariant: `merchantChain` must equal the
+order's `originalDestinationChain` (you can't sign from a chain
+other than where the funds live). It surfaces a clean config
+error if they diverge.
+
+## Partial refunds
+
+Just pass a smaller `amount`. The engine doesn't track how
+much of the original transfer has been refunded; that's your
+order book's job. If you want to enforce a cap, check your DB
+before calling `refund`:
+
+```ts
+const refunded = await db.refunds.where({ originalTxHash }).sum("amount");
+
+if (Number(refunded) + Number(requestedAmount) > Number(originalAmount)) {
+  throw new Error("Refund exceeds original payment");
+}
+```
+
+## How the correlation works
+
+Two reserved metadata keys are stamped onto the refund result:
+
+- `__refundOfTxHash` — always present, holds the source-chain
+  tx hash of the original transfer.
+- `__refundReason` — present when you pass `reason`.
+
+These are visible in:
+
+- `result.metadata` returned from `engine.refund`.
+- The localStorage recovery snapshot so a mid-flight refund
+  failure preserves the link.
+- Any webhook payload your backend sends (see the
+  [webhook flow](/docs/flows/webhooks)) — the metadata round-trips.
+
+Merchants can't shadow these keys. `validateRefundInput`
+rejects any `__`-prefixed key in the merchant `metadata`
+field; the engine stamps the refund keys after merchant
+validation runs.
+
+## Reason codes
+
+`reason` is a free-form string capped at 256 characters. Pick a
+convention and keep it stable. Common shapes:
+
+```ts
+reason: "customer_request";
+reason: "fraud";
+reason: "out_of_stock";
+reason: "double_charge";
+reason: "wrong_amount:expected_10.00_charged_15.00";
+```
+
+If you're doing analytics on reasons, prefer short stable
+slugs over free-form English so they group cleanly in your
+warehouse.
+
+## What you don't get
+
+- **No automatic chargebacks.** Whisk doesn't reach out to the
+  card network or freeze funds. A refund is an outgoing
+  transfer; you decide when to issue it.
+- **No idempotency guard from Whisk.** If your route handler
+  fires `refund` twice for the same order, both go through.
+  Use a unique key on your `(orderId, refundId)` pair before
+  calling.
+- **No multi-token refunds.** USDC only, matching the rest of
+  the engine. If the customer paid in a different token, you'd
+  do a swap then a refund — two engine calls, not one.

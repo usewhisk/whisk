@@ -5,76 +5,73 @@ import type {
   FeePolicy,
 } from "../types/fee.js";
 import type { Token } from "../types/token.js";
+import { splitCustomFee, WHISK_TREASURY_ADDRESS } from "./treasury.js";
 
-export type AppKitEstimateFee = {
-  type: "kit" | "provider" | "forwarder" | "gasFee";
-  token: "USDC" | string;
-  amount: string | null;
-  error?: unknown;
-};
+const USDC_DECIMALS_BIG = 10n ** 6n;
 
-/** Host 90% / Arc 10%. The actual split happens on-chain; entries are informational. */
+/**
+ * Build the merchant fee entries from an integrator-supplied
+ * {@link FeePolicy}. The total comes out to `policy.value`, split 90/10
+ * between `policy.recipient` (merchant) and the Whisk treasury. The end
+ * user always pays the same total — the split decides how it's
+ * distributed.
+ *
+ * Only the absolute-amount form is supported (`policy.value`). The
+ * basis-points form (`policy.bps`) is reserved for the future Swap
+ * surface and is ignored here.
+ */
 export function buildCustomFeeEntries(
   policy: FeePolicy | undefined,
   token: Token,
 ): FeeEntry[] {
   if (!policy?.value || policy.value === "0") return [];
-  const total = parseFloat(policy.value);
-  if (Number.isNaN(total) || total <= 0) return [];
-  const hostShare = formatAmount(total * 0.9);
-  const arcShare = formatAmount(total * 0.1);
-  return [
-    {
+  const totalSubunits = parseSubunits(policy.value);
+  if (totalSubunits <= 0n) return [];
+  const { merchant, whisk } = splitCustomFee(totalSubunits);
+  const entries: FeeEntry[] = [];
+  if (merchant > 0n) {
+    entries.push({
       kind: "custom",
-      amount: hostShare,
+      amount: formatFromSubunits(merchant),
       token,
       recipient: policy.recipient,
-      description: "Host fee (90%)",
-    },
-    {
-      kind: "custom",
-      amount: arcShare,
-      token,
-      description: "Arc share (10%)",
-    },
-  ];
-}
-
-export function fromAppKitFees(
-  fees: ReadonlyArray<AppKitEstimateFee>,
-  defaultToken: Token,
-): FeeEntry[] {
-  const entries: FeeEntry[] = [];
-  for (const f of fees) {
-    if (f.amount == null) continue;
+      description: "Merchant fee (90%)",
+    });
+  }
+  if (whisk > 0n) {
     entries.push({
-      kind: mapAppKitFeeType(f.type),
-      amount: f.amount,
-      token: (f.token as Token) ?? defaultToken,
+      kind: "custom",
+      amount: formatFromSubunits(whisk),
+      token,
+      recipient: WHISK_TREASURY_ADDRESS,
+      description: "Whisk platform fee (10%)",
     });
   }
   return entries;
 }
 
-function mapAppKitFeeType(type: AppKitEstimateFee["type"]): FeeEntry["kind"] {
-  switch (type) {
-    case "provider":
-      return "provider";
-    case "gasFee":
-      return "gas";
-    case "forwarder":
-      return "forwarder";
-    case "kit":
-      return "protocol";
-    default:
-      return "protocol";
-  }
+/** Parse a human USDC amount string into subunits without throwing. */
+function parseSubunits(input: string): bigint {
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(input.trim());
+  if (!match) return 0n;
+  const whole = match[1] ?? "0";
+  const fractionRaw = match[2] ?? "";
+  const fraction = fractionRaw.slice(0, 6).padEnd(6, "0");
+  return BigInt(whole) * USDC_DECIMALS_BIG + BigInt(fraction);
+}
+
+function formatFromSubunits(subunits: bigint): string {
+  const whole = subunits / USDC_DECIMALS_BIG;
+  const fraction = subunits % USDC_DECIMALS_BIG;
+  if (fraction === 0n) return whole.toString();
+  const fractionStr = fraction.toString().padStart(6, "0").replace(/0+$/, "");
+  return `${whole}.${fractionStr}`;
 }
 
 /**
  * Fee kinds deducted from the bridged USDC, i.e. the ones that reduce what the
  * recipient receives. Excludes `gas` (paid in the source chain's native token)
- * and `custom` (the host fee, added on top of the transfer).
+ * and `custom` (the merchant fee, added on top of the transfer).
  */
 const DEDUCTED_FROM_TRANSFER: ReadonlyArray<FeeEntryKind> = [
   "provider",
@@ -94,8 +91,8 @@ export function sumProtocolFees(entries: FeeEntry[], token: Token): number {
 }
 
 /**
- * Just the Forwarding Service fee, in the transfer token. Isolated from the
- * other deducted fees because it's gas-priced at mint time, so it's the only
+ * Just the Forwarder fee, in the transfer token. Isolated from the other
+ * deducted fees because it's gas-priced at mint time, so it's the only
  * part the `"sender"` gross-up cushions against drift.
  */
 export function sumForwarderFees(entries: FeeEntry[], token: Token): number {

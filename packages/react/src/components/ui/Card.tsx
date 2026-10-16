@@ -4,12 +4,11 @@ import { forwardRef, type HTMLAttributes } from "react";
 import { cn } from "../../lib/cn.js";
 
 /**
- * The widget shell. Padding lives in the CSS class so theme overrides
- * stay in one place; consumers can layer additional styles via
- * `className`.
+ * Outer surface for every Whisk widget. Themed via `whisk-card` so the
+ * background, border, and radius all route through `--whisk-*` tokens.
  */
 export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  function Card({ className, ...props }, ref) {
-    return <div ref={ref} className={cn("whisk-card", className)} {...props} />;
+  function Card({ className, ...rest }, ref) {
+    return <div ref={ref} className={cn("whisk-card", className)} {...rest} />;
   },
 );

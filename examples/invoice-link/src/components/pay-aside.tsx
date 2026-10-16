@@ -52,7 +52,6 @@ function PayPanel({
           recipient={invoice.to}
           sourceChain={invoice.chain}
           destinationChain={invoice.chain}
-          showFooter={false}
           onSuccess={({ finalTxHash }) => onPaid(finalTxHash)}
         />
       </div>

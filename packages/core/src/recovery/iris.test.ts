@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Chain } from "../types/chain.js";
 import {
   IRIS_MAINNET_URL,
   IRIS_SANDBOX_URL,
@@ -44,9 +45,10 @@ describe("getIrisBaseUrl", () => {
 
 describe("fetchAttestationOnce", () => {
   it("returns not_found when the source chain has no CCTP domain", async () => {
-    // Monad_Testnet is in the chain registry but has no CCTP domain entry.
+    // Every chain in the registry now has a CCTP domain, so to exercise the
+    // early-return branch we synthesize a chain string that isn't in the map.
     const fetchMock = stubFetch();
-    const msg = await fetchAttestationOnce("Monad_Testnet", "0xburn");
+    const msg = await fetchAttestationOnce("__no_domain__" as Chain, "0xburn");
     expect(msg.status).toBe("not_found");
     // Iris should never have been called.
     expect(fetchMock).not.toHaveBeenCalled();
@@ -85,9 +87,16 @@ describe("fetchAttestationOnce", () => {
   });
 
   it("throws on non-OK non-404 responses", async () => {
-    stubFetch({ ok: false, status: 500, statusText: "Server Error" });
+    // Iris client retries 5xx with backoff before giving up, so the
+    // stub needs to fail every attempt.
+    const failing: FakeResponse = {
+      ok: false,
+      status: 500,
+      statusText: "Server Error",
+    };
+    stubFetch(failing, failing, failing, failing, failing);
     await expect(fetchAttestationOnce("Arc_Testnet", "0xburn")).rejects.toThrow(
-      /500/,
+      /Iris/,
     );
   });
 });

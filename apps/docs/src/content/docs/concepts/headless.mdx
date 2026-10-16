@@ -1,0 +1,134 @@
+---
+title: Headless engine
+description: Drive Whisk from Node, Vue, Svelte, Workers, or any non-React surface. Same engine, no UI dependencies.
+---
+
+`<WhiskSend>` bundles Whisk's UI opinions with the engine. When
+those opinions don't fit — a bespoke checkout, a mobile-first drawer,
+a server-side runner — reach past the widget and drive the engine
+directly.
+
+The engine lives in `@usewhisk/core`. It has no React import, no DOM
+touchpoints, and works the same in a Vite app, a Vue composable, a
+Node script, or a Cloudflare Worker.
+
+## Install just the engine
+
+<InstallCommand packages={["@usewhisk/core", "@usewhisk/cctp"]} />
+
+`@usewhisk/cctp` is the CCTP V2 protocol layer (chain registry,
+ABIs, Iris client, burn/mint builders). `@usewhisk/core` is the
+engine that composes them into `send()` / `refund()` calls.
+
+## Two shapes of headless
+
+**Bring your own UI**: keep the wallet stack (wagmi, Wallet Standard,
+Stellar Wallets Kit, `get-starknet-core`) but replace the widget with
+your own components. Use `useWhisk()` from `@usewhisk/react` for
+state management, but call `engine.send()` yourself from a custom
+button.
+
+**Server-side**: no browser at all. Import the engine on the server,
+build an adapter from your private key, and call the engine directly.
+See [Server-side sends](/docs/concepts/server-side) for a full walk.
+
+## The engine API
+
+Four methods do the heavy lifting:
+
+| Method           | Returns                      |
+| ---------------- | ---------------------------- |
+| `engine.resolve` | `ResolvedRecipient`          |
+| `engine.quote`   | `Quote`                      |
+| `engine.send`    | `SendSuccess \| SendFailure` |
+| `engine.refund`  | `SendSuccess \| SendFailure` |
+
+Every one accepts an `adapter`. The adapter is your bridge to a
+signer — it can be an EVM adapter backed by viem or wagmi, a Solana
+adapter backed by Wallet Standard, or a Starknet adapter backed by
+Argent X. Adapters are per-ecosystem; use the right one for the
+source chain.
+
+## Adapter matrix
+
+| Environment                         | Recommended adapter shape                                                           |
+| ----------------------------------- | ----------------------------------------------------------------------------------- |
+| Browser, wagmi (React)              | `useEvmAdapter()` from `@usewhisk/react`                                            |
+| Browser, injected `window.ethereum` | Custom `EvmAdapter` using viem's `custom()` transport (see `examples/vue-headless`) |
+| Node server, EVM private key        | Custom `EvmAdapter` using viem `privateKeyToAccount` (see `examples/node-headless`) |
+| Browser, Solana Wallet Standard     | `useSolanaAdapter()` from `@usewhisk/react`                                         |
+| Browser, Stellar Wallets Kit        | `useStellarAdapter()` from `@usewhisk/react`                                        |
+| Browser, Starknet get-starknet      | `useStarknetAdapter()` from `@usewhisk/react`                                       |
+
+The interfaces are small (5–6 methods each) and typed. Roll your own
+by implementing `EvmAdapter`, `SolanaAdapter`, `StellarAdapter`, or
+`StarknetAdapter` from `@usewhisk/core`.
+
+## A minimal headless send
+
+```ts title="server/send.ts"
+import { createWhisk } from "@usewhisk/core";
+import { createEvmAdapter } from "./adapter.js"; // your viem wrapper
+
+const engine = createWhisk({
+  chains: ["Base_Sepolia", "Ethereum_Sepolia"],
+  mode: "testnet",
+});
+
+const adapter = createEvmAdapter({
+  chain: "Base_Sepolia",
+  privateKey: process.env.PRIVATE_KEY! as `0x${string}`,
+});
+
+const recipient = await engine.resolve("0xrecipient…", "Ethereum_Sepolia");
+const quote = await engine.quote({
+  recipient,
+  amount: "1.00",
+  sourceChain: "Base_Sepolia",
+  destinationChain: "Ethereum_Sepolia",
+  adapter,
+});
+
+const result = await engine.send({
+  recipient,
+  amount: "1.00",
+  sourceChain: "Base_Sepolia",
+  destinationChain: "Ethereum_Sepolia",
+  adapter,
+  quote,
+});
+```
+
+That's the whole flow: resolve → quote → send. The React widget adds
+UI on top of this exact shape.
+
+## Cross-ecosystem: the destination adapter
+
+Bridges to non-EVM destinations (Solana, Stellar, Starknet) need a
+`destinationAdapter` to sign the mint on the target chain, because
+Circle's Iris auto-forwarder only relays to EVM.
+
+```ts
+await engine.send({
+  recipient,
+  amount: "1.00",
+  sourceChain: "Base_Sepolia",
+  destinationChain: "Stellar_Testnet",
+  adapter, // signs the burn on the source
+  destinationAdapter, // signs the mint on Stellar
+  quote,
+});
+```
+
+For EVM→EVM and Solana→EVM, the Iris Forwarder auto-mints and
+`destinationAdapter` is unused. Whisk selects the right code path
+per route.
+
+## Related
+
+- [Server-side sends](/docs/concepts/server-side) — full example with
+  a scheduled payroll runner.
+- [`examples/node-headless`](https://github.com/usewhisk/whisk/tree/main/examples/node-headless)
+  — runnable send / payroll / refund scripts.
+- [`examples/vue-headless`](https://github.com/usewhisk/whisk/tree/main/examples/vue-headless)
+  — the engine driving a Vue UI, no React.

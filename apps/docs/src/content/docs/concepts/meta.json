@@ -2,12 +2,12 @@
   "title": "Concepts",
   "pages": [
     "engine",
+    "headless",
     "state-machine",
     "routing",
     "resolvers",
     "fees",
     "error-handling",
-    "server-side",
-    "user-controlled-wallets"
+    "server-side"
   ]
 }

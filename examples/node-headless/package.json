@@ -1,0 +1,29 @@
+{
+  "name": "@usewhisk/example-node-headless",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Node script that drives @usewhisk/core directly via viem. Demonstrates the headless flow: server-side send/bridge, refund, receipt polling, webhook signing.",
+  "type": "module",
+  "scripts": {
+    "send": "tsx src/send.ts",
+    "payroll": "tsx src/payroll.ts",
+    "refund": "tsx src/refund.ts",
+    "receipt": "tsx src/receipt.ts",
+    "webhook-server": "tsx src/webhook-server.ts",
+    "webhook-send": "tsx src/webhook-send.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@usewhisk/cctp": "workspace:*",
+    "@usewhisk/core": "workspace:*",
+    "viem": "^2.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2"
+  }
+}

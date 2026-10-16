@@ -54,7 +54,7 @@ const { actions } = useWhisk();
 
 // disconnected → idle happens automatically on wallet connect.
 await actions.resolve("vitalik.eth", "Base_Sepolia"); // → idle (with recipient)
-await actions.quote(recipient, "10", "Arc_Testnet"); // → review
+await actions.quote(recipient, "10", "Ethereum_Sepolia"); // → review
 await actions.send(); // → success | error
 actions.back(); // review → idle
 actions.reset(); // any → idle

@@ -15,6 +15,7 @@ export type {
   FeeEntryKind,
   FeeBreakdown,
 } from "./fee.js";
+export { DEFAULT_FEE_BEARER } from "./fee.js";
 export type { StepName, StepState, Step } from "./step.js";
 export type { Quote } from "./quote.js";
 export type { WhiskConfig, WhiskMode } from "./config.js";

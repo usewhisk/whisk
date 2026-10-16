@@ -1,3 +1,12 @@
+/**
+ * Lifecycle step names emitted by the engine.
+ *
+ *   approve            ERC-20 approval to the TokenMessenger (bridge only)
+ *   transfer           Same-chain USDC transfer
+ *   burn               Source-chain `depositForBurnWithHook`
+ *   fetchAttestation   Waiting for Iris attestation
+ *   mint               Destination-chain `receiveMessage` (or Forwarder)
+ */
 export type StepName =
   | "approve"
   | "transfer"

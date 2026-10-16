@@ -7,7 +7,11 @@ import type {
   WhiskMode,
 } from "@usewhisk/core";
 
-export type WalletAdapterFactory = EvmAdapterFactory | SolanaAdapterFactory;
+export type WalletAdapterFactory =
+  | EvmAdapterFactory
+  | SolanaAdapterFactory
+  | StellarAdapterFactory
+  | StarknetAdapterFactory;
 
 export type EvmAdapterFactory = {
   kind: "evm";
@@ -20,7 +24,35 @@ export type SolanaAdapterFactory = {
   config?: unknown;
 };
 
+export type StellarAdapterFactory = {
+  kind: "stellar";
+  /** {@link StellarConfig} — opaque to the type system so the kit dep is lazy. */
+  config: unknown;
+};
+
+export type StarknetAdapterFactory = {
+  kind: "starknet";
+  /** {@link StarknetConfig} — opaque so the wallet SDK stays lazy. */
+  config: unknown;
+};
+
 export type WhiskClientConfig = {
+  /**
+   * Whisk app key from the console. Format: `wsk_pk_test_...` or
+   * `wsk_pk_live_...`. Get one at https://cloud.usewhisk.xyz.
+   *
+   * Optional today with a 30-day grace warning; will become required
+   * once the transition period ends. Without it, the widget still
+   * functions but usage isn't tracked and the fee tier can't be
+   * resolved.
+   */
+  appId?: string;
+  /**
+   * Base URL of the Whisk Cloud API. Only override for self-hosting
+   * or testing against a staging deployment.
+   * @default "https://cloud.usewhisk.xyz"
+   */
+  cloudBaseUrl?: string;
   wallets: WalletAdapterFactory[];
   chains: Chain[];
   defaultSourceChain?: Chain;

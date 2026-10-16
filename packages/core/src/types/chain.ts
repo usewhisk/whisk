@@ -16,6 +16,8 @@ export type Chain =
   | "Sei"
   | "Solana"
   | "Sonic"
+  | "Starknet"
+  | "Stellar"
   | "Unichain"
   | "World_Chain"
   | "XDC"
@@ -25,21 +27,25 @@ export type Chain =
   | "Avalanche_Fuji"
   | "Base_Sepolia"
   | "Codex_Testnet"
+  | "Edge_Testnet"
   | "Ethereum_Sepolia"
   | "HyperEVM_Testnet"
   | "Ink_Testnet"
   | "Linea_Sepolia"
   | "Monad_Testnet"
+  | "Morph_Testnet"
   | "Optimism_Sepolia"
   | "Plume_Testnet"
   | "Polygon_Amoy_Testnet"
   | "Sei_Testnet"
   | "Solana_Devnet"
   | "Sonic_Testnet"
+  | "Starknet_Sepolia"
+  | "Stellar_Testnet"
   | "Unichain_Sepolia"
   | "World_Chain_Sepolia"
   | "XDC_Apothem";
 
-export type ChainKind = "evm" | "solana";
+export type ChainKind = "evm" | "solana" | "stellar" | "starknet";
 
 export type ChainNetwork = "mainnet" | "testnet";
