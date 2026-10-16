@@ -1,90 +1,106 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
-# Cancel in-flight runs on the same ref when a new push lands.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Default to read-only; individual jobs opt in to anything more.
 permissions:
   contents: read
 
+env:
+  CI: true
+
 jobs:
-  build:
-    name: Type-check, test, build
+  checks:
+    name: format, lint, typecheck
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
-          fetch-depth: 1
           persist-credentials: false
-
-      # No `with: version` here — `pnpm/action-setup@v6` reads the version
-      # from the root `package.json`'s `packageManager` field, and passing
-      # both is a hard error (ERR_PNPM_BAD_PM_VERSION).
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v6
+      # pnpm/action-setup reads the version from packageManager; passing one here is an error.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
           cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Build first — `packages/react`'s typecheck resolves
-      # `@strimz/whisk-core` via the workspace package.json's
-      # `types: ./dist/index.d.ts`, which doesn't exist on a fresh
-      # checkout. Without the build step running first, every import
-      # of `@strimz/whisk-core` errors with TS2307 and a wave of
-      # cascading "implicit any" errors fall out of it.
-      - name: Build
+      - run: pnpm install --frozen-lockfile
+      - name: Prettier (format check)
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Build packages
         run: pnpm build
-
-      - name: Type-check
+      - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
-        run: pnpm test
-
-      - name: Build example app
-        run: pnpm --filter @usewhisk/playground build
-
-  audit:
-    name: Dependency audit
+  tests:
+    name: tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
-          fetch-depth: 1
           persist-credentials: false
-
-      # No `with: version` here — `pnpm/action-setup@v6` reads the version
-      # from the root `package.json`'s `packageManager` field, and passing
-      # both is a hard error (ERR_PNPM_BAD_PM_VERSION).
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Unit tests
+        run: pnpm test
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+  build:
+    name: build, release notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build packages
+        run: pnpm build
+      - name: Build apps
+        run: pnpm build:apps
+      - name: Release Notes Governance Gate
+        run: STRICT_RELEASE_NOTES=true bash scripts/check_release_notes.sh
 
-      # Fail only on high or critical advisories. Moderate/low are surfaced
-      # via Dependabot security updates instead — they shouldn't block PRs.
-      - name: Audit (high+)
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Moderate and low advisories go through Dependabot instead of blocking PRs.
+      - name: Audit (high and critical)
         run: pnpm audit --audit-level=high
+
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    needs: [checks, tests, build, audit]
+    if: always()
+    steps:
+      - name: Every gate passed
+        run: |
+          echo '${{ toJSON(needs) }}' | grep -q '"result": "failure"' && exit 1
+          echo '${{ toJSON(needs) }}' | grep -q '"result": "cancelled"' && exit 1
+          echo ok

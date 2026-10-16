@@ -11,8 +11,7 @@
     "prebuild": "fumadocs-mdx",
     "build": "next build",
     "start": "next start -p 3030",
-    "typecheck": "fumadocs-mdx && tsc --noEmit",
-    "lint": "next lint"
+    "typecheck": "fumadocs-mdx && tsc --noEmit"
   },
   "engines": {
     "node": ">=20"

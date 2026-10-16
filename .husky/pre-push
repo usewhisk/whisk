@@ -1,0 +1,2 @@
+# Full preflight minus the app builds. CI runs those on every pull request.
+./scripts/preflight.sh --fast

@@ -5,3 +5,5 @@ out
 coverage
 pnpm-lock.yaml
 *.md
+.source
+.worktrees
