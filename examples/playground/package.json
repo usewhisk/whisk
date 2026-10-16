@@ -18,7 +18,7 @@
     "@usewhisk/core": "workspace:*",
     "@usewhisk/react": "workspace:*",
     "@tanstack/react-query": "^5.59.0",
-    "next": "^15.5.18",
+    "next": "^15.5.27",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
