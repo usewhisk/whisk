@@ -27,3 +27,14 @@ recovery-file*
 entity_secret*
 entity-secret*
 .vercel
+
+# governance
+.worktrees/
+/*.sh
+.env*
+!.env.example
+.claude/settings.local.json
+
+# Locally installed agent skills (install globally instead)
+.agents
+skills-lock.json

@@ -1,7 +1,12 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
   reactStrictMode: true,
+
+  // A worktree under .worktrees/ sits inside another checkout with its own
+  // lockfile, so Next would otherwise pick the outer checkout as the root.
+  outputFileTracingRoot: path.join(__dirname, "../.."),
 
   // Transpile our workspace packages so the example can run from source
   // (no need to build dist before `pnpm dev`). Production `next build`

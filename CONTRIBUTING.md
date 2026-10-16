@@ -15,6 +15,11 @@ Be decent, be specific, assume good faith. Critique code, not people.
 Most disagreements are about constraints the other side hasn't seen
 yet — ask before objecting.
 
+[AGENTS.md](./AGENTS.md) is the rulebook for every change, human or agent:
+ADR approval for non-trivial work, worktree isolation, test-first bug fixes,
+and `./scripts/preflight.sh` before every pull request. Craft rules live in
+[the engineering standards](./.claude/skills/whisk-engineering-standards/SKILL.md).
+
 ---
 
 ## Repo shape
