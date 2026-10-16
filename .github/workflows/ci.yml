@@ -52,6 +52,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build packages
+        run: pnpm build
       - name: Unit tests
         run: pnpm test
 
