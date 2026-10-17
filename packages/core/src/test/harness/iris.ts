@@ -16,10 +16,17 @@ export type FakeIris = {
   replyToReattest(...replies: IrisReply[]): void;
 };
 
-export const FAST_FEE_ROW: BurnFeeTier = {
+export const FAST_FEE_ROW = {
   finalityThreshold: 1000,
   minimumFee: 1.3,
   forwardFee: { low: 100_000, med: 250_000, high: 500_000 },
+};
+
+/** {@link FAST_FEE_ROW} as `getBurnFees` parses it. */
+export const FAST_FEE_TIER: BurnFeeTier = {
+  finalityThreshold: 1000,
+  minimumFee: 130n,
+  forwardFee: { low: 100_000n, med: 250_000n, high: 500_000n },
 };
 
 export const STANDARD_FEE_ROW = {

@@ -5,6 +5,7 @@ import type {
   FeePolicy,
 } from "../types/fee.js";
 import type { Token } from "../types/token.js";
+import { ConfigError } from "../errors/errors.js";
 import { splitCustomFee, WHISK_TREASURY_ADDRESS } from "./treasury.js";
 
 const USDC_DECIMALS_BIG = 10n ** 6n;
@@ -80,41 +81,51 @@ const DEDUCTED_FROM_TRANSFER: ReadonlyArray<FeeEntryKind> = [
 ];
 
 /**
- * Total of the fees deducted from the bridged amount, in the transfer token.
- * Used to gross up the burn when `feeBearer` is `"sender"` so the recipient
- * still nets the full amount.
+ * Total of the fees deducted from the bridged amount, in subunits of the
+ * transfer token. Used to gross up the burn when `feeBearer` is `"sender"`
+ * so the recipient still nets the full amount.
  */
-export function sumProtocolFees(entries: FeeEntry[], token: Token): number {
-  return entries
-    .filter((e) => e.token === token && DEDUCTED_FROM_TRANSFER.includes(e.kind))
-    .reduce((acc, e) => acc + (parseFloat(e.amount || "0") || 0), 0);
+export function sumProtocolFees(entries: FeeEntry[], token: Token): bigint {
+  return sumSubunits(
+    entries.filter(
+      (e) => e.token === token && DEDUCTED_FROM_TRANSFER.includes(e.kind),
+    ),
+  );
 }
 
 /**
- * Just the Forwarder fee, in the transfer token. Isolated from the other
- * deducted fees because it's gas-priced at mint time, so it's the only
- * part the `"sender"` gross-up cushions against drift.
+ * Just the Forwarder fee, in subunits of the transfer token. Isolated from
+ * the other deducted fees because it's gas-priced at mint time, so it's the
+ * only part the `"sender"` gross-up cushions against drift.
  */
-export function sumForwarderFees(entries: FeeEntry[], token: Token): number {
-  return entries
-    .filter((e) => e.token === token && e.kind === "forwarder")
-    .reduce((acc, e) => acc + (parseFloat(e.amount || "0") || 0), 0);
+export function sumForwarderFees(entries: FeeEntry[], token: Token): bigint {
+  return sumSubunits(
+    entries.filter((e) => e.token === token && e.kind === "forwarder"),
+  );
 }
 
 /** Cross-token entries (e.g. gas in ETH) stay in `entries` but don't roll into `total`. */
 export function sumFees(entries: FeeEntry[], token: Token): FeeBreakdown {
-  const total = entries
-    .filter((e) => e.token === token)
-    .reduce((acc, e) => acc + parseFloat(e.amount || "0"), 0);
   return {
-    total: formatAmount(total),
+    total: formatFromSubunits(
+      sumSubunits(entries.filter((e) => e.token === token)),
+    ),
     token,
     entries,
   };
 }
 
-function formatAmount(n: number): string {
-  // USDC precision (6 dp), trailing zeros stripped.
-  const fixed = n.toFixed(6);
-  return fixed.replace(/\.?0+$/, "") || "0";
+function sumSubunits(entries: FeeEntry[]): bigint {
+  return entries.reduce((acc, e) => acc + entrySubunits(e.amount), 0n);
+}
+
+// Entry amounts come from formatFromSubunits, so anything else is a bug
+// upstream and must not be summed as zero.
+function entrySubunits(amount: string): bigint {
+  const match = /^(\d+)(?:\.(\d{1,6}))?$/.exec(amount);
+  if (!match) {
+    throw new ConfigError(`Fee entry amount "${amount}" is not a USDC amount.`);
+  }
+  const fraction = (match[2] ?? "").padEnd(6, "0");
+  return BigInt(match[1] ?? "0") * USDC_DECIMALS_BIG + BigInt(fraction);
 }
