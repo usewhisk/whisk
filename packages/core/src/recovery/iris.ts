@@ -44,6 +44,8 @@ export type FetchAttestationOptions = {
   /** Override the Iris base URL. Defaults to the chain's network base. */
   baseUrl?: string;
   signal?: AbortSignal;
+  /** Defaults to the global `fetch`. */
+  fetch?: typeof fetch;
 };
 
 export type PollAttestationOptions = FetchAttestationOptions & {
@@ -82,6 +84,7 @@ export async function fetchAttestationOnce(
     network,
     ...(options.signal && { signal: options.signal }),
     ...(options.baseUrl && { baseUrl: options.baseUrl }),
+    ...(options.fetch && { fetch: options.fetch }),
   };
   const messages = await getMessages(
     { sourceDomain: domain as CctpDomain, transactionHash: burnTxHash },

@@ -121,6 +121,7 @@ export async function buildQuote(
       forwarderLevel: options.forwarderLevel,
     }),
     ...(options.config.feePolicy && { customFee: options.config.feePolicy }),
+    ...(options.config.fetch && { fetch: options.config.fetch }),
     token,
   });
 
