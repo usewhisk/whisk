@@ -23,6 +23,9 @@ Technical shape, per
   `createWhiskConfig`, along with `useWhiskCloud` and the Whisk protocol-fee row in
   `WhiskSend`. A handshake that verifies its token returns in Phase 2.
 - The hosted console is not part of this repo. It moves to `usewhisk/platform`.
+- `createWhisk` takes an optional `fetch`, used for every Iris request, and the Iris
+  functions in `@usewhisk/cctp` take one too. Pass one to route Iris through a proxy
+  or to stub Circle in tests.
 - `.gitleaks.toml` allows the public Stellar contract and issuer addresses and the
   fixture webhook secrets in tests, which gitleaks reads as generic API keys.
 
