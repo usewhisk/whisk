@@ -48,6 +48,7 @@ export type ExecuteStarknetToStellarInput = {
   destinationAdapter: StellarAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
+  fetch?: typeof fetch;
 };
 
 const ALL_STEPS: StepName[] = ["approve", "burn", "fetchAttestation", "mint"];
@@ -201,6 +202,7 @@ export async function executeStarknetToStellar(
       { sourceDomain: input.source.cctpDomain, transactionHash: burnHash },
       {
         network: input.network,
+        ...(input.fetch && { fetch: input.fetch }),
         ...(input.pollIntervalMs !== undefined && {
           intervalMs: input.pollIntervalMs,
         }),

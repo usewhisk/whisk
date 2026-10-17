@@ -2,17 +2,18 @@
  * Engine smoke tests — exercise `createWhisk` end-to-end on a same-chain
  * Send and a forwarder-driven Bridge.
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Base, Arbitrum } from "@usewhisk/cctp";
-import type { BurnFeeTier, IrisMessage } from "@usewhisk/cctp";
+import type { IrisMessage } from "@usewhisk/cctp";
 import type { EvmAdapter } from "./adapter.js";
+import type { WhiskConfig } from "../types/config.js";
 import { ConfigError } from "../errors/errors.js";
-
-const FAST_TIER: BurnFeeTier = {
-  finalityThreshold: 1000,
-  minimumFee: 1.3,
-  forwardFee: { low: 100_000, med: 250_000, high: 500_000 },
-};
+import { createWhisk as createEngine } from "./createWhisk.js";
+import {
+  createFakeEvmWallet,
+  createFakeIris,
+  type FakeIris,
+} from "../test/harness/index.js";
 
 const FORWARDED_MESSAGE: IrisMessage = {
   message: ("0x" + "11".repeat(32)) as `0x${string}`,
@@ -24,45 +25,30 @@ const FORWARDED_MESSAGE: IrisMessage = {
   forwardTxHash: "0xff".padEnd(66, "f"),
 };
 
-vi.mock("@usewhisk/cctp", async () => {
-  const actual =
-    await vi.importActual<typeof import("@usewhisk/cctp")>("@usewhisk/cctp");
-  return {
-    ...actual,
-    getBurnFees: vi.fn(async () => [FAST_TIER]),
-    pollMessages: vi.fn(async () => FORWARDED_MESSAGE),
-  };
-});
-
-const { createWhisk } = await import("./createWhisk.js");
-
-const SUCCESS_HASH =
-  "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as `0x${string}`;
-const SENDER = "0x0000000000000000000000000000000000000010" as `0x${string}`;
 const RECIPIENT = "0x0000000000000000000000000000000000000020";
 
+let iris: FakeIris;
+beforeEach(() => {
+  iris = createFakeIris();
+  iris.replyToMessages({ message: FORWARDED_MESSAGE });
+  vi.stubGlobal("fetch", () => {
+    throw new Error("the engine used the global fetch");
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
+
+const createWhisk = (config: WhiskConfig) =>
+  createEngine({ ...config, fetch: iris.fetch });
+
+function makeWallet(chainId: number = Base.evmChainId) {
+  const wallet = createFakeEvmWallet({ chainId });
+  wallet.fund(Base.evmChainId, Base.usdc, 100_000_000n);
+  wallet.fund(Arbitrum.evmChainId, Arbitrum.usdc, 100_000_000n);
+  return wallet;
+}
+
 function makeAdapter(opts: { chainId?: number } = {}): EvmAdapter {
-  return {
-    kind: "evm",
-    address: SENDER,
-    async getChainId() {
-      return opts.chainId ?? Base.evmChainId;
-    },
-    async switchChain() {},
-    async sendCalls(calls) {
-      // One hash per call so the bridge path sees a separate approve + burn.
-      return {
-        hashes: calls.map(
-          (_, i) =>
-            ((i === 0 ? "0xaa" : "0xbb") +
-              "".padEnd(64, i === 0 ? "a" : "b")) as `0x${string}`,
-        ),
-      };
-    },
-    async waitForReceipt() {
-      return { status: "success", blockNumber: 1n };
-    },
-  };
+  return makeWallet(opts.chainId).adapter;
 }
 
 describe("createWhisk", () => {
@@ -135,7 +121,8 @@ describe("createWhisk", () => {
       chains: ["Base", "Arbitrum"],
       feeBearer: "sender",
     });
-    const adapter = makeAdapter();
+    const wallet = makeWallet();
+    const adapter = wallet.adapter;
     const quote = await engine.quote({
       sourceChain: "Base",
       destinationChain: "Arbitrum",
@@ -158,6 +145,13 @@ describe("createWhisk", () => {
       expect(mintStep?.forwarded).toBe(true);
       expect(result.finalTxHash).toBe(FORWARDED_MESSAGE.forwardTxHash);
     }
+    expect(wallet.burns).toHaveLength(1);
+    expect(wallet.burns[0]?.destinationDomain).toBe(Arbitrum.cctpDomain);
+    expect(
+      iris.requests.map((r) => `${r.method} ${r.url.host}${r.url.pathname}`),
+    ).toContain(
+      `GET iris-api.circle.com/v2/burn/USDC/fees/${Base.cctpDomain}/${Arbitrum.cctpDomain}`,
+    );
   });
 
   it("rejects an EVM adapter when the chain is Solana with a clear ConfigError", async () => {

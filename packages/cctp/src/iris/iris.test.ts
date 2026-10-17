@@ -194,6 +194,22 @@ describe("getMessages", () => {
   });
 });
 
+describe("injected fetch", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("calls the fetch it was given instead of the global one", async () => {
+    const globalFetch = vi.fn();
+    vi.stubGlobal("fetch", globalFetch);
+    const injected = vi.fn(async () => jsonResponse({ messages: [] }));
+    await getMessages(
+      { sourceDomain: 6, transactionHash: "0xabc" },
+      { network: "testnet", fetch: injected },
+    );
+    expect(injected).toHaveBeenCalledOnce();
+    expect(globalFetch).not.toHaveBeenCalled();
+  });
+});
+
 // helpers
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {

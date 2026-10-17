@@ -45,6 +45,12 @@ export type WhiskConfig = {
    */
   useForwarder?: boolean;
 
+  /**
+   * Used for every Iris request. Defaults to the global `fetch`. Pass one
+   * to route Iris through a proxy, or to stub Circle in tests.
+   */
+  fetch?: typeof fetch;
+
   /** Inferred from `chains` when omitted. Mixed networks default to `"testnet"` with a warning. */
   mode?: WhiskMode;
 

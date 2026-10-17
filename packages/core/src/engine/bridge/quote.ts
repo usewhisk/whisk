@@ -60,6 +60,7 @@ export type BuildBridgeQuoteInput = {
    * does not affect customFee.
    */
   customFee?: FeePolicy;
+  fetch?: typeof fetch;
 };
 
 /** Estimated end-to-end duration for a Fast Transfer bridge. */
@@ -113,7 +114,10 @@ export async function buildBridgeQuote(
         input.network,
         input.source.cctpDomain,
         input.destination.cctpDomain,
-        { includeForwarderFee: !destSkipsIrisForwarder },
+        {
+          includeForwarderFee: !destSkipsIrisForwarder,
+          ...(input.fetch && { fetch: input.fetch }),
+        },
       ),
     );
 

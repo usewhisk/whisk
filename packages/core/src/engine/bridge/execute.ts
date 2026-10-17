@@ -73,6 +73,7 @@ export type ExecuteBridgeInput = {
   pollIntervalMs?: number;
   /** Iris poll timeout (ms). Default 15 minutes. */
   pollTimeoutMs?: number;
+  fetch?: typeof fetch;
 };
 
 /**
@@ -310,6 +311,7 @@ export async function executeBridge(
       },
       {
         network: input.network,
+        ...(input.fetch && { fetch: input.fetch }),
         ...(input.pollIntervalMs !== undefined && {
           intervalMs: input.pollIntervalMs,
         }),

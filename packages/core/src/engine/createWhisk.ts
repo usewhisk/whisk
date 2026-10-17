@@ -297,6 +297,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         ...(resolvedConfig.feePolicy && {
           customFee: resolvedConfig.feePolicy,
         }),
+        ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
       });
 
       // --- EVM → EVM (the original path) -----------------------------------
@@ -308,6 +309,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeBridge(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
             destination: evmDestination,
             recipientAddress: input.recipient.address,
@@ -332,6 +334,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeSolanaToEvm(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: solSource,
             destination: evmDestination,
             recipientAddress: input.recipient.address as `0x${string}`,
@@ -365,6 +368,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeEvmToStarknet(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
             destination: starknetDest,
             recipientAddress: input.recipient.address,
@@ -401,6 +405,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeStarknetToEvm(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: starknetSource,
             destination: evmDestination,
             recipientAddress: input.recipient.address as `0x${string}`,
@@ -434,6 +439,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeEvmToStellar(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
             destination: stellarDest,
             recipientAddress: input.recipient.address,
@@ -472,6 +478,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeStellarToEvm(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: stellarSource,
             destination: evmDestination,
             recipientAddress: input.recipient.address as `0x${string}`,
@@ -507,6 +514,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeSolanaToStarknet(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: solSource,
             destination: starknetDest,
             recipientAddress: input.recipient.address,
@@ -545,6 +553,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeStarknetToSolana(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: starknetSource,
             destination: solDestination,
             recipientAddress: input.recipient.address,
@@ -583,6 +592,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeStellarToStarknet(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: stellarSource,
             destination: starknetDest,
             recipientAddress: input.recipient.address,
@@ -621,6 +631,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeStarknetToStellar(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: starknetSource,
             destination: stellarDest,
             recipientAddress: input.recipient.address,
@@ -656,6 +667,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeSolanaToStellar(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: solSource,
             destination: stellarDest,
             recipientAddress: input.recipient.address,
@@ -694,6 +706,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeStellarToSolana(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: stellarSource,
             destination: solDestination,
             recipientAddress: input.recipient.address,
@@ -727,6 +740,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeEvmToSolana(
           {
             network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
             destination: solDestination,
             recipientAddress: input.recipient.address,

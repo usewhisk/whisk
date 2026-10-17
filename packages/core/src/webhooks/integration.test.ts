@@ -7,7 +7,7 @@
  * receiver verifies it; the UI re-renders the same lifecycle from the
  * stored source-tx hash.
  */
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Base } from "@usewhisk/cctp";
 import type { EvmAdapter } from "../engine/adapter.js";
 import {
@@ -18,13 +18,7 @@ import {
 } from "./sign.js";
 import { deriveReceiptView } from "../recovery/receipt.js";
 
-vi.mock("@usewhisk/cctp", async () => {
-  const actual =
-    await vi.importActual<typeof import("@usewhisk/cctp")>("@usewhisk/cctp");
-  return { ...actual };
-});
-
-const { createWhisk } = await import("../engine/createWhisk.js");
+import { createWhisk } from "../engine/createWhisk.js";
 
 const SECRET = "whsk_test_secret_a1b2c3d4e5f6";
 const SUCCESS_HASH =
