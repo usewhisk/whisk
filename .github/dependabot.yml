@@ -8,6 +8,10 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # plugin-react 6 needs vite 8; the examples stay on vite 6 until that upgrade.
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         update-types: [minor, patch]
