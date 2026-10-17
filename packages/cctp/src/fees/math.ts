@@ -3,65 +3,74 @@
  *
  * Two protocol-level fees stack on a Fast Transfer + Forwarder bridge:
  *
- *   1. Burn fee — a percentage of the transfer amount, charged by
- *      CCTP. Iris returns `minimumFee` scaled by 100 to preserve
- *      0.01 bps precision (so `minimumFee: 1.3` means 1.3 bps, which
- *      is 0.013% of the amount).
+ *   1. Burn fee: a rate on the transfer amount, charged by CCTP. Iris
+ *      returns `minimumFee` in basis points with up to two decimals
+ *      (`1.3` is 0.013%). Whisk holds it as hundredths of a basis
+ *      point, so `1.3` becomes `130n`.
  *
- *   2. Forwarder fee — a flat USDC fee that pays for destination gas
- *      and the Orbit relayer's service surcharge. Iris returns three
- *      tiers (low / med / high). Whisk defaults to `med` and bumps to
- *      `high` when destination gas is volatile.
+ *   2. Forwarder fee: a flat USDC fee that pays for destination gas
+ *      and the relayer. Iris returns low, med and high levels in USDC
+ *      subunits. Whisk defaults to `med`.
  *
- * `maxFee` on `depositForBurnWithHook` must cover both. The actual
- * deducted fee can be less than `maxFee`; the unused budget goes to
- * priority gas on the destination chain (Circle does not refund).
+ * `maxFee` on `depositForBurnWithHook` must cover both. Every step
+ * rounds up: a `maxFee` one subunit short turns a Fast transfer into a
+ * Standard one.
  */
 
 import type { BurnFeeTier, ForwarderFeeTier } from "../iris/types.js";
-import { InvalidInputError, ProtocolError } from "../errors.js";
+import { InvalidInputError, IrisParseError, ProtocolError } from "../errors.js";
+
+const CENTI_BPS_PER_UNIT = 1_000_000n;
+
+const DECIMAL = /^(\d+)(?:\.(\d+))?$/;
+
+// JSON numbers reach us already parsed. String() gives back the shortest
+// decimal that round-trips, which is the literal Iris sent for any value
+// with 15 or fewer significant digits. Exponent forms are refused.
+function ceilDecimal(raw: unknown, decimals: number, what: string): bigint {
+  const text =
+    typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw : "";
+  const match = DECIMAL.exec(text);
+  if (!match) {
+    throw new IrisParseError(`Iris ${what} is invalid: ${String(raw)}`);
+  }
+  const fraction = match[2] ?? "";
+  const kept = fraction.slice(0, decimals).padEnd(decimals, "0");
+  const dropped = /[1-9]/.test(fraction.slice(decimals)) ? 1n : 0n;
+  return BigInt((match[1] ?? "0") + kept) + dropped;
+}
+
+/** Iris's `minimumFee` as hundredths of a basis point: `1.3` is `130n`. */
+export function parseFeeBps(raw: unknown): bigint {
+  return ceilDecimal(raw, 2, "minimumFee");
+}
+
+/** An Iris forwarder fee in USDC subunits, rounded up. */
+export function parseForwarderFee(raw: unknown): bigint {
+  return ceilDecimal(raw, 0, "forwardFee");
+}
 
 /**
- * Iris returns `minimumFee` as a bps decimal (e.g. `1.3` = 1.3 bps =
- * 0.013%). To stay in integer math we scale by 100 internally:
- *
- *   scaledFee = ceil(minimumFee * 100)         e.g. 1.3 → 130
- *   burnFee   = (amount × scaledFee) / 1_000_000
- *
- * For 1 USDC (= 1_000_000 subunits) at 1.3 bps:
- *   (1_000_000 × 130) / 1_000_000 = 130 subunits = $0.00013   ✓
+ * The CCTP burn fee on `amount` subunits at `feeCentiBps` hundredths of
+ * a basis point, rounded up.
  */
-const BPS_INTERNAL_DIVISOR = 1_000_000n;
-
-/**
- * Compute the CCTP burn fee for a given amount.
- *
- * `bps` is the value Iris returns (1.3 means 1.3 bps). Result is in
- * USDC subunits, ceil-rounded so the caller never under-quotes.
- */
-export function computeBurnFee(amount: bigint, bps: number): bigint {
+export function computeBurnFee(amount: bigint, feeCentiBps: bigint): bigint {
   if (amount < 0n) {
     throw new InvalidInputError(
       "invalid_amount",
       `amount must be non-negative, got ${amount}`,
     );
   }
-  if (!Number.isFinite(bps) || bps < 0) {
+  if (feeCentiBps < 0n) {
     throw new InvalidInputError(
       "invalid_input",
-      `bps must be a non-negative finite number, got ${bps}`,
+      `feeCentiBps must be non-negative, got ${feeCentiBps}`,
     );
   }
-  const scaledFee = BigInt(Math.ceil(bps * 100));
-  return (amount * scaledFee) / BPS_INTERNAL_DIVISOR;
+  return ceilDiv(amount * feeCentiBps, CENTI_BPS_PER_UNIT);
 }
 
-/**
- * Pick the right forwarder fee for a tier. Higher tier = more
- * priority gas budget on the destination.
- *
- * Returns USDC subunits (bigint).
- */
+/** The forwarder fee for a level, in USDC subunits. */
 export function selectForwarderFee(
   tier: BurnFeeTier,
   level: keyof ForwarderFeeTier = "med",
@@ -69,17 +78,17 @@ export function selectForwarderFee(
   if (!tier.forwardFee) {
     throw new ProtocolError(
       "fee_unavailable",
-      "Tier has no forwardFee — fetch burn fees with includeForwarderFee=true",
+      "Tier has no forwardFee. Fetch burn fees with includeForwarderFee=true",
     );
   }
   const value = tier.forwardFee[level];
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+  if (value < 0n) {
     throw new ProtocolError(
       "fee_unavailable",
-      `Invalid forwardFee.${level}: ${String(value)}`,
+      `Invalid forwardFee.${level}: ${value}`,
     );
   }
-  return BigInt(Math.ceil(value));
+  return value;
 }
 
 export type ComputeMaxFeeInput = {
@@ -90,10 +99,8 @@ export type ComputeMaxFeeInput = {
   /** Forwarder tier; defaults to `"med"`. */
   forwarderLevel?: keyof ForwarderFeeTier;
   /**
-   * Optional buffer to add to the forwarder fee in basis points
-   * (0–10000). Whisk defaults to 0 — the Iris `high` tier already
-   * includes a buffer. Apply a buffer only when burning during known
-   * gas spikes.
+   * Whole basis points added to the forwarder fee (0 to 10000). Iris's
+   * `high` level already carries a buffer, so this defaults to 0.
    */
   forwarderBufferBps?: number;
   /** Whether to include the forwarder fee. Defaults to `true`. */
@@ -139,13 +146,15 @@ export function computeMaxFee(input: ComputeMaxFeeInput): ComputeMaxFeeResult {
 }
 
 function applyBufferBps(value: bigint, bps: number): bigint {
-  if (!Number.isFinite(bps) || bps < 0) {
+  if (!Number.isSafeInteger(bps) || bps < 0) {
     throw new InvalidInputError(
       "invalid_input",
-      `bufferBps must be a non-negative finite number, got ${bps}`,
+      `bufferBps must be a non-negative whole number, got ${bps}`,
     );
   }
-  if (bps === 0) return value;
-  const bpsBig = BigInt(Math.ceil(bps));
-  return (value * (10_000n + bpsBig)) / 10_000n;
+  return ceilDiv(value * (10_000n + BigInt(bps)), 10_000n);
+}
+
+function ceilDiv(numerator: bigint, denominator: bigint): bigint {
+  return (numerator + denominator - 1n) / denominator;
 }

@@ -22,8 +22,8 @@ import { buildBurnIntent } from "./index.js";
 
 const FAST_TIER: BurnFeeTier = {
   finalityThreshold: 1000,
-  minimumFee: 1.3,
-  forwardFee: { low: 206035, med: 207543, high: 209052 },
+  minimumFee: 130n,
+  forwardFee: { low: 206_035n, med: 207_543n, high: 209_052n },
 };
 
 const RECIPIENT = "0x000000000000000000000000000000000000Beef";

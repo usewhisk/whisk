@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IrisHttpError } from "../errors.js";
+import { IrisHttpError, IrisParseError } from "../errors.js";
 import {
   FINALITY_FAST,
   IRIS_MAINNET_URL,
@@ -44,11 +44,35 @@ describe("getBurnFees", () => {
     );
     const tiers = await getBurnFees("testnet", 6, 1);
     expect(tiers).toHaveLength(1);
-    expect(tiers[0]?.minimumFee).toBe(1.3);
-    expect(tiers[0]?.forwardFee?.med).toBe(207543);
+    expect(tiers[0]?.minimumFee).toBe(130n);
+    expect(tiers[0]?.forwardFee?.med).toBe(207_543n);
     const calledUrl = fetchMock.mock.calls[0]?.[0] as string;
     expect(calledUrl).toContain(`${IRIS_SANDBOX_URL}/v2/burn/USDC/fees/6/1`);
     expect(calledUrl).toContain("forward=true");
+  });
+
+  it("parses fees exactly and rounds fractional subunits up", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        {
+          finalityThreshold: 1000,
+          minimumFee: 1.1,
+          forwardFee: { low: 100.4, med: 200.6, high: 300.1 },
+        },
+      ]),
+    );
+    const [tier] = await getBurnFees("testnet", 6, 1);
+    expect(tier?.minimumFee).toBe(110n);
+    expect(tier?.forwardFee).toEqual({ low: 101n, med: 201n, high: 301n });
+  });
+
+  it("rejects a minimumFee Iris sends in exponent form", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([{ finalityThreshold: 1000, minimumFee: 1e-7 }]),
+    );
+    await expect(getBurnFees("testnet", 6, 1)).rejects.toBeInstanceOf(
+      IrisParseError,
+    );
   });
 
   it("omits ?forward=true when includeForwarderFee is false", async () => {
@@ -79,7 +103,7 @@ describe("getBurnFees", () => {
     const tiers = await getBurnFees("testnet", 0, 3);
     expect(tiers).toHaveLength(1);
     expect(tiers[0]?.finalityThreshold).toBe(FINALITY_FAST);
-    expect(pickFeeTier(tiers).minimumFee).toBe(1);
+    expect(pickFeeTier(tiers).minimumFee).toBe(100n);
   });
 
   it("retries on 5xx then succeeds", async () => {
@@ -106,8 +130,8 @@ describe("pickForwarderFee", () => {
   it("returns the requested level as bigint", () => {
     const tier = {
       finalityThreshold: 1000,
-      minimumFee: 1.3,
-      forwardFee: { low: 100, med: 200, high: 300 },
+      minimumFee: 130n,
+      forwardFee: { low: 100n, med: 200n, high: 300n },
     } as const;
     expect(pickForwarderFee(tier, "low")).toBe(100n);
     expect(pickForwarderFee(tier, "med")).toBe(200n);
@@ -117,26 +141,15 @@ describe("pickForwarderFee", () => {
   it("defaults to med", () => {
     const tier = {
       finalityThreshold: 1000,
-      minimumFee: 1.3,
-      forwardFee: { low: 100, med: 200, high: 300 },
+      minimumFee: 130n,
+      forwardFee: { low: 100n, med: 200n, high: 300n },
     } as const;
     expect(pickForwarderFee(tier)).toBe(200n);
   });
 
   it("throws when tier has no forwardFee", () => {
-    const tier = { finalityThreshold: 1000, minimumFee: 1.3 } as const;
+    const tier = { finalityThreshold: 1000, minimumFee: 130n } as const;
     expect(() => pickForwarderFee(tier)).toThrow(/forwardFee/);
-  });
-
-  it("ceils to safely cover fractional forwarder fees", () => {
-    const tier = {
-      finalityThreshold: 1000,
-      minimumFee: 1.3,
-      forwardFee: { low: 100.4, med: 200.6, high: 300.1 },
-    } as const;
-    expect(pickForwarderFee(tier, "low")).toBe(101n);
-    expect(pickForwarderFee(tier, "med")).toBe(201n);
-    expect(pickForwarderFee(tier, "high")).toBe(301n);
   });
 });
 

@@ -87,6 +87,8 @@ export {
 export {
   computeBurnFee,
   computeMaxFee,
+  parseFeeBps,
+  parseForwarderFee,
   selectForwarderFee,
 } from "./fees/index.js";
 export type { ComputeMaxFeeInput, ComputeMaxFeeResult } from "./fees/index.js";
