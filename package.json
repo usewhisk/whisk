@@ -2,7 +2,7 @@
   "name": "whisk",
   "private": true,
   "version": "0.0.0",
-  "description": "Whisk — embeddable USDC send widget built on Circle App Kit. Workspace root.",
+  "description": "Whisk: accept USDC from any chain. SDK workspace root.",
   "license": "MIT",
   "author": "SignorDev (https://github.com/Signor1)",
   "type": "module",
@@ -25,13 +25,14 @@
     "changeset": "changeset",
     "version": "changeset version && pnpm install --lockfile-only",
     "release": "pnpm build && changeset publish",
-    "prepare": "husky"
+    "prepare": "./scripts/hooks/install.sh"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.9",
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "@types/node": "^22.9.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.0.5",
+    "lefthook": "^2.2.2",
     "prettier": "^3.3.3",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
@@ -68,8 +69,5 @@
         "GHSA-vfj7-8cjw-p6xm"
       ]
     }
-  },
-  "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,mdx,css,yaml,yml}": "prettier --write"
   }
 }

@@ -93,10 +93,16 @@ jobs:
       - name: Audit (high and critical)
         run: pnpm audit --audit-level=high
 
+  secrets:
+    uses: usewhisk/.github/.github/workflows/secrets.yml@main
+
+  commits:
+    uses: usewhisk/.github/.github/workflows/commits.yml@main
+
   quality:
     name: quality
     runs-on: ubuntu-latest
-    needs: [checks, tests, build, audit]
+    needs: [checks, tests, build, audit, secrets, commits]
     if: always()
     steps:
       - name: Every gate passed

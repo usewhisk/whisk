@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Question, idea, or RFC
-    url: https://github.com/Signor1/whisk/discussions
-    about: For anything that isn't a bug or a concrete feature request, start a discussion first.
-  - name: Security vulnerability
-    url: https://github.com/Signor1/whisk/security/advisories/new
-    about: Report privately. See SECURITY.md for what to include and the response timeline.
