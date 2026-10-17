@@ -12,31 +12,24 @@ export const FINALITY_FAST = 1000 as const;
 export type FinalityThreshold = typeof FINALITY_FAST;
 
 /**
- * Forwarder fee tiers returned per finality level.
- *
- * Higher tier = more priority gas budget on the destination chain.
- * Circle recommends `med` as the default, `high` for safety buffer.
- * All values are USDC subunits (6 decimals).
+ * Forwarder fee levels returned per finality level, in USDC subunits.
+ * Circle recommends `med` or higher.
  */
 export type ForwarderFeeTier = {
-  low: number;
-  med: number;
-  high: number;
+  low: bigint;
+  med: bigint;
+  high: bigint;
 };
 
 /**
- * Single row of the `/v2/burn/USDC/fees/{src}/{dst}?forward=true` response.
+ * A Fast row of the `/v2/burn/USDC/fees/{src}/{dst}` response, parsed.
  *
- * `minimumFee` is the CCTP protocol fee rate in basis points × 100
- * (Iris scales by 100 to preserve 0.01 bps precision). Apply via
- * `(amount * minimumFee) / 1_000_000n` for subunits.
- *
- * `forwardFee` is present only when `?forward=true` is set on the
- * request.
+ * `minimumFee` is in hundredths of a basis point: Iris's `1.3` is `130n`.
+ * `forwardFee` is present only when `?forward=true` is set on the request.
  */
 export type BurnFeeTier = {
   finalityThreshold: FinalityThreshold;
-  minimumFee: number;
+  minimumFee: bigint;
   forwardFee?: ForwarderFeeTier;
 };
 

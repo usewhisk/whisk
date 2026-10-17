@@ -1,6 +1,7 @@
 export {
   createFakeIris,
   FAST_FEE_ROW,
+  FAST_FEE_TIER,
   STANDARD_FEE_ROW,
   type FakeIris,
   type IrisReply,

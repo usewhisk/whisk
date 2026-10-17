@@ -6,7 +6,7 @@ import { executeBridge } from "./execute.js";
 import {
   createFakeEvmWallet,
   createFakeIris,
-  FAST_FEE_ROW,
+  FAST_FEE_TIER,
   type FakeEvmWallet,
   type FakeIris,
 } from "../../test/harness/index.js";
@@ -59,7 +59,7 @@ const baseInput = (): Parameters<typeof executeBridge>[0] => ({
   maxFee: 251_000n,
   burnFee: 1_000n,
   forwarderFee: 250_000n,
-  tier: FAST_FEE_ROW,
+  tier: FAST_FEE_TIER,
   useForwarder: true,
   sourceAdapter: wallet.adapter,
   fetch: iris.fetch,

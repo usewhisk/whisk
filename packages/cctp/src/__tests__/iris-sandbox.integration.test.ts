@@ -17,9 +17,9 @@ describe.skipIf(!LIVE)("Iris sandbox (live)", () => {
     const tiers = await getBurnFees("testnet", 6, 3);
     expect(tiers.length).toBeGreaterThan(0);
     const fast = pickFeeTier(tiers);
-    expect(fast.minimumFee).toBeGreaterThanOrEqual(0);
+    expect(fast.minimumFee).toBeGreaterThanOrEqual(0n);
     if (fast.forwardFee) {
-      expect(fast.forwardFee.low).toBeGreaterThan(0);
+      expect(fast.forwardFee.low).toBeGreaterThan(0n);
       expect(fast.forwardFee.med).toBeGreaterThanOrEqual(fast.forwardFee.low);
       expect(fast.forwardFee.high).toBeGreaterThanOrEqual(fast.forwardFee.med);
     }

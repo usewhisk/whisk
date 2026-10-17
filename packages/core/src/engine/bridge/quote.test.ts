@@ -5,8 +5,8 @@ import { ConfigError } from "../../errors/errors.js";
 
 const FAST_TIER: BurnFeeTier = {
   finalityThreshold: 1000,
-  minimumFee: 1.3, // 1.3 bps = 0.013%
-  forwardFee: { low: 100_000, med: 250_000, high: 500_000 },
+  minimumFee: 130n,
+  forwardFee: { low: 100_000n, med: 250_000n, high: 500_000n },
 };
 
 const RECIPIENT = "0x0000000000000000000000000000000000000020";

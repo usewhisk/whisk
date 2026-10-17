@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ConfigError } from "../errors/errors.js";
 import {
   buildCustomFeeEntries,
   sumFees,
@@ -110,6 +111,23 @@ describe("sumFees", () => {
     expect(breakdown.total).toBe("0");
   });
 
+  it("adds amounts a float cannot hold exactly", () => {
+    const breakdown = sumFees(
+      [
+        { kind: "protocol", amount: "90071992547.409931", token: "USDC" },
+        { kind: "forwarder", amount: "0.000001", token: "USDC" },
+      ],
+      "USDC",
+    );
+    expect(breakdown.total).toBe("90071992547.409932");
+  });
+
+  it("throws on an entry amount that is not a USDC amount", () => {
+    expect(() =>
+      sumFees([{ kind: "protocol", amount: "1e-6", token: "USDC" }], "USDC"),
+    ).toThrow(ConfigError);
+  });
+
   it("returns zero total when entry list is empty", () => {
     const breakdown = sumFees([], "USDC");
     expect(breakdown.total).toBe("0");
@@ -127,19 +145,19 @@ describe("sumProtocolFees", () => {
   ];
 
   it("sums only the fees deducted from the bridged amount", () => {
-    expect(sumProtocolFees(entries, "USDC")).toBeCloseTo(2.4407, 6);
+    expect(sumProtocolFees(entries, "USDC")).toBe(2_440_700n);
   });
 
   it("ignores entries denominated in a different token", () => {
-    expect(sumProtocolFees(entries, "EURC")).toBe(0);
+    expect(sumProtocolFees(entries, "EURC")).toBe(0n);
   });
 
   it("excludes the merchant `custom` fee", () => {
-    expect(sumProtocolFees(entries, "USDC")).not.toBeCloseTo(3.3407, 6);
+    expect(sumProtocolFees(entries, "USDC")).not.toBe(3_340_700n);
   });
 
   it("returns zero for an empty list", () => {
-    expect(sumProtocolFees([], "USDC")).toBe(0);
+    expect(sumProtocolFees([], "USDC")).toBe(0n);
   });
 });
 
@@ -153,6 +171,6 @@ describe("sumForwarderFees", () => {
         ],
         "USDC",
       ),
-    ).toBeCloseTo(0.25, 6);
+    ).toBe(250_000n);
   });
 });

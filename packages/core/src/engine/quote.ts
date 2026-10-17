@@ -19,6 +19,7 @@ import type { WhiskConfig } from "../types/config.js";
 import { decideRoute } from "../routing/decide.js";
 import { InvalidAddressError } from "../errors/errors.js";
 import { buildCustomFeeEntries, sumFees } from "../fees/calculate.js";
+import { formatUsdcAmount, parseUsdcAmount } from "./amount.js";
 import { DEFAULT_FEE_BEARER } from "../types/fee.js";
 import { DEFAULT_TOKEN } from "../types/token.js";
 import {
@@ -78,20 +79,19 @@ export async function buildQuote(
       options.config.feePolicy,
       token,
     );
-    const senderDebit = customFeeEntries.reduce(
-      (acc, e) => acc + (parseFloat(e.amount) || 0),
-      parseFloat(params.amount) || 0,
-    );
+    const fees = sumFees(customFeeEntries, token);
     const quote: Quote = {
       route,
       recipient: params.recipient,
       amountIn: customFeeEntries.length
-        ? formatNumber(senderDebit)
+        ? formatUsdcAmount(
+            parseUsdcAmount(params.amount) + parseUsdcAmount(fees.total),
+          )
         : params.amount,
       amountOut: params.amount,
       amountBurned: params.amount,
       token,
-      fees: sumFees(customFeeEntries, token),
+      fees,
       estimatedDurationMs: SEND_DURATION_MS,
     };
     return { quote };
@@ -119,9 +119,4 @@ export async function buildQuote(
   });
 
   return { quote: result.quote, bridge: result };
-}
-
-function formatNumber(n: number): string {
-  const fixed = n.toFixed(6);
-  return fixed.replace(/\.?0+$/, "") || "0";
 }
