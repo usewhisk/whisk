@@ -35,7 +35,6 @@ import { useStarknetAdapter } from "../hooks/useStarknetAdapter.js";
 import { useStellarAdapter } from "../hooks/useStellarAdapter.js";
 import { useStarknetWallet } from "../provider/starknetContext.js";
 import { useStellarWallet } from "../provider/stellarContext.js";
-import { useWhiskCloud } from "../cloud/context.js";
 
 export type WhiskSendProps = {
   /**
@@ -119,7 +118,6 @@ export function WhiskSend({
   const solana = useWallet();
   const stellar = useStellarWallet();
   const starknet = useStarknetWallet();
-  const cloud = useWhiskCloud();
   const [showConnect, setShowConnect] = useState(false);
 
   const availableTabs = useMemo<TabKind[]>(
@@ -321,18 +319,8 @@ export function WhiskSend({
         quote,
       });
       setResult(r);
-      if (r.kind === "success") {
-        // Fire-and-forget usage event to Whisk Cloud. Client swallows
-        // errors — this never blocks the user's success screen.
-        void cloud.client?.emit({
-          kind: tab === "send" ? "send" : "bridge",
-          sourceChain,
-          destinationChain: destinationForTab,
-          amountUsdc: amount,
-          ...(r.finalTxHash ? { txHash: r.finalTxHash } : {}),
-        });
-        onSuccess?.(r);
-      } else onFailure?.(r);
+      if (r.kind === "success") onSuccess?.(r);
+      else onFailure?.(r);
     } finally {
       setSubmitting(false);
     }
@@ -438,9 +426,6 @@ export function WhiskSend({
               onAmountChange={onAmountChange}
               quote={quote}
               quoteError={quoteError}
-              {...(cloud.verify?.bps !== undefined
-                ? { protocolBps: cloud.verify.bps }
-                : {})}
             />
           </Tabs.Content>
         </Tabs.Root>
@@ -467,9 +452,6 @@ export function WhiskSend({
           onAmountChange={setAmount}
           quote={quote}
           quoteError={quoteError}
-          {...(cloud.verify?.bps !== undefined
-            ? { protocolBps: cloud.verify.bps }
-            : {})}
         />
       )}
 
@@ -514,8 +496,6 @@ type TransferFormProps = {
   onAmountChange: (v: string) => void;
   quote: Quote | null;
   quoteError: string | null;
-  /** Take-rate in basis points from the appId JWT. Display-only. */
-  protocolBps?: number | undefined;
 };
 
 function TransferForm({
@@ -534,7 +514,6 @@ function TransferForm({
   onAmountChange,
   quote,
   quoteError,
-  protocolBps,
 }: TransferFormProps) {
   return (
     <div className="whisk-form">
@@ -593,27 +572,14 @@ function TransferForm({
         {...(quoteError ? { error: quoteError } : {})}
       />
 
-      {quote ? <QuoteSummary quote={quote} protocolBps={protocolBps} /> : null}
+      {quote ? <QuoteSummary quote={quote} /> : null}
     </div>
   );
 }
 
-function QuoteSummary({
-  quote,
-  protocolBps,
-}: {
-  quote: Quote;
-  protocolBps?: number | undefined;
-}) {
+function QuoteSummary({ quote }: { quote: Quote }) {
   const bridge = isBridgeRoute(quote.route);
   const isSend = isSendRoute(quote.route);
-  // Protocol fee is display-only in Phase 1 — the appId JWT tells us
-  // the tier's bps but the widget doesn't actually collect it. When
-  // Phase 2 lands, this value flows into the burn math on top.
-  const protocolFee =
-    protocolBps && protocolBps > 0
-      ? ((Number(quote.amountIn) * protocolBps) / 10_000).toFixed(4)
-      : null;
   return (
     <div className="whisk-summary" aria-live="polite">
       <SummaryRow
@@ -636,13 +602,6 @@ function QuoteSummary({
             />
           ))
         : null}
-      {protocolFee ? (
-        <SummaryRow
-          label={`Whisk protocol fee · ${protocolBps} bps`}
-          value={`${protocolFee} ${quote.token}`}
-          muted
-        />
-      ) : null}
     </div>
   );
 }

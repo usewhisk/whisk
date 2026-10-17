@@ -14,8 +14,6 @@ export { useStellarAdapter } from "./useStellarAdapter.js";
 
 export { useStarknetAdapter } from "./useStarknetAdapter.js";
 
-export { useWhiskCloud } from "../cloud/context.js";
-
 export { useWhisk } from "./useWhisk.js";
 export type { UseWhiskResult } from "./useWhisk.js";
 

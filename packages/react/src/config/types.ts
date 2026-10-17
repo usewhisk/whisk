@@ -37,22 +37,6 @@ export type StarknetAdapterFactory = {
 };
 
 export type WhiskClientConfig = {
-  /**
-   * Whisk app key from the console. Format: `wsk_pk_test_...` or
-   * `wsk_pk_live_...`. Get one at https://cloud.usewhisk.xyz.
-   *
-   * Optional today with a 30-day grace warning; will become required
-   * once the transition period ends. Without it, the widget still
-   * functions but usage isn't tracked and the fee tier can't be
-   * resolved.
-   */
-  appId?: string;
-  /**
-   * Base URL of the Whisk Cloud API. Only override for self-hosting
-   * or testing against a staging deployment.
-   * @default "https://cloud.usewhisk.xyz"
-   */
-  cloudBaseUrl?: string;
   wallets: WalletAdapterFactory[];
   chains: Chain[];
   defaultSourceChain?: Chain;
