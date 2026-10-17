@@ -1,0 +1,30 @@
+# Canonical hooks for every usewhisk repo. Copy with scripts/sync-standards.sh and
+# change only the format and lint commands for the repo's stack.
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format
+      glob: "*.{js,mjs,cjs,ts,tsx,json,jsonc,md,mdx,css,yml,yaml}"
+      run: pnpm exec prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+    - name: secrets
+      run: ./scripts/hooks/secrets.sh
+    - name: added-lines
+      run: ./scripts/hooks/check-added-lines.sh {staged_files}
+
+commit-msg:
+  parallel: true
+  jobs:
+    - name: conventional
+      run: pnpm exec commitlint --edit {1}
+    - name: no-ai-trailer
+      run: ./scripts/hooks/no-ai-trailer.sh {1}
+
+pre-push:
+  piped: true
+  jobs:
+    - name: refs
+      run: ./scripts/hooks/check-push-refs.sh
+      use_stdin: true
+    - name: preflight
+      run: ./scripts/preflight.sh --fast

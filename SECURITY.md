@@ -6,7 +6,7 @@ behaviour before there's a fix puts real users' money at risk.
 
 ## Reporting a vulnerability
 
-**Use [GitHub's private vulnerability reporting](https://github.com/Signor1/whisk/security/advisories/new)** —
+**Use [GitHub's private vulnerability reporting](https://github.com/usewhisk/whisk/security/advisories/new)**:
 click *Report a vulnerability*. GitHub keeps the report between you
 and the maintainers until we publish an advisory.
 

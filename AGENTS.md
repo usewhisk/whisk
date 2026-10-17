@@ -81,6 +81,22 @@ scripts, or docs.
 
 ---
 
+## Git Hooks
+
+`pnpm install` installs lefthook. The hooks are part of the gate, not a convenience:
+
+- `pre-commit`: formatting, gitleaks, no em-dashes, no `@ts-ignore`, `@ts-nocheck` or
+  `as any`.
+- `commit-msg`: Conventional Commits, no AI trailers.
+- `pre-push`: no push to `main`, `<type>/<kebab-description>` branch names, fast
+  preflight.
+
+AI agents never pass `--no-verify`, never edit a hook to get past it, and never
+disable one. A failing hook is fixed at its cause. The shared hooks live in
+`usewhisk/.github` and are copied here with its `sync-standards.sh`.
+
+---
+
 ## Multi-Stage Development Lifecycle (Phases 0-8)
 
 ```

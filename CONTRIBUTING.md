@@ -57,15 +57,22 @@ examples consume the public surface only.
 ## Setup
 
 ```bash
-git clone https://github.com/Signor1/whisk
+git clone https://github.com/usewhisk/whisk
 cd whisk
-pnpm install              # installs everything + sets up the husky hook
+pnpm install              # installs everything and the git hooks
 pnpm build                # build core + react packages once
 ```
 
-The first run of `pnpm install` also bootstraps Husky's
-`pre-commit` hook. From then on, every commit runs `lint-staged` →
-`prettier --write` on the staged files automatically.
+You also need gitleaks (`brew install gitleaks`). `pnpm install` sets up lefthook,
+which runs on every commit and push:
+
+| Hook | Checks |
+|---|---|
+| `pre-commit` | Prettier on staged files, gitleaks, no em-dashes, no `@ts-ignore`, `@ts-nocheck` or `as any` |
+| `commit-msg` | Conventional Commits, no AI co-author trailers |
+| `pre-push` | No push to `main`, `<type>/<kebab-description>` branch names, `./scripts/preflight.sh --fast` |
+
+Never skip them with `--no-verify`. CI runs the same checks on every pull request.
 
 ## The development loop
 
@@ -254,9 +261,9 @@ npm publish rights.
 
 - Is the docs site at https://www.usewhisk.xyz/docs.
 - Bug? Open an
-  [issue](https://github.com/Signor1/whisk/issues/new/choose).
+  [issue](https://github.com/usewhisk/whisk/issues/new/choose).
 - Idea? Open a
-  [discussion](https://github.com/Signor1/whisk/discussions) before
+  [discussion](https://github.com/usewhisk/whisk/discussions) before
   the issue — alignment is cheaper than a closed PR.
 
 Thanks for contributing.

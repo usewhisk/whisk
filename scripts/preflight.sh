@@ -17,7 +17,9 @@ echo -e "\n${BLUE}[1/5] Format check...${NC}"; pnpm format:check
 echo -e "\n${BLUE}[2/5] Lint...${NC}";         pnpm lint
 
 # Apps and examples resolve package types from dist, so the packages are built first.
-echo -e "\n${BLUE}[3/5] Typecheck...${NC}";    pnpm build && pnpm typecheck
+echo -e "\n${BLUE}[3/5] Typecheck...${NC}"
+pnpm build
+pnpm typecheck
 echo -e "\n${BLUE}[4/5] Tests...${NC}";        pnpm test
 
 if [ "$SKIP_BUILD" = "true" ]; then
