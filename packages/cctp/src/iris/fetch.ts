@@ -26,6 +26,8 @@ export type FetchJsonOptions = {
   baseDelayMs?: number;
   /** Allow caller-side cancellation. */
   signal?: AbortSignal;
+  /** Defaults to the global `fetch`. */
+  fetch?: typeof fetch;
 };
 
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -41,6 +43,7 @@ export async function fetchIrisJson<T>(
     maxRetries = DEFAULT_MAX_RETRIES,
     baseDelayMs = DEFAULT_BASE_DELAY_MS,
     signal,
+    fetch: fetchImpl = fetch,
   } = options;
 
   let lastError: unknown;
@@ -54,7 +57,7 @@ export async function fetchIrisJson<T>(
     signal?.addEventListener("abort", onCallerAbort);
 
     try {
-      const res = await fetch(url, {
+      const res = await fetchImpl(url, {
         method: "GET",
         headers: { accept: "application/json" },
         signal: ctrl.signal,
