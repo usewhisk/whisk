@@ -95,7 +95,6 @@ export {
   useStarknetAdapter,
   useStellarAdapter,
   useWhisk,
-  useWhiskCloud,
   useWhiskContext,
   useWhiskEngine,
 } from "./hooks/index.js";

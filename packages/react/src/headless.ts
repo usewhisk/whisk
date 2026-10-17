@@ -57,7 +57,6 @@ export {
   useRefund,
   useSolanaAdapter,
   useStarknetAdapter,
-  useWhiskCloud,
   useStellarAdapter,
   useWhisk,
   useWhiskContext,

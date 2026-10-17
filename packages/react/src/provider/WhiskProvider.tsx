@@ -22,7 +22,6 @@ import type { WhiskThemeInput } from "../theme/index.js";
 import { WhiskContext, type WhiskContextValue } from "./context.js";
 import { StellarWalletProvider } from "./stellarContext.js";
 import { StarknetWalletProvider } from "./starknetContext.js";
-import { WhiskCloudProvider } from "../cloud/context.js";
 
 export type WhiskProviderProps = {
   config: WhiskClientConfig;
@@ -189,13 +188,6 @@ export function WhiskProvider({
   }
 
   return (
-    <WhiskContext.Provider value={contextValue}>
-      <WhiskCloudProvider
-        appId={config.appId}
-        {...(config.cloudBaseUrl ? { baseUrl: config.cloudBaseUrl } : {})}
-      >
-        {inner}
-      </WhiskCloudProvider>
-    </WhiskContext.Provider>
+    <WhiskContext.Provider value={contextValue}>{inner}</WhiskContext.Provider>
   );
 }
