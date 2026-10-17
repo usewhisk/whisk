@@ -44,6 +44,16 @@ Technical shape, per
   an address with no contract. The registry uses Circle's native USDC on all three.
 - `pnpm --filter @usewhisk/cctp check:registry` reads every EVM entry back from
   its public RPCs and fails on any mismatch. It runs nightly in `registry.yml`.
+- Fee maths is exact and rounds up. `parseFeeBps` reads Iris's `minimumFee` from its
+  decimal text into hundredths of a basis point (`1.3` is `130n`), and
+  `computeBurnFee(amount, feeCentiBps)` takes that bigint and rounds the fee up, as
+  does the forwarder buffer. Before, `maxFee` could come out one subunit short, which
+  turns a Fast transfer into a Standard one.
+- `BurnFeeTier.minimumFee` and the `forwardFee` levels are bigints.
+  `sumProtocolFees` and `sumForwarderFees` return bigint subunits, and quote totals
+  are summed in bigints.
+- A test fails the build if `parseFloat`, `Number(`, `toFixed(` or `Math.ceil`,
+  `floor` or `round` appears in a `fees`, `engine` or `quote` source path.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 
