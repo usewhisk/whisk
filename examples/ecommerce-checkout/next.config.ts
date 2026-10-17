@@ -1,7 +1,10 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // Worktrees under .worktrees/ sit inside a checkout with its own lockfile.
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   transpilePackages: ["@usewhisk/core", "@usewhisk/react"],
   webpack: (config) => {
     config.resolve = config.resolve ?? {};
