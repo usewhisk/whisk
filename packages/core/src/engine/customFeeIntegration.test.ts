@@ -3,16 +3,16 @@
  * merchant-fee entry in quotes and submits the extra USDC transfer in
  * sendCalls.
  */
-import { describe, expect, it, vi } from "vitest";
-import type { BurnFeeTier, IrisMessage } from "@usewhisk/cctp";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { IrisMessage } from "@usewhisk/cctp";
 import { Base } from "@usewhisk/cctp";
-import type { EvmAdapter, EvmCall } from "./adapter.js";
-
-const FAST_TIER: BurnFeeTier = {
-  finalityThreshold: 1000,
-  minimumFee: 1.3,
-  forwardFee: { low: 100_000, med: 250_000, high: 500_000 },
-};
+import type { WhiskConfig } from "../types/config.js";
+import { createWhisk as createEngine } from "./createWhisk.js";
+import {
+  createFakeEvmWallet,
+  createFakeIris,
+  type FakeIris,
+} from "../test/harness/index.js";
 
 const FORWARDED_MESSAGE: IrisMessage = {
   message: ("0x" + "11".repeat(32)) as `0x${string}`,
@@ -24,43 +24,22 @@ const FORWARDED_MESSAGE: IrisMessage = {
   forwardTxHash: "0xff".padEnd(66, "f"),
 };
 
-vi.mock("@usewhisk/cctp", async () => {
-  const actual =
-    await vi.importActual<typeof import("@usewhisk/cctp")>("@usewhisk/cctp");
-  return {
-    ...actual,
-    getBurnFees: vi.fn(async () => [FAST_TIER]),
-    pollMessages: vi.fn(async () => FORWARDED_MESSAGE),
-  };
-});
-
-const { createWhisk } = await import("./createWhisk.js");
-
 const MERCHANT = "0x000000000000000000000000000000000000bEEF";
 const RECIPIENT = "0x0000000000000000000000000000000000000020";
-const SENDER = "0x0000000000000000000000000000000000000010" as `0x${string}`;
+
+let iris: FakeIris;
+beforeEach(() => {
+  iris = createFakeIris();
+  iris.replyToMessages({ message: FORWARDED_MESSAGE });
+});
+
+const createWhisk = (config: WhiskConfig) =>
+  createEngine({ ...config, fetch: iris.fetch });
 
 function makeAdapter() {
-  const sendCallsSpy = vi.fn(async (calls: EvmCall[]) => ({
-    hashes: calls.map(
-      (_, i) =>
-        ((i === 0 ? "0xaa" : i === 1 ? "0xbb" : "0xcc") +
-          "".padEnd(64, ["a", "b", "c"][i] ?? "d")) as `0x${string}`,
-    ),
-  }));
-  const adapter: EvmAdapter = {
-    kind: "evm",
-    address: SENDER,
-    async getChainId() {
-      return Base.evmChainId;
-    },
-    async switchChain() {},
-    sendCalls: sendCallsSpy,
-    async waitForReceipt() {
-      return { status: "success" as const, blockNumber: 1n };
-    },
-  };
-  return { adapter, sendCallsSpy };
+  const wallet = createFakeEvmWallet({ chainId: Base.evmChainId });
+  wallet.fund(Base.evmChainId, Base.usdc, 100_000_000n);
+  return { adapter: wallet.adapter, wallet };
 }
 
 describe("customFee wiring", () => {
@@ -89,7 +68,7 @@ describe("customFee wiring", () => {
       chains: ["Base"],
       feePolicy: { value: "1", recipient: MERCHANT },
     });
-    const { adapter, sendCallsSpy } = makeAdapter();
+    const { adapter, wallet } = makeAdapter();
     await engine.send({
       sourceChain: "Base",
       destinationChain: "Base",
@@ -99,8 +78,8 @@ describe("customFee wiring", () => {
       // @ts-expect-error — quote not required by the executor for Send
       quote: {},
     });
-    expect(sendCallsSpy).toHaveBeenCalledOnce();
-    const calls = sendCallsSpy.mock.calls[0]?.[0] ?? [];
+    expect(wallet.batches).toHaveLength(1);
+    const calls = wallet.batches[0] ?? [];
     // [merchant fee, treasury fee, main transfer]
     expect(calls).toHaveLength(3);
     for (const call of calls) {
@@ -135,7 +114,7 @@ describe("customFee wiring", () => {
       feeBearer: "sender",
       feePolicy: { value: "1", recipient: MERCHANT },
     });
-    const { adapter, sendCallsSpy } = makeAdapter();
+    const { adapter, wallet } = makeAdapter();
     await engine.send({
       sourceChain: "Base",
       destinationChain: "Arbitrum",
@@ -146,7 +125,7 @@ describe("customFee wiring", () => {
       quote: {},
     });
     // First sendCalls invocation: [merchantFee, treasuryFee, approve, burn]
-    const firstBatch = sendCallsSpy.mock.calls[0]?.[0] ?? [];
+    const firstBatch = wallet.batches[0] ?? [];
     expect(firstBatch).toHaveLength(4);
     // The three USDC ops + the TokenMessenger burn.
     expect(firstBatch[0]?.to).toBe(Base.usdc);

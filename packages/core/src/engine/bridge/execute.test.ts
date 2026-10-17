@@ -1,19 +1,15 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import {
-  Base,
-  Arbitrum,
-  type BurnFeeTier,
-  type IrisMessage,
-} from "@usewhisk/cctp";
-import type { EvmAdapter } from "../adapter.js";
+import { describe, expect, it, beforeEach } from "vitest";
+import { Base, Arbitrum, type IrisMessage } from "@usewhisk/cctp";
 import type { Step } from "../../types/step.js";
 import { OnchainRevertError } from "../../errors/errors.js";
-
-const FAST_TIER: BurnFeeTier = {
-  finalityThreshold: 1000,
-  minimumFee: 1.3,
-  forwardFee: { low: 100_000, med: 250_000, high: 500_000 },
-};
+import { executeBridge } from "./execute.js";
+import {
+  createFakeEvmWallet,
+  createFakeIris,
+  FAST_FEE_ROW,
+  type FakeEvmWallet,
+  type FakeIris,
+} from "../../test/harness/index.js";
 
 const FORWARDED_MESSAGE: IrisMessage = {
   message: ("0x" + "11".repeat(32)) as `0x${string}`,
@@ -39,48 +35,19 @@ const FAILED_FORWARDER_MESSAGE: IrisMessage = {
   forwardState: "FAILED",
 };
 
-const { pollMessagesMock } = vi.hoisted(() => ({
-  pollMessagesMock: vi.fn(),
-}));
-vi.mock("@usewhisk/cctp", async () => {
-  const actual =
-    await vi.importActual<typeof import("@usewhisk/cctp")>("@usewhisk/cctp");
-  return { ...actual, pollMessages: pollMessagesMock };
-});
-
-const { executeBridge } = await import("./execute.js");
-
-const SENDER = "0x0000000000000000000000000000000000000010" as `0x${string}`;
 const RECIPIENT = "0x0000000000000000000000000000000000000020";
 
-function makeAdapter(
-  opts: Partial<EvmAdapter> & { chainId?: number } = {},
-): EvmAdapter {
-  return {
-    kind: "evm",
-    address: SENDER,
-    async getChainId() {
-      return opts.chainId ?? Base.evmChainId;
-    },
-    switchChain: opts.switchChain ?? (async () => {}),
-    sendCalls:
-      opts.sendCalls ??
-      (async (calls) => ({
-        hashes: calls.map(
-          (_, i) =>
-            ("0x" +
-              (i === 0 ? "aa" : "bb") +
-              "".padEnd(64, i === 0 ? "a" : "b")) as `0x${string}`,
-        ),
-      })),
-    waitForReceipt:
-      opts.waitForReceipt ??
-      (async () => ({ status: "success" as const, blockNumber: 1n })),
-  };
+function makeWallet(chainId: number = Base.evmChainId): FakeEvmWallet {
+  const wallet = createFakeEvmWallet({ chainId });
+  wallet.fund(Base.evmChainId, Base.usdc, 100_000_000n);
+  return wallet;
 }
 
+let iris: FakeIris;
+let wallet: FakeEvmWallet;
 beforeEach(() => {
-  pollMessagesMock.mockReset();
+  iris = createFakeIris();
+  wallet = makeWallet();
 });
 
 const baseInput = (): Parameters<typeof executeBridge>[0] => ({
@@ -92,14 +59,17 @@ const baseInput = (): Parameters<typeof executeBridge>[0] => ({
   maxFee: 251_000n,
   burnFee: 1_000n,
   forwarderFee: 250_000n,
-  tier: FAST_TIER,
+  tier: FAST_FEE_ROW,
   useForwarder: true,
-  sourceAdapter: makeAdapter(),
+  sourceAdapter: wallet.adapter,
+  fetch: iris.fetch,
+  pollIntervalMs: 1,
+  pollTimeoutMs: 50,
 });
 
 describe("executeBridge — forwarder happy path", () => {
   it("returns success with the forwarder tx hash and marks mint as forwarded", async () => {
-    pollMessagesMock.mockResolvedValue(FORWARDED_MESSAGE);
+    iris.replyToMessages({ message: FORWARDED_MESSAGE });
     const events: Step[] = [];
     const result = await executeBridge(baseInput(), {
       onStep: (s) => events.push(s),
@@ -121,30 +91,43 @@ describe("executeBridge — forwarder happy path", () => {
       "fetchAttestation:success",
       "mint:success",
     ]);
+    expect(wallet.burns).toHaveLength(1);
+    expect(wallet.burns[0]).toMatchObject({
+      chainId: Base.evmChainId,
+      tokenMessenger: Base.tokenMessenger,
+      amount: 5_000_000n,
+      destinationDomain: Arbitrum.cctpDomain,
+    });
+    expect(wallet.balanceOf(Base.evmChainId, Base.usdc)).toBe(95_000_000n);
   });
 });
 
 describe("executeBridge — manual mint", () => {
   it("submits receiveMessage when the forwarder is disabled", async () => {
-    pollMessagesMock.mockResolvedValue(MANUAL_MESSAGE);
-    const adapter = makeAdapter();
-    const sendCallsSpy = vi.spyOn(adapter, "sendCalls");
+    iris.replyToMessages({ message: MANUAL_MESSAGE });
     const result = await executeBridge({
       ...baseInput(),
       useForwarder: false,
-      sourceAdapter: adapter,
     });
     expect(result.kind).toBe("success");
     if (result.kind === "success") {
       const mint = result.steps.find((s) => s.name === "mint");
       expect(mint?.forwarded).toBe(false);
     }
-    // Three sendCalls invocations: (approve, burn) batch, then mint.
-    expect(sendCallsSpy).toHaveBeenCalledTimes(2);
+    // Two batches: approve and burn, then the mint.
+    expect(wallet.batches).toHaveLength(2);
+    expect(wallet.mints).toEqual([
+      {
+        chainId: Arbitrum.evmChainId,
+        messageTransmitter: Arbitrum.messageTransmitter,
+        message: MANUAL_MESSAGE.message,
+        attestation: MANUAL_MESSAGE.attestation,
+      },
+    ]);
   });
 
   it("falls back to manual mint when the forwarder reports FAILED", async () => {
-    pollMessagesMock.mockResolvedValue(FAILED_FORWARDER_MESSAGE);
+    iris.replyToMessages({ message: FAILED_FORWARDER_MESSAGE });
     const result = await executeBridge(baseInput());
     expect(result.kind).toBe("success");
     if (result.kind === "success") {
@@ -156,14 +139,9 @@ describe("executeBridge — manual mint", () => {
 
 describe("executeBridge — failures", () => {
   it("maps a burn revert to OnchainRevertError and snapshots the burn hash", async () => {
-    pollMessagesMock.mockResolvedValue(FORWARDED_MESSAGE);
-    const adapter = makeAdapter({
-      waitForReceipt: async () => ({ status: "reverted", blockNumber: 1n }),
-    });
-    const result = await executeBridge({
-      ...baseInput(),
-      sourceAdapter: adapter,
-    });
+    iris.replyToMessages({ message: FORWARDED_MESSAGE });
+    wallet.revertNext("approve");
+    const result = await executeBridge(baseInput());
     expect(result.kind).toBe("failure");
     if (result.kind === "failure") {
       // The approve step is first; it reverts, so we never reach burn.
@@ -172,10 +150,10 @@ describe("executeBridge — failures", () => {
       expect(snapshot.kind).toBe("bridge");
       expect(snapshot.recipientAddress).toBe(RECIPIENT);
     }
+    expect(wallet.burns).toHaveLength(0);
   });
 
   it("returns a polling_timeout failure when the attestation never lands", async () => {
-    pollMessagesMock.mockResolvedValue(null);
     const result = await executeBridge(baseInput());
     expect(result.kind).toBe("failure");
     if (result.kind === "failure") {
@@ -186,10 +164,8 @@ describe("executeBridge — failures", () => {
   });
 
   it("returns a failed_offchain failure when Iris reports attestation failure", async () => {
-    pollMessagesMock.mockResolvedValue({
-      ...MANUAL_MESSAGE,
-      status: "failed",
-      delayReason: "expired",
+    iris.replyToMessages({
+      message: { ...MANUAL_MESSAGE, status: "failed", delayReason: "expired" },
     });
     const result = await executeBridge(baseInput());
     expect(result.kind).toBe("failure");
@@ -199,9 +175,8 @@ describe("executeBridge — failures", () => {
   });
 
   it("returns a polling_timeout failure when the forwarder doesn't finalize", async () => {
-    pollMessagesMock.mockResolvedValue({
-      ...MANUAL_MESSAGE,
-      forwardState: "PENDING",
+    iris.replyToMessages({
+      message: { ...MANUAL_MESSAGE, forwardState: "PENDING" },
     });
     const result = await executeBridge(baseInput());
     expect(result.kind).toBe("failure");
@@ -215,27 +190,21 @@ describe("executeBridge — failures", () => {
 
 describe("executeBridge — chain switching", () => {
   it("switches the source adapter to the source chain if needed", async () => {
-    pollMessagesMock.mockResolvedValue(FORWARDED_MESSAGE);
-    const switchChain = vi.fn(async () => {});
-    const adapter = makeAdapter({ chainId: 1, switchChain });
-    await executeBridge({ ...baseInput(), sourceAdapter: adapter });
-    expect(switchChain).toHaveBeenCalledWith(Base.evmChainId);
+    iris.replyToMessages({ message: FORWARDED_MESSAGE });
+    const onMainnet = makeWallet(1);
+    await executeBridge({ ...baseInput(), sourceAdapter: onMainnet.adapter });
+    expect(onMainnet.switches).toEqual([Base.evmChainId]);
   });
 
   it("switches the destination adapter for manual mint", async () => {
-    pollMessagesMock.mockResolvedValue(MANUAL_MESSAGE);
-    const destSwitch = vi.fn(async () => {});
-    const sourceAdapter = makeAdapter({ chainId: Base.evmChainId });
-    const destinationAdapter = makeAdapter({
-      chainId: Base.evmChainId, // wrong — should switch to Arbitrum
-      switchChain: destSwitch,
-    });
+    iris.replyToMessages({ message: MANUAL_MESSAGE });
+    // Starts on Base, so the manual mint has to switch it to Arbitrum.
+    const destination = makeWallet(Base.evmChainId);
     await executeBridge({
       ...baseInput(),
       useForwarder: false,
-      sourceAdapter,
-      destinationAdapter,
+      destinationAdapter: destination.adapter,
     });
-    expect(destSwitch).toHaveBeenCalledWith(Arbitrum.evmChainId);
+    expect(destination.switches).toEqual([Arbitrum.evmChainId]);
   });
 });

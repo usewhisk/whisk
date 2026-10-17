@@ -4,18 +4,18 @@
  * onto the result, and dispatches through the same Send / Bridge path
  * as a regular transfer.
  */
-import { describe, expect, it, vi } from "vitest";
-import type { BurnFeeTier, IrisMessage } from "@usewhisk/cctp";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { IrisMessage } from "@usewhisk/cctp";
 import { Base } from "@usewhisk/cctp";
-import type { EvmAdapter, EvmCall } from "./adapter.js";
+import type { WhiskConfig } from "../types/config.js";
 import { REFUND_OF_TX_KEY, REFUND_REASON_KEY } from "../refund/index.js";
 import { ConfigError } from "../errors/errors.js";
-
-const FAST_TIER: BurnFeeTier = {
-  finalityThreshold: 1000,
-  minimumFee: 1.3,
-  forwardFee: { low: 100_000, med: 250_000, high: 500_000 },
-};
+import { createWhisk as createEngine } from "./createWhisk.js";
+import {
+  createFakeEvmWallet,
+  createFakeIris,
+  type FakeIris,
+} from "../test/harness/index.js";
 
 const FORWARDED_MESSAGE: IrisMessage = {
   message: ("0x" + "11".repeat(32)) as `0x${string}`,
@@ -27,52 +27,33 @@ const FORWARDED_MESSAGE: IrisMessage = {
   forwardTxHash: "0xff".padEnd(66, "f"),
 };
 
-vi.mock("@usewhisk/cctp", async () => {
-  const actual =
-    await vi.importActual<typeof import("@usewhisk/cctp")>("@usewhisk/cctp");
-  return {
-    ...actual,
-    getBurnFees: vi.fn(async () => [FAST_TIER]),
-    pollMessages: vi.fn(async () => FORWARDED_MESSAGE),
-  };
-});
-
-const { createWhisk } = await import("./createWhisk.js");
-
 const MERCHANT_WALLET =
   "0x0000000000000000000000000000000000000010" as `0x${string}`;
 const ORIGINAL_SENDER = "0x0000000000000000000000000000000000000020";
 const ORIGINAL_TX = ("0x" + "ab".repeat(32)) as `0x${string}`;
-const REFUND_HASH =
-  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" as `0x${string}`;
+
+let iris: FakeIris;
+beforeEach(() => {
+  iris = createFakeIris();
+  iris.replyToMessages({ message: FORWARDED_MESSAGE });
+});
+
+const createWhisk = (config: WhiskConfig) =>
+  createEngine({ ...config, fetch: iris.fetch });
 
 function makeAdapter() {
-  const sendCallsSpy = vi.fn(async (calls: EvmCall[]) => ({
-    hashes: calls.map((_, i) =>
-      i === calls.length - 1
-        ? REFUND_HASH
-        : (("0xaa" + "".padEnd(64, "a")) as `0x${string}`),
-    ),
-  }));
-  const adapter: EvmAdapter = {
-    kind: "evm",
+  const wallet = createFakeEvmWallet({
     address: MERCHANT_WALLET,
-    async getChainId() {
-      return Base.evmChainId;
-    },
-    async switchChain() {},
-    sendCalls: sendCallsSpy,
-    async waitForReceipt() {
-      return { status: "success" as const, blockNumber: 1n };
-    },
-  };
-  return { adapter, sendCallsSpy };
+    chainId: Base.evmChainId,
+  });
+  wallet.fund(Base.evmChainId, Base.usdc, 100_000_000n);
+  return { adapter: wallet.adapter, wallet };
 }
 
 describe("engine.refund", () => {
   it("dispatches a same-chain USDC transfer from merchant to original sender", async () => {
     const engine = createWhisk({ chains: ["Base"] });
-    const { adapter, sendCallsSpy } = makeAdapter();
+    const { adapter, wallet } = makeAdapter();
     const result = await engine.refund({
       originalTxHash: ORIGINAL_TX,
       originalDestinationChain: "Base",
@@ -84,15 +65,19 @@ describe("engine.refund", () => {
 
     expect(result.kind).toBe("success");
     if (result.kind === "success") {
-      expect(result.finalTxHash).toBe(REFUND_HASH);
-      // No bridge — single-call transfer.
-      expect(sendCallsSpy).toHaveBeenCalledOnce();
-      const calls = sendCallsSpy.mock.calls[0]?.[0] ?? [];
-      expect(calls).toHaveLength(1);
-      expect(calls[0]?.to).toBe(Base.usdc);
-      // ERC-20 transfer selector.
-      expect(calls[0]?.data.startsWith("0xa9059cbb")).toBe(true);
+      expect(result.finalTxHash).toBeDefined();
     }
+    // No bridge, a single USDC transfer back to the payer.
+    expect(wallet.batches).toHaveLength(1);
+    expect(wallet.transfers).toEqual([
+      {
+        chainId: Base.evmChainId,
+        token: Base.usdc,
+        to: ORIGINAL_SENDER,
+        amount: 5_250_000n,
+      },
+    ]);
+    expect(wallet.burns).toHaveLength(0);
   });
 
   it("stamps __refundOfTxHash and __refundReason on the result metadata", async () => {
@@ -151,7 +136,7 @@ describe("engine.refund", () => {
 
   it("routes through a Bridge when refundDestinationChain differs from originalDestinationChain", async () => {
     const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
-    const { adapter, sendCallsSpy } = makeAdapter();
+    const { adapter, wallet } = makeAdapter();
     const result = await engine.refund({
       originalTxHash: ORIGINAL_TX,
       originalDestinationChain: "Base",
@@ -162,7 +147,7 @@ describe("engine.refund", () => {
     });
     expect(result.kind).toBe("success");
     // Bridge submission: [approve, burn]
-    const firstBatch = sendCallsSpy.mock.calls[0]?.[0] ?? [];
+    const firstBatch = wallet.batches[0] ?? [];
     expect(firstBatch).toHaveLength(2);
     expect(firstBatch[0]?.to).toBe(Base.usdc);
     expect(firstBatch[1]?.to).toBe(Base.tokenMessenger);

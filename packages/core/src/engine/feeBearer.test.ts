@@ -3,44 +3,20 @@
  * to `"sender"` and that the resolved config reflects what the engine will
  * actually apply on a bridge.
  */
-import { describe, expect, it, vi } from "vitest";
-import type { BurnFeeTier } from "@usewhisk/cctp";
+import { describe, expect, it } from "vitest";
+import { Base } from "@usewhisk/cctp";
+import type { WhiskConfig } from "../types/config.js";
+import { DEFAULT_FEE_BEARER } from "../types/fee.js";
+import { createWhisk as createEngine } from "./createWhisk.js";
+import { createFakeEvmWallet, createFakeIris } from "../test/harness/index.js";
 
-const FAST_TIER: BurnFeeTier = {
-  finalityThreshold: 1000,
-  minimumFee: 1.3,
-  forwardFee: { low: 100_000, med: 250_000, high: 500_000 },
-};
-
-vi.mock("@usewhisk/cctp", async () => {
-  const actual =
-    await vi.importActual<typeof import("@usewhisk/cctp")>("@usewhisk/cctp");
-  return {
-    ...actual,
-    getBurnFees: vi.fn(async () => [FAST_TIER]),
-  };
-});
-
-const { createWhisk } = await import("./createWhisk.js");
-const { DEFAULT_FEE_BEARER } = await import("../types/fee.js");
-
-const SENDER = "0x0000000000000000000000000000000000000010" as `0x${string}`;
 const RECIPIENT = "0x0000000000000000000000000000000000000020";
 
-const adapter = {
-  kind: "evm" as const,
-  address: SENDER,
-  async getChainId() {
-    return 8453;
-  },
-  async switchChain() {},
-  async sendCalls() {
-    return { hashes: [] };
-  },
-  async waitForReceipt() {
-    return { status: "success" as const, blockNumber: 1n };
-  },
-};
+const iris = createFakeIris();
+const createWhisk = (config: WhiskConfig) =>
+  createEngine({ ...config, fetch: iris.fetch });
+
+const adapter = createFakeEvmWallet({ chainId: Base.evmChainId }).adapter;
 
 describe("feeBearer defaulting", () => {
   it("public default is 'sender'", () => {
