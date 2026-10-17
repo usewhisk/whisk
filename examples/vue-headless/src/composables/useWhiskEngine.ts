@@ -18,8 +18,8 @@ import {
 } from "viem";
 import { baseSepolia, sepolia } from "viem/chains";
 import {
-  chainInfo,
   createWhisk,
+  tryChainByEvmChainId,
   toWhiskError,
   type Chain,
   type EvmAdapter,
@@ -103,8 +103,7 @@ function makeAdapter(
     },
 
     async switchChain(chainId) {
-      const info = chainInfoByEvmChainId(chainId);
-      if (!info) {
+      if (!tryChainByEvmChainId(chainId)) {
         throw new Error(`Unsupported chainId ${chainId}`);
       }
       try {
@@ -167,17 +166,6 @@ function makeAdapter(
       };
     },
   };
-}
-
-/** Reverse lookup: Whisk `chainInfo` doesn't index by evm chainId directly. */
-function chainInfoByEvmChainId(
-  chainId: number,
-): ReturnType<typeof chainInfo> | null {
-  for (const c of ["Base_Sepolia", "Ethereum_Sepolia"] as Chain[]) {
-    const info = chainInfo(c);
-    if (info.kind === "evm" && info.evmChainId === chainId) return info;
-  }
-  return null;
 }
 
 function mergeStep(steps: Step[], next: Step): Step[] {

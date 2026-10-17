@@ -32,11 +32,11 @@ import {
   deriveTokenMessenger,
   toBytes32,
   type BurnFeeTier,
-  type EvmCctpChain,
-  type CctpNetwork,
+  type EvmChain,
+  type Network,
   type ForwarderFeeTier,
   type IrisMessage,
-  type SolanaCctpChain,
+  type SolanaChain,
   type SolanaInstruction,
 } from "@usewhisk/cctp";
 import { PublicKey } from "@solana/web3.js";
@@ -54,9 +54,9 @@ import type {
 import type { BridgeRecoverySnapshot } from "./execute.js";
 
 export type ExecuteEvmToSolanaInput = {
-  network: CctpNetwork;
-  source: EvmCctpChain;
-  destination: SolanaCctpChain;
+  network: Network;
+  source: EvmChain;
+  destination: SolanaChain;
   /** Recipient base58 pubkey on the destination Solana chain. */
   recipientAddress: string;
   burnAmount: bigint;

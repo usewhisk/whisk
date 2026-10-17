@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import {
-  chainInfo,
+  getChain,
   RECEIPT_STAGE_HELP,
   RECEIPT_STAGE_LABELS,
   type Chain,
@@ -82,10 +82,8 @@ export function WhiskReceipt({
         <div>
           <h2 className="whisk-header__mark">{title}</h2>
           <p className="whisk-header__tag">
-            {chainInfo(sourceChain).label}
-            {view?.isCrossChain
-              ? ` → ${chainInfo(destinationChain).label}`
-              : ""}
+            {getChain(sourceChain).label}
+            {view?.isCrossChain ? ` → ${getChain(destinationChain).label}` : ""}
           </p>
           {description ? (
             <p className="whisk-header__tag">{description}</p>

@@ -10,16 +10,15 @@
  */
 import type { Chain } from "../types/chain.js";
 import type { Step } from "../types/step.js";
-import { cctpDomainFor } from "../chains/cctpDomain.js";
-import { chainInfo, explorerTxUrl } from "../chains/registry.js";
+import { getChain } from "@usewhisk/cctp";
+import { explorerTxUrl } from "../chains/index.js";
 import type { IrisStatus } from "./iris.js";
 
 /**
  * High-level lifecycle stages a Whisk transfer can be in, derived from the
  * combination of Iris attestation status + whether a destination tx is known.
  *
- * - `"submitted"` — source tx submitted; either Iris hasn't seen it yet or
- *   the transfer is same-chain (no CCTP domain).
+ * - `"submitted"`: source tx submitted; Iris hasn't seen it yet.
  * - `"awaiting_attestation"` — burn confirmed, waiting on Circle Iris to
  *   sign the cross-chain message.
  * - `"attested"` — attestation complete, but no destination tx observed yet
@@ -123,7 +122,6 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
     };
   }
 
-  const sourceIsCctp = cctpDomainFor(sourceChain) !== undefined;
   const status = input.irisStatus;
 
   // Iris reported a hard failure — render error.
@@ -203,9 +201,7 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
     };
   }
 
-  // No Iris status yet (initial render or `not_found`). If the source chain
-  // isn't CCTP-eligible we never expect Iris to find it; otherwise we're
-  // still in the early window.
+  // No Iris status yet: the first render, or Iris has not seen the burn.
   return {
     stage: "submitted",
     isCrossChain: true,
@@ -216,7 +212,7 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
       sourceExplorerUrl,
       destinationTxHash,
       destinationExplorerUrl,
-      burnState: sourceIsCctp ? "pending" : "noop",
+      burnState: "pending",
       attestationState: "noop",
       mintState: "noop",
     }),
@@ -278,11 +274,11 @@ export const RECEIPT_STAGE_HELP: Record<ReceiptStage, string> = {
   failed: "Something went wrong. Check the source tx for the full revert.",
 };
 
-/** Chain label helpers, surfaced for the receipt UI without re-importing `chainInfo`. */
+/** Chain labels for the receipt UI. */
 export function describeReceiptChains(view: ReceiptView, input: ReceiptInput) {
   return {
-    sourceLabel: chainInfo(input.sourceChain).label,
-    destinationLabel: chainInfo(input.destinationChain).label,
+    sourceLabel: getChain(input.sourceChain).label,
+    destinationLabel: getChain(input.destinationChain).label,
     isCrossChain: view.isCrossChain,
   };
 }

@@ -24,10 +24,10 @@ import {
   CCTP_FORWARD_HOOK_DATA,
   pollMessages,
   type BurnFeeTier,
-  type EvmCctpChain,
+  type EvmChain,
   type ForwarderFeeTier,
   type IrisMessage,
-  type SolanaCctpChain,
+  type SolanaChain,
 } from "@usewhisk/cctp";
 import { toWhiskError, WhiskError } from "../../errors/errors.js";
 import type { Step, StepName } from "../../types/step.js";
@@ -41,8 +41,8 @@ import type { BridgeRecoverySnapshot } from "./execute.js";
 
 export type ExecuteSolanaToEvmInput = {
   network: "mainnet" | "testnet";
-  source: SolanaCctpChain;
-  destination: EvmCctpChain;
+  source: SolanaChain;
+  destination: EvmChain;
   /** Recipient EVM 0x-address on the destination chain. */
   recipientAddress: `0x${string}`;
   burnAmount: bigint;

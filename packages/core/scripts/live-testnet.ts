@@ -76,17 +76,17 @@ import {
   SolanaDevnet,
   StarknetSepolia,
   StellarTestnet,
-  TESTNET_CHAINS,
+  getChain,
   usdcAbi,
   type BurnFeeTier,
   type CctpChain,
   type EvmAdapter,
   type EvmCall,
-  type SolanaCctpChain,
+  type SolanaChain,
   type SolanaInstruction,
   type StarknetCall,
-  type StarknetCctpChain,
-  type StellarCctpChain,
+  type StarknetChain,
+  type StellarChain,
   type StellarInvocation,
 } from "@usewhisk/cctp";
 import { createWhisk } from "../src/engine/createWhisk.js";
@@ -195,60 +195,60 @@ console.log(
   `Helius:  ${HELIUS_KEY ? "enabled" : "disabled — using public Devnet RPC"}`,
 );
 
-// Per-chain Alchemy slug. Maps CctpChain.name → the subdomain prefix
+// Per-chain Alchemy slug. Maps CctpChain.id → the subdomain prefix
 // Alchemy uses. Chains without a known prefix fall back to the
 // CctpChain's `defaultRpcUrls[0]`. Avalanche Fuji + WorldChain Sepolia
 // are absent here because Alchemy gated those subdomains on a higher
 // plan; public RPCs handle both fine.
 const ALCHEMY_PREFIX: Record<string, string> = {
-  EthereumSepolia: "eth-sepolia",
-  OptimismSepolia: "opt-sepolia",
-  ArbitrumSepolia: "arb-sepolia",
-  BaseSepolia: "base-sepolia",
-  PolygonAmoy: "polygon-amoy",
-  UnichainSepolia: "unichain-sepolia",
-  LineaSepolia: "linea-sepolia",
+  Ethereum_Sepolia: "eth-sepolia",
+  Optimism_Sepolia: "opt-sepolia",
+  Arbitrum_Sepolia: "arb-sepolia",
+  Base_Sepolia: "base-sepolia",
+  Polygon_Amoy_Testnet: "polygon-amoy",
+  Unichain_Sepolia: "unichain-sepolia",
+  Linea_Sepolia: "linea-sepolia",
 };
 
 function rpcUrlFor(chain: CctpChain): string {
   if (ALCHEMY_KEY) {
-    const prefix = ALCHEMY_PREFIX[chain.name];
+    const prefix = ALCHEMY_PREFIX[chain.id];
     if (prefix) return `https://${prefix}.g.alchemy.com/v2/${ALCHEMY_KEY}`;
   }
   const fallback = chain.defaultRpcUrls[0];
   if (!fallback) {
-    throw new Error(`No RPC URL configured for ${chain.name}`);
+    throw new Error(`No RPC URL configured for ${chain.id}`);
   }
   return fallback;
 }
 
 const VIEM_CHAIN: Record<string, ViemChain> = {
-  EthereumSepolia: sepolia,
-  AvalancheFuji: avalancheFuji,
-  OptimismSepolia: optimismSepolia,
-  ArbitrumSepolia: arbitrumSepolia,
-  BaseSepolia: baseSepolia,
-  PolygonAmoy: polygonAmoy,
-  UnichainSepolia: unichainSepolia,
-  LineaSepolia: lineaSepolia,
-  WorldChainSepolia: worldchainSepolia,
+  Ethereum_Sepolia: sepolia,
+  Avalanche_Fuji: avalancheFuji,
+  Optimism_Sepolia: optimismSepolia,
+  Arbitrum_Sepolia: arbitrumSepolia,
+  Base_Sepolia: baseSepolia,
+  Polygon_Amoy_Testnet: polygonAmoy,
+  Unichain_Sepolia: unichainSepolia,
+  Linea_Sepolia: lineaSepolia,
+  World_Chain_Sepolia: worldchainSepolia,
 };
 
-const WHISK_CHAIN: Record<string, WhiskChain> = {
-  EthereumSepolia: "Ethereum_Sepolia",
-  AvalancheFuji: "Avalanche_Fuji",
-  OptimismSepolia: "Optimism_Sepolia",
-  ArbitrumSepolia: "Arbitrum_Sepolia",
-  BaseSepolia: "Base_Sepolia",
-  PolygonAmoy: "Polygon_Amoy_Testnet",
-  UnichainSepolia: "Unichain_Sepolia",
-  LineaSepolia: "Linea_Sepolia",
-  WorldChainSepolia: "World_Chain_Sepolia",
-  SolanaDevnet: "Solana_Devnet",
-  StellarTestnet: "Stellar_Testnet",
-  StarknetSepolia: "Starknet_Sepolia",
-};
-
+// The chains this script has wallets and viem configs for.
+const LIVE_CHAINS: WhiskChain[] = [
+  "Ethereum_Sepolia",
+  "Avalanche_Fuji",
+  "Optimism_Sepolia",
+  "Arbitrum_Sepolia",
+  "Base_Sepolia",
+  "Polygon_Amoy_Testnet",
+  "Unichain_Sepolia",
+  "Linea_Sepolia",
+  "World_Chain_Sepolia",
+  "Solana_Devnet",
+  "Stellar_Testnet",
+  "Starknet_Sepolia",
+];
 const NATIVE_SYMBOL: Record<number, string> = {
   43113: "AVAX",
   80002: "MATIC",
@@ -261,11 +261,11 @@ function buildClients(chain: CctpChain): {
 } {
   if (chain.ecosystem !== "evm") {
     throw new Error(
-      `buildClients: ${chain.name} is not EVM (use Solana branch instead)`,
+      `buildClients: ${chain.id} is not EVM (use Solana branch instead)`,
     );
   }
-  const viemChain = VIEM_CHAIN[chain.name];
-  if (!viemChain) throw new Error(`No viem chain for ${chain.name}`);
+  const viemChain = VIEM_CHAIN[chain.id];
+  if (!viemChain) throw new Error(`No viem chain for ${chain.id}`);
   const transport = http(rpcUrlFor(chain));
   const publicClient = createPublicClient({
     chain: viemChain,
@@ -279,7 +279,7 @@ function buildClients(chain: CctpChain): {
   return { publicClient, walletClient, viemChain };
 }
 
-function makeSolanaNodeAdapter(chain: SolanaCctpChain): SolanaAdapter {
+function makeSolanaNodeAdapter(chain: SolanaChain): SolanaAdapter {
   if (!solanaKeypair || !solanaConnection) {
     throw new Error(
       "Solana node adapter requires WHISK_SOLANA_PK + Solana connection",
@@ -356,7 +356,7 @@ function makeSolanaNodeAdapter(chain: SolanaCctpChain): SolanaAdapter {
   };
 }
 
-function makeStellarNodeAdapter(chain: StellarCctpChain): StellarAdapter {
+function makeStellarNodeAdapter(chain: StellarChain): StellarAdapter {
   if (!stellarKeypair || !stellarRpc) {
     throw new Error(
       "Stellar node adapter requires WHISK_STELLAR_SEED + RPC connection",
@@ -456,7 +456,7 @@ function makeStellarNodeAdapter(chain: StellarCctpChain): StellarAdapter {
   };
 }
 
-function makeStarknetNodeAdapter(chain: StarknetCctpChain): StarknetAdapter {
+function makeStarknetNodeAdapter(chain: StarknetChain): StarknetAdapter {
   if (!starknetAccount || !starknetProvider) {
     throw new Error(
       "Starknet node adapter requires WHISK_STARKNET_ADDRESS + WHISK_STARKNET_PK",
@@ -518,7 +518,7 @@ function makeNodeAdapter(chain: CctpChain): EvmAdapter {
     async switchChain(targetChainId) {
       if (targetChainId !== chain.evmChainId) {
         throw new Error(
-          `Node adapter is pinned to ${chain.name} (${chain.evmChainId}); cannot switch to ${targetChainId}.`,
+          `Node adapter is pinned to ${chain.id} (${chain.evmChainId}); cannot switch to ${targetChainId}.`,
         );
       }
     },
@@ -581,22 +581,19 @@ async function discover(): Promise<{
 }> {
   console.log("\n── Phase 1: discover balances ──");
   const rows: BalanceRow[] = [];
-  for (const chain of TESTNET_CHAINS) {
-    const whiskChain = WHISK_CHAIN[chain.name];
+  for (const whiskChain of LIVE_CHAINS) {
+    const chain = getChain(whiskChain);
     if (chain.ecosystem === "solana") {
       rows.push(await discoverSolana(chain, whiskChain));
-    } else {
+    } else if (chain.ecosystem === "evm") {
       rows.push(await discoverEvm(chain, whiskChain));
     }
   }
-  // Stellar testnet is outside TESTNET_CHAINS (different ecosystem).
   if (stellarKeypair) {
-    const whiskChain = WHISK_CHAIN[StellarTestnet.name];
-    rows.push(await discoverStellar(StellarTestnet, whiskChain));
+    rows.push(await discoverStellar(StellarTestnet, StellarTestnet.id));
   }
   if (starknetAccount) {
-    const whiskChain = WHISK_CHAIN[StarknetSepolia.name];
-    rows.push(await discoverStarknet(StarknetSepolia, whiskChain));
+    rows.push(await discoverStarknet(StarknetSepolia, StarknetSepolia.id));
   }
 
   for (const r of rows) {
@@ -612,10 +609,10 @@ async function discover(): Promise<{
                 (r.chain as { evmChainId?: number }).evmChainId ?? 0
               ] ?? "ETH");
     console.log(
-      `  ${status}  ${r.chain.name.padEnd(20)}  ${fmtUsdc(r.usdc).padStart(12)} USDC  ${fmtNative(r.native, r.chain.ecosystem).padStart(10)} ${sym}  ${r.hint}`,
+      `  ${status}  ${r.chain.id.padEnd(20)}  ${fmtUsdc(r.usdc).padStart(12)} USDC  ${fmtNative(r.native, r.chain.ecosystem).padStart(10)} ${sym}  ${r.hint}`,
     );
   }
-  const byName = new Map(rows.map((r) => [r.chain.name, r]));
+  const byName = new Map(rows.map((r) => [r.chain.id, r]));
   return { rows, byName };
 }
 
@@ -646,7 +643,7 @@ async function discoverEvm(
 }
 
 async function discoverSolana(
-  chain: SolanaCctpChain,
+  chain: SolanaChain,
   whiskChain: WhiskChain | undefined,
 ): Promise<BalanceRow> {
   if (!solanaKeypair || !solanaConnection) {
@@ -684,7 +681,7 @@ async function discoverSolana(
 }
 
 async function discoverStellar(
-  chain: StellarCctpChain,
+  chain: StellarChain,
   whiskChain: WhiskChain | undefined,
 ): Promise<BalanceRow> {
   if (!stellarKeypair) {
@@ -738,7 +735,7 @@ async function discoverStellar(
 }
 
 async function discoverStarknet(
-  chain: StarknetCctpChain,
+  chain: StarknetChain,
   whiskChain: WhiskChain | undefined,
 ): Promise<BalanceRow> {
   if (!starknetAccount || !starknetProvider) {
@@ -855,7 +852,7 @@ async function sweepSameChain(
       row.chain.ecosystem === "solana"
         ? solanaKeypair!.publicKey.toBase58()
         : account.address;
-    process.stdout.write(`  ${row.chain.name.padEnd(20)} `);
+    process.stdout.write(`  ${row.chain.id.padEnd(20)} `);
     try {
       const quote = await engine.quote({
         sourceChain: row.whiskChain,
@@ -886,7 +883,7 @@ async function sweepSameChain(
   for (const r of skipped) {
     const reason =
       r.usdc < 10_000n ? "no USDC" : r.native === 0n ? "no native gas" : "?";
-    console.log(`  ${r.chain.name.padEnd(20)} SKIP (${reason})`);
+    console.log(`  ${r.chain.id.padEnd(20)} SKIP (${reason})`);
   }
 }
 
@@ -900,12 +897,12 @@ const BRIDGE_AMOUNT = "0.05";
 // domains. Bridge runs only fire when the source has both USDC and
 // native gas; pairs whose source lacks gas just print SKIP and move on.
 const DEFAULT_BRIDGE_PAIRS: ReadonlyArray<[string, string]> = [
-  ["BaseSepolia", "OptimismSepolia"],
-  ["BaseSepolia", "ArbitrumSepolia"],
-  ["EthereumSepolia", "BaseSepolia"],
-  ["EthereumSepolia", "ArbitrumSepolia"],
-  ["AvalancheFuji", "BaseSepolia"],
-  ["PolygonAmoy", "EthereumSepolia"],
+  ["Base_Sepolia", "Optimism_Sepolia"],
+  ["Base_Sepolia", "Arbitrum_Sepolia"],
+  ["Ethereum_Sepolia", "Base_Sepolia"],
+  ["Ethereum_Sepolia", "Arbitrum_Sepolia"],
+  ["Avalanche_Fuji", "Base_Sepolia"],
+  ["Polygon_Amoy_Testnet", "Ethereum_Sepolia"],
 ];
 
 function pairsFromArg(): ReadonlyArray<[string, string]> {
@@ -992,8 +989,8 @@ async function sweepRecovery(byName: Map<string, BalanceRow>): Promise<void> {
 
   // Base → Eth: both have native gas, so the recovery path's manual
   // mint on the destination can actually land.
-  const srcName = "BaseSepolia";
-  const dstName = "EthereumSepolia";
+  const srcName = "Base_Sepolia";
+  const dstName = "Ethereum_Sepolia";
   const src = byName.get(srcName);
   const dst = byName.get(dstName);
   if (!src?.whiskChain || !dst?.whiskChain) {
@@ -1086,7 +1083,7 @@ async function sweepRefund(
   // Same-chain refund: send 0.05 from A → A, then refund A → A. The
   // merchant adapter is the same wallet (loopback) so we can verify
   // metadata stamping without needing a second signer.
-  const chain = byName.get("BaseSepolia");
+  const chain = byName.get("Base_Sepolia");
   if (!chain?.whiskChain || chain.usdc < 100_000n || chain.native === 0n) {
     console.log("  skip — Base Sepolia needs USDC + native gas");
     return;
@@ -1146,7 +1143,7 @@ async function sweepEdges(
   byName: Map<string, BalanceRow>,
 ): Promise<void> {
   console.log("\n── Phase 6: edge cases ──");
-  const base = byName.get("BaseSepolia");
+  const base = byName.get("Base_Sepolia");
   if (!base?.whiskChain || base.usdc < 1_000n) {
     console.log("  skip — Base Sepolia needs USDC for fixture quotes");
     return;
@@ -1203,12 +1200,12 @@ async function sweepEdges(
   // 6.3 — Bridge with feeBearer="receiver" yields a smaller amountOut
   process.stdout.write("  receiver mode (deducts from out)    ");
   try {
-    const dstChain = byName.get("ArbitrumSepolia");
+    const dstChain = byName.get("Arbitrum_Sepolia");
     if (!dstChain?.whiskChain) {
       console.log("SKIP  (Arb Sepolia missing)");
     } else {
       const receiverEngine = createWhisk({
-        chains: Object.values(WHISK_CHAIN),
+        chains: LIVE_CHAINS,
         mode: "testnet",
         feeBearer: "receiver",
       });
@@ -1232,12 +1229,12 @@ async function sweepEdges(
   // 6.4 — Bridge with merchant feePolicy: quote includes 90/10 split
   process.stdout.write("  customFee 90/10 split              ");
   try {
-    const dstChain = byName.get("OptimismSepolia");
+    const dstChain = byName.get("Optimism_Sepolia");
     if (!dstChain?.whiskChain) {
       console.log("SKIP  (OP Sepolia missing)");
     } else {
       const feeEngine = createWhisk({
-        chains: Object.values(WHISK_CHAIN),
+        chains: LIVE_CHAINS,
         mode: "testnet",
         feeBearer: "sender",
         feePolicy: { value: "1", recipient: account.address },
@@ -1284,8 +1281,8 @@ async function sweepCrossEcosystemBridge(
     return;
   }
 
-  const sol = byName.get("SolanaDevnet");
-  const base = byName.get("BaseSepolia");
+  const sol = byName.get("Solana_Devnet");
+  const base = byName.get("Base_Sepolia");
   if (!sol?.whiskChain || !base?.whiskChain) {
     console.log("  skip (SolanaDevnet or BaseSepolia not found)");
     return;
@@ -1297,7 +1294,7 @@ async function sweepCrossEcosystemBridge(
     sol.usdc >= 100_000n &&
     sol.native >= 10_000_000n /* 0.01 SOL */
   ) {
-    const solAdapter = makeSolanaNodeAdapter(sol.chain as SolanaCctpChain);
+    const solAdapter = makeSolanaNodeAdapter(sol.chain as SolanaChain);
     process.stdout.write(`  SolanaDevnet → BaseSepolia  `);
     try {
       const quote = await engine.quote({
@@ -1347,7 +1344,7 @@ async function sweepCrossEcosystemBridge(
   // -------- Base → Solana (manual mint on Solana, two adapters) ----------
   if (base.ok && base.usdc >= 100_000n && base.native > 0n) {
     const evmAdapter = makeNodeAdapter(base.chain);
-    const solAdapter = makeSolanaNodeAdapter(sol.chain as SolanaCctpChain);
+    const solAdapter = makeSolanaNodeAdapter(sol.chain as SolanaChain);
     process.stdout.write(`  BaseSepolia → SolanaDevnet  `);
     try {
       const quote = await engine.quote({
@@ -1420,9 +1417,9 @@ async function sweepStellarBridge(
     return;
   }
 
-  const stellar = byName.get("StellarTestnet");
-  const base = byName.get("BaseSepolia");
-  const sol = byName.get("SolanaDevnet");
+  const stellar = byName.get("Stellar_Testnet");
+  const base = byName.get("Base_Sepolia");
+  const sol = byName.get("Solana_Devnet");
   if (!stellar?.whiskChain) {
     console.log("  skip (StellarTestnet not found)");
     return;
@@ -1436,7 +1433,7 @@ async function sweepStellarBridge(
     stellar.native > 0n
   ) {
     const stellarAdapter = makeStellarNodeAdapter(
-      stellar.chain as StellarCctpChain,
+      stellar.chain as StellarChain,
     );
     const evmAdapter = makeNodeAdapter(base.chain);
     process.stdout.write(`  StellarTestnet → BaseSepolia  `);
@@ -1493,7 +1490,7 @@ async function sweepStellarBridge(
   if (base?.ok && base.usdc >= 100_000n && base.native > 0n) {
     const evmAdapter = makeNodeAdapter(base.chain);
     const stellarAdapter = makeStellarNodeAdapter(
-      stellar.chain as StellarCctpChain,
+      stellar.chain as StellarChain,
     );
     process.stdout.write(`  BaseSepolia → StellarTestnet  `);
     try {
@@ -1552,9 +1549,9 @@ async function sweepStellarBridge(
     sol.usdc >= 100_000n &&
     sol.native >= 10_000_000n
   ) {
-    const solAdapter = makeSolanaNodeAdapter(sol.chain as SolanaCctpChain);
+    const solAdapter = makeSolanaNodeAdapter(sol.chain as SolanaChain);
     const stellarAdapter = makeStellarNodeAdapter(
-      stellar.chain as StellarCctpChain,
+      stellar.chain as StellarChain,
     );
     process.stdout.write(`  SolanaDevnet → StellarTestnet  `);
     try {
@@ -1613,9 +1610,9 @@ async function sweepStellarBridge(
     stellar.native > 0n
   ) {
     const stellarAdapter = makeStellarNodeAdapter(
-      stellar.chain as StellarCctpChain,
+      stellar.chain as StellarChain,
     );
-    const solAdapter = makeSolanaNodeAdapter(sol.chain as SolanaCctpChain);
+    const solAdapter = makeSolanaNodeAdapter(sol.chain as SolanaChain);
     process.stdout.write(`  StellarTestnet → SolanaDevnet  `);
     try {
       const quote = await engine.quote({
@@ -1681,8 +1678,8 @@ async function sweepStarknetBridge(
     return;
   }
 
-  const starknet = byName.get("StarknetSepolia");
-  const base = byName.get("BaseSepolia");
+  const starknet = byName.get("Starknet_Sepolia");
+  const base = byName.get("Base_Sepolia");
   if (!starknet?.whiskChain || !base?.whiskChain) {
     console.log("  skip (StarknetSepolia or BaseSepolia not found)");
     return;
@@ -1690,9 +1687,7 @@ async function sweepStarknetBridge(
 
   // -------- Starknet → Base (manual EVM receiveMessage) ------------------
   if (starknet.ok && starknet.usdc >= 100_000n) {
-    const stkAdapter = makeStarknetNodeAdapter(
-      starknet.chain as StarknetCctpChain,
-    );
+    const stkAdapter = makeStarknetNodeAdapter(starknet.chain as StarknetChain);
     const evmAdapter = makeNodeAdapter(base.chain);
     process.stdout.write(`  StarknetSepolia → BaseSepolia  `);
     try {
@@ -1741,9 +1736,7 @@ async function sweepStarknetBridge(
   // -------- Base → Starknet (manual Starknet receive_message) ------------
   if (base.ok && base.usdc >= 100_000n && base.native > 0n) {
     const evmAdapter = makeNodeAdapter(base.chain);
-    const stkAdapter = makeStarknetNodeAdapter(
-      starknet.chain as StarknetCctpChain,
-    );
+    const stkAdapter = makeStarknetNodeAdapter(starknet.chain as StarknetChain);
     process.stdout.write(`  BaseSepolia → StarknetSepolia  `);
     try {
       const quote = await engine.quote({
@@ -1834,7 +1827,7 @@ async function main() {
   console.log(`Mode: testnet · phase=${phase}`);
 
   const engine = createWhisk({
-    chains: Object.values(WHISK_CHAIN),
+    chains: LIVE_CHAINS,
     mode: "testnet",
     feeBearer: "sender",
     useForwarder: true,

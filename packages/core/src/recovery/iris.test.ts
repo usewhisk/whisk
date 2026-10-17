@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { IrisMessage as CctpIrisMessage } from "@usewhisk/cctp";
+import {
+  UnknownChainError,
+  type IrisMessage as CctpIrisMessage,
+} from "@usewhisk/cctp";
 import type { Chain } from "../types/chain.js";
 import { createFakeIris } from "../test/harness/index.js";
 import {
@@ -46,13 +49,11 @@ describe("getIrisBaseUrl", () => {
 });
 
 describe("fetchAttestationOnce", () => {
-  it("returns not_found when the source chain has no CCTP domain", async () => {
-    // Every chain in the registry now has a CCTP domain, so to exercise the
-    // early-return branch we synthesize a chain string that isn't in the map.
+  it("throws for a chain outside the registry without calling Iris", async () => {
     const fetchMock = stubFetch();
-    const msg = await fetchAttestationOnce("__no_domain__" as Chain, "0xburn");
-    expect(msg.status).toBe("not_found");
-    // Iris should never have been called.
+    await expect(
+      fetchAttestationOnce("__unknown__" as Chain, "0xburn"),
+    ).rejects.toBeInstanceOf(UnknownChainError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

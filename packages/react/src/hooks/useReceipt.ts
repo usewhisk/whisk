@@ -3,7 +3,6 @@
 import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  cctpDomainFor,
   deriveReceiptView,
   fetchAttestationOnce,
   type Chain,
@@ -65,8 +64,7 @@ export function useReceipt(input: UseReceiptInput): UseReceiptResult {
     !!sourceTxHash &&
     sourceChain !== destinationChain &&
     !destinationTxHash &&
-    !hasError &&
-    cctpDomainFor(sourceChain) !== undefined;
+    !hasError;
 
   // Anchor the polling deadline to the source-tx hash. New hash → new
   // deadline; same hash → preserved across re-renders.

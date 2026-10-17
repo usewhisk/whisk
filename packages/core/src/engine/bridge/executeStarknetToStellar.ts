@@ -16,11 +16,11 @@ import {
   decodeStrkeyToBytes32,
   pollMessages,
   type BurnFeeTier,
-  type CctpNetwork,
+  type Network,
   type ForwarderFeeTier,
   type IrisMessage,
-  type StarknetCctpChain,
-  type StellarCctpChain,
+  type StarknetChain,
+  type StellarChain,
 } from "@usewhisk/cctp";
 import { ConfigError, toWhiskError, WhiskError } from "../../errors/errors.js";
 import type { Step, StepName } from "../../types/step.js";
@@ -34,9 +34,9 @@ import type {
 import type { BridgeRecoverySnapshot } from "./execute.js";
 
 export type ExecuteStarknetToStellarInput = {
-  network: CctpNetwork;
-  source: StarknetCctpChain;
-  destination: StellarCctpChain;
+  network: Network;
+  source: StarknetChain;
+  destination: StellarChain;
   recipientAddress: string;
   burnAmount: bigint;
   maxFee: bigint;

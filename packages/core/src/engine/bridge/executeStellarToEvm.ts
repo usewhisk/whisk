@@ -24,11 +24,11 @@ import {
   canonicalToStellarSubunits,
   pollMessages,
   type BurnFeeTier,
-  type EvmCctpChain,
-  type CctpNetwork,
+  type EvmChain,
+  type Network,
   type ForwarderFeeTier,
   type IrisMessage,
-  type StellarCctpChain,
+  type StellarChain,
 } from "@usewhisk/cctp";
 import { ConfigError, toWhiskError, WhiskError } from "../../errors/errors.js";
 import type { Step, StepName } from "../../types/step.js";
@@ -43,9 +43,9 @@ import type {
 import type { BridgeRecoverySnapshot } from "./execute.js";
 
 export type ExecuteStellarToEvmInput = {
-  network: CctpNetwork;
-  source: StellarCctpChain;
-  destination: EvmCctpChain;
+  network: Network;
+  source: StellarChain;
+  destination: EvmChain;
   /** Recipient EVM 0x-address on the destination chain. */
   recipientAddress: `0x${string}`;
   /** Burn amount in 6-decimal canonical subunits. Scaled to 7 on submit. */

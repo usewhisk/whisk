@@ -216,21 +216,20 @@ export type { CustomFeeSplit } from "@usewhisk/core";
  * --------------------------------------------------------------------- */
 
 export {
-  allChains,
-  cctpDomainFor,
-  chainByEvmId,
-  chainForCctpDomain,
-  chainInfo,
-  chainsByKind,
+  CHAINS,
+  addressFormat,
+  chainByDomain,
+  chainByEvmChainId,
   chainsByNetwork,
   explorerAddressUrl,
   explorerTxUrl,
+  getChain,
   inferMode,
+  isChainId,
   resolveMode,
-  supportedTokensFor,
-  tokenAddressFor,
+  tryChainByEvmChainId,
 } from "@usewhisk/core";
-export type { ChainInfo, SupportedTokenAlias } from "@usewhisk/core";
+export type { AddressFormat, CctpChain } from "@usewhisk/core";
 
 /* --------------------------------------------------------------------- *
  *  Recovery

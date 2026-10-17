@@ -246,19 +246,21 @@ typed error back.
 
 ```ts
 import {
-  allChains,
-  chainInfo,
-  chainByEvmId,
-  chainsByKind,
+  CHAINS,
+  chainByEvmChainId,
   chainsByNetwork,
   explorerTxUrl,
+  getChain,
 } from "@usewhisk/core";
 
-chainInfo("Base_Sepolia").label;            // "Base Sepolia"
+getChain("Base_Sepolia").label;             // "Base Sepolia"
 chainsByNetwork("testnet").length;          // every supported testnet
-chainByEvmId(8453)?.chain;                  // "Base"
+chainByEvmChainId(8453).id;                 // "Base"
 explorerTxUrl("Solana_Devnet", "sig123");   // includes ?cluster=devnet
 ```
+
+The registry lives in `@usewhisk/cctp`; core re-exports it, and `Chain` is
+the union of its ids.
 
 ## Type-safe everywhere
 

@@ -11,12 +11,14 @@
  * `buildMintIntent` from `@usewhisk/cctp` directly.
  */
 import {
+  getChain,
   MESSAGE_TRANSMITTER_V2_EVM_MAINNET,
   MESSAGE_TRANSMITTER_V2_EVM_TESTNET,
+  MESSAGE_TRANSMITTER_V2_SOLANA,
   messageTransmitterV2Abi,
 } from "@usewhisk/cctp";
 import type { Chain } from "../types/chain.js";
-import { chainInfo, explorerTxUrl } from "../chains/registry.js";
+import { explorerTxUrl } from "../chains/index.js";
 
 /** EVM `MessageTransmitterV2` address — same across every EVM mainnet chain. */
 export const EVM_MAINNET_MESSAGE_TRANSMITTER =
@@ -24,9 +26,8 @@ export const EVM_MAINNET_MESSAGE_TRANSMITTER =
 /** EVM `MessageTransmitterV2` address — same across every EVM testnet chain. */
 export const EVM_TESTNET_MESSAGE_TRANSMITTER =
   MESSAGE_TRANSMITTER_V2_EVM_TESTNET;
-/** Solana `MessageTransmitterV2` program — reserved for future Solana support. */
-export const SOLANA_MESSAGE_TRANSMITTER =
-  "CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbeC" as const;
+/** Solana `MessageTransmitterV2` program, the same on mainnet-beta and devnet. */
+export const SOLANA_MESSAGE_TRANSMITTER = MESSAGE_TRANSMITTER_V2_SOLANA;
 
 /** ABI fragment exposed to consumers feeding wagmi's `useWriteContract`. */
 export const RECEIVE_MESSAGE_ABI = messageTransmitterV2Abi.filter(
@@ -43,22 +44,14 @@ export type ReceiveMessageCall = {
 };
 
 /** Resolve the `MessageTransmitter` address for a chain. */
-export function messageTransmitterAddress(chain: Chain): string | undefined {
-  const info = chainInfo(chain);
-  if (info.kind === "solana") return SOLANA_MESSAGE_TRANSMITTER;
-  if (info.kind === "evm") {
-    return info.network === "mainnet"
-      ? EVM_MAINNET_MESSAGE_TRANSMITTER
-      : EVM_TESTNET_MESSAGE_TRANSMITTER;
-  }
-  return undefined;
+export function messageTransmitterAddress(chain: Chain): string {
+  return getChain(chain).messageTransmitter;
 }
 
 /**
  * Build a `MessageTransmitter.receiveMessage` call descriptor for the
- * destination chain. Returns `null` for non-EVM destinations (different
- * call surface, not in scope) or chains without a registered
- * MessageTransmitter. Throws on malformed hex inputs.
+ * destination chain. Returns `null` for non-EVM destinations, which take a
+ * different call. Throws on malformed hex inputs.
  */
 export function buildReceiveMessageCall(
   destinationChain: Chain,
@@ -75,15 +68,12 @@ export function buildReceiveMessageCall(
       "buildReceiveMessageCall: `attestation` must be a 0x-prefixed hex string",
     );
   }
-  const info = chainInfo(destinationChain);
-  if (info.kind !== "evm") return null;
-
-  const address = messageTransmitterAddress(destinationChain);
-  if (!address) return null;
+  const destination = getChain(destinationChain);
+  if (destination.ecosystem !== "evm") return null;
 
   return {
     destinationChain,
-    address,
+    address: destination.messageTransmitter,
     abi: RECEIVE_MESSAGE_ABI,
     functionName: "receiveMessage",
     args: [message, attestation],

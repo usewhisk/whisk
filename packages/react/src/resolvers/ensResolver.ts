@@ -5,8 +5,10 @@ import { mainnet, sepolia } from "viem/chains";
 import { normalize } from "viem/ens";
 import {
   ResolverError,
-  chainInfo,
+  addressFormat,
   cleanErrorMessage,
+  getChain,
+  type CctpChain,
   type Resolver,
 } from "@usewhisk/core";
 
@@ -80,8 +82,9 @@ export function createEnsResolver(options: EnsResolverOptions = {}): Resolver {
         return null;
       }
 
-      const info = chainInfo(ctx.chain);
-      const destinationCoinType = ensCoinTypeForChain(info);
+      const destination = getChain(ctx.chain);
+      const { pattern } = addressFormat(ctx.chain);
+      const destinationCoinType = ensCoinTypeForChain(destination);
 
       const client = getClient();
 
@@ -90,18 +93,18 @@ export function createEnsResolver(options: EnsResolverOptions = {}): Resolver {
         normalized,
         destinationCoinType,
       );
-      if (primary && info.addressRegex.test(primary)) {
+      if (primary && pattern.test(primary)) {
         return { address: primary, chain: ctx.chain };
       }
 
       // EVM addresses are namespace-equivalent; Solana regex check keeps cross-ecosystem safe.
       if (
         fallbackToEthAddress &&
-        info.kind === "evm" &&
+        destination.ecosystem === "evm" &&
         destinationCoinType !== 60
       ) {
         const fallbackAddr = await safeGetEnsAddress(client, normalized, 60);
-        if (fallbackAddr && info.addressRegex.test(fallbackAddr)) {
+        if (fallbackAddr && pattern.test(fallbackAddr)) {
           return { address: fallbackAddr, chain: ctx.chain };
         }
       }
@@ -151,18 +154,13 @@ export const sepoliaEnsResolver: Resolver = createEnsResolver({
 });
 
 // ENSIP-11: mainnet → 60, other EVM → unsigned (0x80000000 | chainId), Solana → 501.
-function ensCoinTypeForChain(
-  info: ReturnType<typeof chainInfo>,
-): number | undefined {
-  if (info.kind === "evm") {
-    if (info.evmChainId === 1) return 60;
-    if (typeof info.evmChainId === "number") {
-      // `|` returns signed int32 — coerce to unsigned for chainIds ≥ 2^31.
-      return (0x80000000 | info.evmChainId) >>> 0;
-    }
-    return undefined;
+function ensCoinTypeForChain(chain: CctpChain): number | undefined {
+  if (chain.ecosystem === "evm") {
+    if (chain.evmChainId === 1) return 60;
+    // `|` returns a signed int32, so coerce to unsigned for chain ids of 2^31 and up.
+    return (0x80000000 | chain.evmChainId) >>> 0;
   }
-  if (info.kind === "solana") {
+  if (chain.ecosystem === "solana") {
     return 501;
   }
   return undefined;

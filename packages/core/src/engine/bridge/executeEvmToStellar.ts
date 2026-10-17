@@ -26,11 +26,11 @@ import {
   decodeStrkeyToBytes32,
   pollMessages,
   type BurnFeeTier,
-  type EvmCctpChain,
-  type CctpNetwork,
+  type EvmChain,
+  type Network,
   type ForwarderFeeTier,
   type IrisMessage,
-  type StellarCctpChain,
+  type StellarChain,
 } from "@usewhisk/cctp";
 import { ConfigError, toWhiskError, WhiskError } from "../../errors/errors.js";
 import type { Step, StepName } from "../../types/step.js";
@@ -45,9 +45,9 @@ import type {
 import type { BridgeRecoverySnapshot } from "./execute.js";
 
 export type ExecuteEvmToStellarInput = {
-  network: CctpNetwork;
-  source: EvmCctpChain;
-  destination: StellarCctpChain;
+  network: Network;
+  source: EvmChain;
+  destination: StellarChain;
   /** Recipient strkey (G…, M…, or C…) — encoded into hookData. */
   recipientAddress: string;
   burnAmount: bigint;

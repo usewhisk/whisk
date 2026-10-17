@@ -8,7 +8,7 @@
  */
 import { encodeFunctionData, isAddress as viemIsAddress } from "viem";
 import { usdcAbi } from "@usewhisk/cctp";
-import type { EvmCctpChain } from "@usewhisk/cctp";
+import type { EvmChain } from "@usewhisk/cctp";
 import {
   InvalidAddressError,
   toWhiskError,
@@ -24,7 +24,7 @@ import type {
 
 export type ExecuteSameChainSendInput = {
   /** Chain definition from `@usewhisk/cctp` — gives us USDC address + EVM chain ID. */
-  chain: EvmCctpChain;
+  chain: EvmChain;
   recipientAddress: string;
   /** Amount in USDC subunits (6 decimals). */
   amount: bigint;

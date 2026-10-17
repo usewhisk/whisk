@@ -1,51 +1,8 @@
-/** Values match Circle App Kit's `Blockchain` enum strings. */
-export type Chain =
-  // Mainnets
-  | "Arbitrum"
-  | "Avalanche"
-  | "Base"
-  | "Codex"
-  | "Ethereum"
-  | "HyperEVM"
-  | "Ink"
-  | "Linea"
-  | "Monad"
-  | "Optimism"
-  | "Plume"
-  | "Polygon"
-  | "Sei"
-  | "Solana"
-  | "Sonic"
-  | "Starknet"
-  | "Stellar"
-  | "Unichain"
-  | "World_Chain"
-  | "XDC"
-  // Testnets
-  | "Arbitrum_Sepolia"
-  | "Arc_Testnet"
-  | "Avalanche_Fuji"
-  | "Base_Sepolia"
-  | "Codex_Testnet"
-  | "Edge_Testnet"
-  | "Ethereum_Sepolia"
-  | "HyperEVM_Testnet"
-  | "Ink_Testnet"
-  | "Linea_Sepolia"
-  | "Monad_Testnet"
-  | "Morph_Testnet"
-  | "Optimism_Sepolia"
-  | "Plume_Testnet"
-  | "Polygon_Amoy_Testnet"
-  | "Sei_Testnet"
-  | "Solana_Devnet"
-  | "Sonic_Testnet"
-  | "Starknet_Sepolia"
-  | "Stellar_Testnet"
-  | "Unichain_Sepolia"
-  | "World_Chain_Sepolia"
-  | "XDC_Apothem";
+import type { ChainId, Ecosystem, Network } from "@usewhisk/cctp";
 
-export type ChainKind = "evm" | "solana" | "stellar" | "starknet";
+/** Circle App Kit `Blockchain` strings, taken from the `@usewhisk/cctp` registry. */
+export type Chain = ChainId;
 
-export type ChainNetwork = "mainnet" | "testnet";
+export type ChainKind = Ecosystem;
+
+export type ChainNetwork = Network;

@@ -15,15 +15,12 @@
  */
 
 import {
-  chainByEvmChainId,
-  chainBySolanaCluster,
-  chainByStarknetNetwork,
-  chainByStellarNetwork,
+  getChain,
   type CctpChain,
-  type EvmCctpChain,
-  type SolanaCctpChain,
-  type StarknetCctpChain,
-  type StellarCctpChain,
+  type EvmChain,
+  type SolanaChain,
+  type StarknetChain,
+  type StellarChain,
 } from "@usewhisk/cctp";
 import type { WhiskConfig } from "../types/config.js";
 import type { ResolvedRecipient } from "../types/recipient.js";
@@ -32,7 +29,6 @@ import type { Chain } from "../types/chain.js";
 import { ConfigError } from "../errors/errors.js";
 import { addressResolver } from "../resolvers/address.js";
 import { resolveMode } from "../chains/mode.js";
-import { chainInfo } from "../chains/registry.js";
 import { decideRoute } from "../routing/decide.js";
 import { mergeMetadata, validateMetadata } from "../metadata/validate.js";
 import type { WhiskMetadata } from "../metadata/types.js";
@@ -196,7 +192,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     const route = decideRoute(input.sourceChain, input.destinationChain);
 
     if (isSendRoute(route)) {
-      const cctpChain = lookupCctpChain(route.chain);
+      const cctpChain = getChain(route.chain);
 
       if (cctpChain.ecosystem === "solana") {
         const adapter = expectSolanaAdapter(input.adapter, cctpChain);
@@ -237,7 +233,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      const evmSendChain = cctpChain as EvmCctpChain;
+      const evmSendChain = cctpChain as EvmChain;
       const adapter = expectEvmAdapter(input.adapter, evmSendChain);
       const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSendChain);
       return executeSameChainSend(
@@ -253,8 +249,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     }
 
     if (isBridgeRoute(route)) {
-      const source = lookupCctpChain(route.sourceChain);
-      const destination = lookupCctpChain(route.destinationChain);
+      const source = getChain(route.sourceChain);
+      const destination = getChain(route.destinationChain);
       const network = resolvedConfig.mode ?? source.network;
 
       // Same-cluster Solana "bridge" is a logical impossibility — both
@@ -302,8 +298,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
 
       // --- EVM → EVM (the original path) -----------------------------------
       if (source.ecosystem === "evm" && destination.ecosystem === "evm") {
-        const evmSource = source as EvmCctpChain;
-        const evmDestination = destination as EvmCctpChain;
+        const evmSource = source as EvmChain;
+        const evmDestination = destination as EvmChain;
         const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
         const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
         return executeBridge(
@@ -328,8 +324,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
 
       // --- Solana → EVM (Forwarder relays the mint) ------------------------
       if (source.ecosystem === "solana" && destination.ecosystem === "evm") {
-        const solSource = source as SolanaCctpChain;
-        const evmDestination = destination as EvmCctpChain;
+        const solSource = source as SolanaChain;
+        const evmDestination = destination as EvmChain;
         const solanaAdapter = expectSolanaAdapter(input.adapter, solSource);
         return executeSolanaToEvm(
           {
@@ -352,8 +348,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
 
       // --- EVM → Starknet (manual receive_message via destAdapter) --------
       if (source.ecosystem === "evm" && destination.ecosystem === "starknet") {
-        const evmSource = source as EvmCctpChain;
-        const starknetDest = destination as StarknetCctpChain;
+        const evmSource = source as EvmChain;
+        const starknetDest = destination as StarknetChain;
         const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
         if (!input.destinationAdapter) {
           throw new ConfigError(
@@ -387,8 +383,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
 
       // --- Starknet → EVM (manual receive on EVM, no Iris forward) --------
       if (source.ecosystem === "starknet" && destination.ecosystem === "evm") {
-        const starknetSource = source as StarknetCctpChain;
-        const evmDestination = destination as EvmCctpChain;
+        const starknetSource = source as StarknetChain;
+        const evmDestination = destination as EvmChain;
         const starknetAdapter = expectStarknetAdapter(
           input.adapter,
           starknetSource,
@@ -423,8 +419,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
 
       // --- EVM → Stellar (Stellar Forwarder mints on signed call from destAdapter) -
       if (source.ecosystem === "evm" && destination.ecosystem === "stellar") {
-        const evmSource = source as EvmCctpChain;
-        const stellarDest = destination as StellarCctpChain;
+        const evmSource = source as EvmChain;
+        const stellarDest = destination as StellarChain;
         const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
         if (!input.destinationAdapter) {
           throw new ConfigError(
@@ -460,8 +456,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       // Iris's auto-forwarder doesn't relay Stellar-source burns, so the
       // destination EVM wallet must sign receiveMessage manually.
       if (source.ecosystem === "stellar" && destination.ecosystem === "evm") {
-        const stellarSource = source as StellarCctpChain;
-        const evmDestination = destination as EvmCctpChain;
+        const stellarSource = source as StellarChain;
+        const evmDestination = destination as EvmChain;
         const stellarAdapter = expectStellarAdapter(
           input.adapter,
           stellarSource,
@@ -499,8 +495,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         source.ecosystem === "solana" &&
         destination.ecosystem === "starknet"
       ) {
-        const solSource = source as SolanaCctpChain;
-        const starknetDest = destination as StarknetCctpChain;
+        const solSource = source as SolanaChain;
+        const starknetDest = destination as StarknetChain;
         const solanaAdapter = expectSolanaAdapter(input.adapter, solSource);
         if (!input.destinationAdapter) {
           throw new ConfigError(
@@ -535,8 +531,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         source.ecosystem === "starknet" &&
         destination.ecosystem === "solana"
       ) {
-        const starknetSource = source as StarknetCctpChain;
-        const solDestination = destination as SolanaCctpChain;
+        const starknetSource = source as StarknetChain;
+        const solDestination = destination as SolanaChain;
         const starknetAdapter = expectStarknetAdapter(
           input.adapter,
           starknetSource,
@@ -574,8 +570,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         source.ecosystem === "stellar" &&
         destination.ecosystem === "starknet"
       ) {
-        const stellarSource = source as StellarCctpChain;
-        const starknetDest = destination as StarknetCctpChain;
+        const stellarSource = source as StellarChain;
+        const starknetDest = destination as StarknetChain;
         const stellarAdapter = expectStellarAdapter(
           input.adapter,
           stellarSource,
@@ -613,8 +609,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         source.ecosystem === "starknet" &&
         destination.ecosystem === "stellar"
       ) {
-        const starknetSource = source as StarknetCctpChain;
-        const stellarDest = destination as StellarCctpChain;
+        const starknetSource = source as StarknetChain;
+        const stellarDest = destination as StellarChain;
         const starknetAdapter = expectStarknetAdapter(
           input.adapter,
           starknetSource,
@@ -652,8 +648,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         source.ecosystem === "solana" &&
         destination.ecosystem === "stellar"
       ) {
-        const solSource = source as SolanaCctpChain;
-        const stellarDest = destination as StellarCctpChain;
+        const solSource = source as SolanaChain;
+        const stellarDest = destination as StellarChain;
         const solanaAdapter = expectSolanaAdapter(input.adapter, solSource);
         if (!input.destinationAdapter) {
           throw new ConfigError(
@@ -688,8 +684,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         source.ecosystem === "stellar" &&
         destination.ecosystem === "solana"
       ) {
-        const stellarSource = source as StellarCctpChain;
-        const solDestination = destination as SolanaCctpChain;
+        const stellarSource = source as StellarChain;
+        const solDestination = destination as SolanaChain;
         const stellarAdapter = expectStellarAdapter(
           input.adapter,
           stellarSource,
@@ -724,8 +720,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
 
       // --- EVM → Solana (manual mint on Solana — needs destinationAdapter) -
       if (source.ecosystem === "evm" && destination.ecosystem === "solana") {
-        const evmSource = source as EvmCctpChain;
-        const solDestination = destination as SolanaCctpChain;
+        const evmSource = source as EvmChain;
+        const solDestination = destination as SolanaChain;
         const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
         if (!input.destinationAdapter) {
           throw new ConfigError(
@@ -768,34 +764,10 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
   return engine;
 }
 
-/**
- * Map a Whisk-typed chain to its CCTP chain entry. Both EVM and Solana
- * branches are supported; the caller discriminates on `ecosystem`.
- */
-function lookupCctpChain(chain: Chain): CctpChain {
-  const info = chainInfo(chain);
-  if (info.kind === "solana") {
-    const cluster = chain === "Solana" ? "mainnet-beta" : "devnet";
-    return chainBySolanaCluster(cluster);
-  }
-  if (info.kind === "stellar") {
-    const stellarNetwork = chain === "Stellar" ? "public" : "testnet";
-    return chainByStellarNetwork(stellarNetwork);
-  }
-  if (info.kind === "starknet") {
-    const starknetNetwork = chain === "Starknet" ? "mainnet" : "sepolia";
-    return chainByStarknetNetwork(starknetNetwork);
-  }
-  if (info.evmChainId === undefined) {
-    throw new ConfigError(`Chain "${chain}" has no EVM chain ID. Unsupported.`);
-  }
-  return chainByEvmChainId(info.evmChainId);
-}
-
 function expectEvmAdapter(adapter: WhiskAdapter, chain: CctpChain): EvmAdapter {
   if (adapter.kind !== "evm") {
     throw new ConfigError(
-      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.name}" (ecosystem=evm). Connect an EVM wallet.`,
+      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.id}" (ecosystem=evm). Connect an EVM wallet.`,
     );
   }
   return adapter;
@@ -803,11 +775,11 @@ function expectEvmAdapter(adapter: WhiskAdapter, chain: CctpChain): EvmAdapter {
 
 function expectSolanaAdapter(
   adapter: WhiskAdapter,
-  chain: SolanaCctpChain,
+  chain: SolanaChain,
 ): SolanaAdapter {
   if (adapter.kind !== "solana") {
     throw new ConfigError(
-      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.name}" (ecosystem=solana). Connect a Solana wallet.`,
+      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.id}" (ecosystem=solana). Connect a Solana wallet.`,
     );
   }
   return adapter;
@@ -815,11 +787,11 @@ function expectSolanaAdapter(
 
 function expectStellarAdapter(
   adapter: WhiskAdapter,
-  chain: StellarCctpChain,
+  chain: StellarChain,
 ): StellarAdapter {
   if (adapter.kind !== "stellar") {
     throw new ConfigError(
-      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.name}" (ecosystem=stellar). Connect a Stellar wallet.`,
+      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.id}" (ecosystem=stellar). Connect a Stellar wallet.`,
     );
   }
   return adapter;
@@ -827,11 +799,11 @@ function expectStellarAdapter(
 
 function expectStarknetAdapter(
   adapter: WhiskAdapter,
-  chain: StarknetCctpChain,
+  chain: StarknetChain,
 ): StarknetAdapter {
   if (adapter.kind !== "starknet") {
     throw new ConfigError(
-      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.name}" (ecosystem=starknet). Connect a Starknet wallet.`,
+      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.id}" (ecosystem=starknet). Connect a Starknet wallet.`,
     );
   }
   return adapter;

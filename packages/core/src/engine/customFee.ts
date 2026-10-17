@@ -15,7 +15,7 @@
  * ignored for v1.
  */
 import { encodeFunctionData, isAddress as viemIsAddress } from "viem";
-import { usdcAbi, type EvmCctpChain } from "@usewhisk/cctp";
+import { usdcAbi, type EvmChain } from "@usewhisk/cctp";
 import type { FeePolicy } from "../types/fee.js";
 import { ConfigError } from "../errors/errors.js";
 import { parseUsdcAmount } from "./amount.js";
@@ -43,7 +43,7 @@ export type CustomFee = {
  */
 export function buildCustomFee(
   policy: FeePolicy | undefined,
-  source: EvmCctpChain,
+  source: EvmChain,
 ): CustomFee | null {
   if (!policy?.value) return null;
 
