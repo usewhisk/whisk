@@ -11,12 +11,12 @@
  *   approve(from: Address, spender: Address, amount: i128, expiration_ledger: u32)
  */
 import { Address, Contract, nativeToScVal, xdr } from "@stellar/stellar-sdk";
-import type { StellarCctpChain } from "../chains/types.js";
+import type { StellarChain } from "../chains/types.js";
 import { InvalidInputError } from "../errors.js";
 import type { StellarInvocation } from "./burn.js";
 
 export type BuildStellarApproveInvocationInput = {
-  source: StellarCctpChain;
+  source: StellarChain;
   /** Owner strkey (G/M/C). Wallet that's authorizing TMM to spend USDC. */
   owner: string;
   /** Spender — typically the chain's TMM contract (C…). */

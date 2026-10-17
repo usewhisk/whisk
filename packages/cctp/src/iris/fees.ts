@@ -7,7 +7,7 @@
  * Each row has the protocol fee bps × 100 and (when ?forward=true) the
  * forwarder fee tiers low/med/high in USDC subunits.
  */
-import type { CctpDomain, CctpNetwork } from "../chains/types.js";
+import type { CctpDomain, Network } from "../chains/types.js";
 import { irisBaseUrl } from "./urls.js";
 import { fetchIrisJson, type FetchJsonOptions } from "./fetch.js";
 import type { BurnFeeTier, ForwarderFeeTier } from "./types.js";
@@ -26,7 +26,7 @@ export type GetBurnFeesOptions = FetchJsonOptions & {
  * `pickFeeTier` to project to a specific finality + forwarder choice.
  */
 export async function getBurnFees(
-  network: CctpNetwork,
+  network: Network,
   sourceDomain: CctpDomain,
   destinationDomain: CctpDomain,
   options: GetBurnFeesOptions = {},

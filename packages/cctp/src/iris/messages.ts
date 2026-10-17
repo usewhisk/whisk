@@ -7,7 +7,7 @@
  * Returns the message + attestation + forwarder state in a single
  * call. Use this to drive recovery polling.
  */
-import type { CctpDomain, CctpNetwork } from "../chains/types.js";
+import type { CctpDomain, Network } from "../chains/types.js";
 import { irisBaseUrl } from "./urls.js";
 import { fetchIrisJson, type FetchJsonOptions } from "./fetch.js";
 import { IrisAbortedError, IrisHttpError } from "../errors.js";
@@ -18,7 +18,7 @@ import type {
 } from "./types.js";
 
 export type GetMessagesOptions = FetchJsonOptions & {
-  network: CctpNetwork;
+  network: Network;
 };
 
 /**

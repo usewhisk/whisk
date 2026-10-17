@@ -136,12 +136,9 @@ describe("buildBurnIntent — Fast-only policy", () => {
   });
 
   it("rejects a source chain that doesn't support Fast Transfer", () => {
-    // We don't ship any non-Fast chain in v1, so synthesise a fake
-    // entry. The cast is necessary because `supportsFastTransfer` is
-    // statically `true` on every shipped row.
     const noFastChain = {
       ...Avalanche,
-      supportsFastTransfer: false,
+      capabilities: { ...Avalanche.capabilities, fastSource: false },
     };
     expect(() =>
       buildBurnIntent({

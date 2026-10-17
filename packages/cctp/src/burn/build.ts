@@ -94,7 +94,7 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
   if (input.source.ecosystem !== "evm") {
     throw new UnsupportedError(
       "unsupported_ecosystem",
-      `Source chain "${input.source.name}" is not EVM. Use the Solana burn builder for Solana sources.`,
+      `Source chain "${input.source.id}" is not EVM. Use the Solana burn builder for Solana sources.`,
     );
   }
   if (input.source.cctpDomain === input.destination.cctpDomain) {
@@ -150,10 +150,10 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
       `mintRecipient is not a valid EVM address: ${input.mintRecipient}`,
     );
   }
-  if (!input.source.supportsFastTransfer) {
+  if (!input.source.capabilities.fastSource) {
     throw new ProtocolError(
       "no_route",
-      `Source chain "${input.source.name}" does not support Fast Transfer; Whisk does not bridge from this chain.`,
+      `Source chain "${input.source.id}" does not support Fast Transfer; Whisk does not bridge from this chain.`,
     );
   }
 

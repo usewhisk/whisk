@@ -40,7 +40,7 @@ import {
   type AccountMeta,
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import type { SolanaCctpChain } from "../chains/types.js";
+import type { SolanaChain } from "../chains/types.js";
 import { InvalidInputError } from "../errors.js";
 import {
   deriveDenylistAccount,
@@ -69,7 +69,7 @@ import {
 const ANY_DESTINATION_CALLER = new PublicKey(new Uint8Array(32));
 
 export type BuildSolanaBurnIntentInput = {
-  source: SolanaCctpChain;
+  source: SolanaChain;
   /** Destination chain CCTP domain (0=Eth, 1=Avax, 3=Arb, 6=Base, etc.). */
   destinationDomain: number;
   /** USDC subunits (6 decimals). Must be > 0 and ≤ 10M USDC. */
@@ -107,7 +107,7 @@ export type SolanaInstruction = {
 };
 
 export type SolanaBurnIntent = {
-  source: SolanaCctpChain;
+  source: SolanaChain;
   destinationDomain: number;
   amount: bigint;
   maxFee: bigint;

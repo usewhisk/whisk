@@ -24,7 +24,7 @@
  * engine handles that approve invocation; this builder only produces
  * the burn Call.
  */
-import type { StarknetCctpChain, StarknetFelt } from "../chains/types.js";
+import type { StarknetChain, StarknetFelt } from "../chains/types.js";
 import { FINALITY_FAST } from "../iris/types.js";
 import { InvalidInputError } from "../errors.js";
 import {
@@ -44,7 +44,7 @@ export type StarknetCall = {
 };
 
 export type BuildStarknetBurnIntentInput = {
-  source: StarknetCctpChain;
+  source: StarknetChain;
   destinationDomain: number;
   /** USDC subunits (6 decimals) — the canonical CCTP amount. */
   amount: bigint;
@@ -68,7 +68,7 @@ export type BuildStarknetBurnIntentInput = {
 };
 
 export type StarknetBurnIntent = {
-  source: StarknetCctpChain;
+  source: StarknetChain;
   destinationDomain: number;
   amount: bigint;
   maxFee: bigint;
@@ -152,7 +152,7 @@ export function buildStarknetBurnIntent(
  * standard ERC-20 / SNIP-2 interface: `approve(spender, amount: u256)`.
  */
 export function buildStarknetApproveCall(args: {
-  source: StarknetCctpChain;
+  source: StarknetChain;
   spender: StarknetFelt;
   amount: bigint;
 }): StarknetCall {

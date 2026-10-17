@@ -42,7 +42,7 @@ export function buildMintIntent(input: BuildMintIntentInput): MintIntent {
   if (input.destination.ecosystem !== "evm") {
     throw new UnsupportedError(
       "unsupported_ecosystem",
-      `Destination chain "${input.destination.name}" is not EVM. v1 supports EVM only.`,
+      `Destination chain "${input.destination.id}" is not EVM. v1 supports EVM only.`,
     );
   }
   if (!HEX_PREFIX_REGEX.test(input.message)) {
