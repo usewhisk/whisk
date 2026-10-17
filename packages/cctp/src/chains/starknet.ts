@@ -1,16 +1,4 @@
-/**
- * CCTP V2 Starknet chains (mainnet + Sepolia testnet).
- *
- * Domain 25. Starknet's CCTP V2 is implemented as two Cairo contracts:
- * `TokenMessengerMinterV2` (burns + mints) and `MessageTransmitterV2`
- * (sends + receives attested messages).
- *
- * USDC on Starknet behaves like an ERC-20 — the burn call uses the
- * standard `transferFrom` allowance pattern, so callers must `approve`
- * the TokenMessenger before `deposit_for_burn`. The engine handles that
- * approve step automatically.
- */
-import type { StarknetCctpChain } from "./types.js";
+import type { StarknetChain } from "./types.js";
 import {
   MESSAGE_TRANSMITTER_V2_STARKNET_MAINNET,
   MESSAGE_TRANSMITTER_V2_STARKNET_SEPOLIA,
@@ -23,34 +11,46 @@ import {
   USDC_STARKNET_SEPOLIA,
 } from "./constants.js";
 
-export const Starknet: StarknetCctpChain = {
-  ecosystem: "starknet",
-  name: "Starknet",
+export const Starknet = {
+  id: "Starknet",
   label: "Starknet",
+  ecosystem: "starknet",
   network: "mainnet",
   starknetNetwork: "mainnet",
   chainId: STARKNET_CHAIN_ID_MAINNET,
   cctpDomain: STARKNET_CCTP_DOMAIN,
   usdc: USDC_STARKNET_MAINNET,
+  usdcDecimals: 6,
   tokenMessengerMinter: TOKEN_MESSENGER_MINTER_V2_STARKNET_MAINNET,
   messageTransmitter: MESSAGE_TRANSMITTER_V2_STARKNET_MAINNET,
-  defaultRpcUrls: ["https://starknet-mainnet.public.blastapi.io/rpc/v0_8"],
+  nativeCurrency: { symbol: "STRK", decimals: 18 },
+  defaultRpcUrls: ["https://starknet-rpc.publicnode.com"],
   explorerUrl: "https://voyager.online",
-  supportsFastTransfer: true,
-};
+  capabilities: {
+    fastSource: true,
+    forwardingDestination: false,
+    upfrontFeeSource: false,
+  },
+} as const satisfies StarknetChain;
 
-export const StarknetSepolia: StarknetCctpChain = {
-  ecosystem: "starknet",
-  name: "StarknetSepolia",
+export const StarknetSepolia = {
+  id: "Starknet_Sepolia",
   label: "Starknet Sepolia",
+  ecosystem: "starknet",
   network: "testnet",
   starknetNetwork: "sepolia",
   chainId: STARKNET_CHAIN_ID_SEPOLIA,
   cctpDomain: STARKNET_CCTP_DOMAIN,
   usdc: USDC_STARKNET_SEPOLIA,
+  usdcDecimals: 6,
   tokenMessengerMinter: TOKEN_MESSENGER_MINTER_V2_STARKNET_SEPOLIA,
   messageTransmitter: MESSAGE_TRANSMITTER_V2_STARKNET_SEPOLIA,
-  defaultRpcUrls: ["https://starknet-sepolia.public.blastapi.io/rpc/v0_8"],
+  nativeCurrency: { symbol: "STRK", decimals: 18 },
+  defaultRpcUrls: ["https://starknet-sepolia-rpc.publicnode.com"],
   explorerUrl: "https://sepolia.voyager.online",
-  supportsFastTransfer: true,
-};
+  capabilities: {
+    fastSource: true,
+    forwardingDestination: false,
+    upfrontFeeSource: false,
+  },
+} as const satisfies StarknetChain;

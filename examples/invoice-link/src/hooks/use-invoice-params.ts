@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useMemo } from "react";
-import { allChains } from "@usewhisk/react";
+import { getChain, isChainId } from "@usewhisk/react";
 import type { InvoiceQuery } from "../lib/types";
 
 /**
@@ -28,14 +28,16 @@ export function useInvoiceParams(): InvoiceQuery {
     if (!to) return { valid: false, reason: "missing-to" };
     if (!amount) return { valid: false, reason: "missing-amount" };
 
-    const resolved = allChains().find((c) => c.chain === chainParam);
-    if (!resolved) return { valid: false, reason: "unknown-chain" };
+    if (!isChainId(chainParam)) {
+      return { valid: false, reason: "unknown-chain" };
+    }
+    const resolved = getChain(chainParam);
 
     return {
       valid: true,
       to,
       amount,
-      chain: resolved.chain,
+      chain: chainParam,
       chainLabel: resolved.label,
       memo,
     };

@@ -11,10 +11,11 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { useAccount } from "wagmi";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
-  chainInfo,
+  getChain,
   isBridgeRoute,
   isSendRoute,
   type Chain,
+  type ChainKind,
   type Quote,
   type ResolvedRecipient,
   type SendFailure,
@@ -73,12 +74,8 @@ export type WhiskSendProps = {
 
 type TabKind = "send" | "bridge";
 
-function ecosystemFor(chain: Chain): "evm" | "solana" | "stellar" | "starknet" {
-  const kind = chainInfo(chain).kind;
-  if (kind === "solana") return "solana";
-  if (kind === "stellar") return "stellar";
-  if (kind === "starknet") return "starknet";
-  return "evm";
+function ecosystemFor(chain: Chain): ChainKind {
+  return getChain(chain).ecosystem;
 }
 
 /**

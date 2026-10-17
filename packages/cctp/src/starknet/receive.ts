@@ -9,13 +9,13 @@
  * (or any third party) signs this on the destination side after Iris
  * attests the burn.
  */
-import type { StarknetCctpChain } from "../chains/types.js";
+import type { StarknetChain } from "../chains/types.js";
 import { InvalidInputError } from "../errors.js";
 import { hexToByteArrayFelts } from "./calldata.js";
 import type { StarknetCall } from "./burn.js";
 
 export type BuildStarknetReceiveIntentInput = {
-  destination: StarknetCctpChain;
+  destination: StarknetChain;
   /** 0x-prefixed CCTP message bytes from Iris. */
   message: `0x${string}`;
   /** 0x-prefixed attestation bytes from Iris. */
@@ -23,7 +23,7 @@ export type BuildStarknetReceiveIntentInput = {
 };
 
 export type StarknetReceiveIntent = {
-  destination: StarknetCctpChain;
+  destination: StarknetChain;
   call: StarknetCall;
 };
 

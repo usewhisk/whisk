@@ -42,7 +42,7 @@ import {
   type AccountMeta,
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import type { SolanaCctpChain } from "../chains/types.js";
+import type { SolanaChain } from "../chains/types.js";
 import { InvalidInputError } from "../errors.js";
 import {
   deriveCustodyTokenAccount,
@@ -60,7 +60,7 @@ import { DISCRIMINATOR_RECEIVE_MESSAGE } from "./discriminators.js";
 import { createWriter, withDiscriminator, writeBytes } from "./borsh.js";
 
 export type BuildSolanaReceiveIntentInput = {
-  destination: SolanaCctpChain;
+  destination: SolanaChain;
   /** Raw CCTP message bytes from Iris. */
   message: Uint8Array;
   /** Raw attestation bytes from Iris. */
@@ -81,7 +81,7 @@ export type BuildSolanaReceiveIntentInput = {
 };
 
 export type SolanaReceiveIntent = {
-  destination: SolanaCctpChain;
+  destination: SolanaChain;
   instruction: {
     programId: PublicKey;
     keys: AccountMeta[];

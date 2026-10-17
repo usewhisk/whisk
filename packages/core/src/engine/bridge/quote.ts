@@ -24,7 +24,7 @@ import {
   pickFeeTier,
   type BurnFeeTier,
   type CctpChain,
-  type CctpNetwork,
+  type Network,
   type ForwarderFeeTier,
 } from "@usewhisk/cctp";
 import { ConfigError } from "../../errors/errors.js";
@@ -37,7 +37,7 @@ import { buildCustomFeeEntries, sumFees } from "../../fees/calculate.js";
 import { formatUsdcAmount, parseUsdcAmount } from "../amount.js";
 
 export type BuildBridgeQuoteInput = {
-  network: CctpNetwork;
+  network: Network;
   source: CctpChain;
   destination: CctpChain;
   sourceChain: Chain;
@@ -86,9 +86,9 @@ export async function buildBridgeQuote(
       "buildBridgeQuote: source and destination chains are identical — use a same-chain Send.",
     );
   }
-  if (!input.source.supportsFastTransfer) {
+  if (!input.source.capabilities.fastSource) {
     throw new ConfigError(
-      `Chain "${input.source.name}" does not support Fast Transfer. Bridges from this chain are not available in this build.`,
+      `Chain "${input.source.id}" does not support Fast Transfer. Bridges from this chain are not available in this build.`,
     );
   }
 

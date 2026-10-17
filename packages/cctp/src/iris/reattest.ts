@@ -7,14 +7,14 @@
  * re-signed by Circle (e.g. before the destination chain processed the
  * mint). Returns the new attestation.
  */
-import type { CctpNetwork } from "../chains/types.js";
+import type { Network } from "../chains/types.js";
 import { irisBaseUrl } from "./urls.js";
 import { fetchIrisJson, type FetchJsonOptions } from "./fetch.js";
 import { IrisHttpError } from "../errors.js";
 import type { IrisMessage } from "./types.js";
 
 export type ReattestOptions = FetchJsonOptions & {
-  network: CctpNetwork;
+  network: Network;
 };
 
 /**

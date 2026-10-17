@@ -33,7 +33,7 @@ import {
   Operation,
   xdr,
 } from "@stellar/stellar-sdk";
-import type { StellarCctpChain } from "../chains/types.js";
+import type { StellarChain } from "../chains/types.js";
 import { FINALITY_FAST } from "../iris/types.js";
 import { InvalidInputError } from "../errors.js";
 import { decodeStrkeyToBytes32, isValidStellarStrkey } from "./strkey.js";
@@ -52,7 +52,7 @@ export type StellarInvocation = {
 };
 
 export type BuildStellarBurnIntentInput = {
-  source: StellarCctpChain;
+  source: StellarChain;
   /** Destination CCTP domain. */
   destinationDomain: number;
   /**
@@ -88,7 +88,7 @@ export type BuildStellarBurnIntentInput = {
 };
 
 export type StellarBurnIntent = {
-  source: StellarCctpChain;
+  source: StellarChain;
   destinationDomain: number;
   amount: bigint;
   maxFee: bigint;

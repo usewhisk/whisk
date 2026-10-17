@@ -26,8 +26,26 @@ Technical shape, per
 - `createWhisk` takes an optional `fetch`, used for every Iris request, and the Iris
   functions in `@usewhisk/cctp` take one too. Pass one to route Iris through a proxy
   or to stub Circle in tests.
-- `.gitleaks.toml` allows the public Stellar contract and issuer addresses and the
-  fixture webhook secrets in tests, which gitleaks reads as generic API keys.
+- One chain registry, in `@usewhisk/cctp`. It covers 25 EVM chains plus Solana,
+  Stellar and Starknet, each on mainnet and testnet, with Arc among them. Chain ids
+  are Circle App Kit `Blockchain` strings (`Base_Sepolia`, `Arc_Testnet`), and core's
+  `Chain` type is the union of those ids. Each entry carries its native currency,
+  USDC decimals and Circle's capability flags (`fastSource`,
+  `forwardingDestination`, `upfrontFeeSource`).
+- Core's lookups are replaced by the registry's: `chainInfo` by `getChain`,
+  `chainByEvmId` by `chainByEvmChainId` and `tryChainByEvmChainId`, `allChains` by
+  `CHAINS`, and an entry's `kind` by its `ecosystem`. `addressFormat(chain)` gives
+  the input pattern and hint. `cctpDomainFor`, `chainForCctpDomain`, `chainsByKind`,
+  `supportedTokensFor` and `tokenAddressFor` are removed; every chain now has a
+  domain (`getChain(chain).cctpDomain`).
+- Receipts and recovery now find Stellar (domain 27) and Starknet (domain 25) burns
+  on Iris.
+- Core's old table pointed Ink and Plume at Stargate's bridged `USDC.e` and Codex at
+  an address with no contract. The registry uses Circle's native USDC on all three.
+- `pnpm --filter @usewhisk/cctp check:registry` reads every EVM entry back from
+  its public RPCs and fails on any mismatch. It runs nightly in `registry.yml`.
+- `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
+  secrets in tests, which gitleaks reads as generic API keys.
 
 This note is updated as each Phase 1 step lands on the branch. The testnet matrix
 from Step 10 is the automation this release still needs.

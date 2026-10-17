@@ -1,7 +1,7 @@
 "use client";
 
 import * as Select from "@radix-ui/react-select";
-import { chainInfo, type Chain } from "@usewhisk/core";
+import { getChain, type Chain } from "@usewhisk/core";
 import { cn } from "../../lib/cn.js";
 
 export type ChainPickerProps = {
@@ -17,7 +17,7 @@ export type ChainPickerProps = {
 /**
  * Compact chain dropdown — Radix Select underneath so keyboard nav and
  * focus rings work out of the box. Renders the chain label from
- * `chainInfo`; visual styling routes through `--whisk-*` tokens.
+ * `getChain`; visual styling routes through `--whisk-*` tokens.
  */
 export function ChainPicker({
   value,
@@ -51,7 +51,7 @@ export function ChainPicker({
           <Select.Viewport>
             {chains.map((c) => (
               <Select.Item key={c} value={c} className="whisk-select-item">
-                <Select.ItemText>{chainInfo(c).label}</Select.ItemText>
+                <Select.ItemText>{getChain(c).label}</Select.ItemText>
               </Select.Item>
             ))}
           </Select.Viewport>

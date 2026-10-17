@@ -18,11 +18,11 @@ import {
   pollMessages,
   toBytes32,
   type BurnFeeTier,
-  type CctpNetwork,
+  type Network,
   type ForwarderFeeTier,
   type IrisMessage,
-  type SolanaCctpChain,
-  type StarknetCctpChain,
+  type SolanaChain,
+  type StarknetChain,
   type StarknetFelt,
 } from "@usewhisk/cctp";
 import { ConfigError, toWhiskError, WhiskError } from "../../errors/errors.js";
@@ -37,9 +37,9 @@ import type {
 import type { BridgeRecoverySnapshot } from "./execute.js";
 
 export type ExecuteStarknetToSolanaInput = {
-  network: CctpNetwork;
-  source: StarknetCctpChain;
-  destination: SolanaCctpChain;
+  network: Network;
+  source: StarknetChain;
+  destination: SolanaChain;
   recipientAddress: string;
   burnAmount: bigint;
   maxFee: bigint;

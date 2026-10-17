@@ -1,6 +1,6 @@
 import type { Chain } from "../types/chain.js";
 import type { WhiskMode } from "../types/config.js";
-import { chainInfo } from "./registry.js";
+import { getChain } from "@usewhisk/cctp";
 
 /** Returns "mainnet" when every chain is mainnet, "testnet" otherwise. */
 export function inferMode(chains: ReadonlyArray<Chain>): WhiskMode {
@@ -8,7 +8,7 @@ export function inferMode(chains: ReadonlyArray<Chain>): WhiskMode {
   let sawMainnet = false;
   let sawTestnet = false;
   for (const chain of chains) {
-    if (chainInfo(chain).network === "mainnet") sawMainnet = true;
+    if (getChain(chain).network === "mainnet") sawMainnet = true;
     else sawTestnet = true;
   }
   return sawMainnet && !sawTestnet ? "mainnet" : "testnet";
@@ -25,7 +25,7 @@ export function resolveMode(
   if (explicit !== inferred && chains.length > 0) {
     const mixed =
       inferred === "testnet" &&
-      chains.some((c) => chainInfo(c).network === "mainnet");
+      chains.some((c) => getChain(c).network === "mainnet");
     // eslint-disable-next-line no-console
     console.warn(
       `[whisk] config.mode is "${explicit}" but the chain list looks like ${inferred} (${

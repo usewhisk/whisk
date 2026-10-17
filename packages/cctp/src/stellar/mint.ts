@@ -14,12 +14,12 @@
  *   5. Atomic — any failure reverts the entire invocation
  */
 import { Contract, nativeToScVal, xdr } from "@stellar/stellar-sdk";
-import type { StellarCctpChain } from "../chains/types.js";
+import type { StellarChain } from "../chains/types.js";
 import { InvalidInputError } from "../errors.js";
 import type { StellarInvocation } from "./burn.js";
 
 export type BuildStellarMintIntentInput = {
-  destination: StellarCctpChain;
+  destination: StellarChain;
   /** Raw CCTP message bytes from Iris. */
   message: Uint8Array;
   /** Raw attestation bytes from Iris. */
@@ -27,7 +27,7 @@ export type BuildStellarMintIntentInput = {
 };
 
 export type StellarMintIntent = {
-  destination: StellarCctpChain;
+  destination: StellarChain;
   invocation: StellarInvocation;
 };
 

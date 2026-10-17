@@ -8,7 +8,7 @@
 import {
   assertStarknetFelt,
   u256ToFelts,
-  type StarknetCctpChain,
+  type StarknetChain,
   type StarknetCall,
 } from "@usewhisk/cctp";
 import {
@@ -20,7 +20,7 @@ import type { Step } from "../../types/step.js";
 import type { SendListeners, SendResult, StarknetAdapter } from "../types.js";
 
 export type ExecuteSameChainStarknetSendInput = {
-  chain: StarknetCctpChain;
+  chain: StarknetChain;
   /** Recipient address (Starknet felt252 hex). */
   recipientAddress: string;
   /** Amount in 6-decimal canonical USDC subunits. */

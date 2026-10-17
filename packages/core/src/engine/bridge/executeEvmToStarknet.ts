@@ -18,11 +18,11 @@ import {
   buildStarknetReceiveIntent,
   pollMessages,
   type BurnFeeTier,
-  type EvmCctpChain,
-  type CctpNetwork,
+  type EvmChain,
+  type Network,
   type ForwarderFeeTier,
   type IrisMessage,
-  type StarknetCctpChain,
+  type StarknetChain,
   type StarknetFelt,
 } from "@usewhisk/cctp";
 import { ConfigError, toWhiskError, WhiskError } from "../../errors/errors.js";
@@ -38,9 +38,9 @@ import type {
 import type { BridgeRecoverySnapshot } from "./execute.js";
 
 export type ExecuteEvmToStarknetInput = {
-  network: CctpNetwork;
-  source: EvmCctpChain;
-  destination: StarknetCctpChain;
+  network: Network;
+  source: EvmChain;
+  destination: StarknetChain;
   /** Recipient Starknet felt. */
   recipientAddress: string;
   burnAmount: bigint;

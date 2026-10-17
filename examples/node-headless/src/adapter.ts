@@ -24,9 +24,8 @@ import {
   unichainSepolia,
   worldchainSepolia,
 } from "viem/chains";
-import { chainByEvmChainId, type EvmCctpChain } from "@usewhisk/cctp";
+import { getChain, type EvmChain } from "@usewhisk/cctp";
 import type { Chain, EvmAdapter, EvmCall } from "@usewhisk/core";
-import { chainInfo } from "@usewhisk/core";
 
 const VIEM_CHAINS: Record<number, ViemChain> = {
   11_155_111: sepolia,
@@ -40,20 +39,19 @@ const VIEM_CHAINS: Record<number, ViemChain> = {
   4_801: worldchainSepolia,
 };
 
-function lookup(chain: Chain): { viem: ViemChain; cctp: EvmCctpChain } {
-  const info = chainInfo(chain);
-  if (info.kind !== "evm" || info.evmChainId === undefined) {
+function lookup(chain: Chain): { viem: ViemChain; cctp: EvmChain } {
+  const cctp = getChain(chain);
+  if (cctp.ecosystem !== "evm") {
     throw new Error(
       `createEvmAdapter: chain "${chain}" is not EVM; use a matching per-ecosystem adapter.`,
     );
   }
-  const viem = VIEM_CHAINS[info.evmChainId];
+  const viem = VIEM_CHAINS[cctp.evmChainId];
   if (!viem) {
     throw new Error(
-      `createEvmAdapter: no viem chain wired for evmChainId=${info.evmChainId}. Add it to VIEM_CHAINS.`,
+      `createEvmAdapter: no viem chain wired for evmChainId=${cctp.evmChainId}. Add it to VIEM_CHAINS.`,
     );
   }
-  const cctp = chainByEvmChainId(info.evmChainId);
   return { viem, cctp };
 }
 

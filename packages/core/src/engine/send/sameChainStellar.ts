@@ -15,7 +15,7 @@ import { Address, Contract, nativeToScVal, xdr } from "@stellar/stellar-sdk";
 import {
   canonicalToStellarSubunits,
   isValidStellarStrkey,
-  type StellarCctpChain,
+  type StellarChain,
   type StellarInvocation,
 } from "@usewhisk/cctp";
 import {
@@ -27,7 +27,7 @@ import type { Step } from "../../types/step.js";
 import type { SendListeners, SendResult, StellarAdapter } from "../types.js";
 
 export type ExecuteSameChainStellarSendInput = {
-  chain: StellarCctpChain;
+  chain: StellarChain;
   /** Recipient strkey (G…, M…, or C…). */
   recipientAddress: string;
   /** Amount in 6-decimal canonical subunits. Scaled to 7 decimals on submit. */

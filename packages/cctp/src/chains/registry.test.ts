@@ -1,202 +1,185 @@
 import { describe, expect, it } from "vitest";
 import {
-  Arbitrum,
-  ArbitrumSepolia,
+  Arc,
+  ArcTestnet,
   Base,
   BaseSepolia,
-  Ethereum,
-  EthereumSepolia,
-  Polygon,
-  PolygonAmoy,
+  CHAINS,
+  Edge,
+  MESSAGE_TRANSMITTER_V2_EVM_MAINNET,
+  MESSAGE_TRANSMITTER_V2_EVM_TESTNET,
+  SolanaDevnet,
+  Stellar,
+  StellarTestnet,
+  StarknetSepolia,
+  TOKEN_MESSENGER_V2_EVM_MAINNET,
+  TOKEN_MESSENGER_V2_EVM_TESTNET,
   UnknownChainError,
-  allChains,
-  chainsByNetwork,
   chainByDomain,
   chainByEvmChainId,
+  chainsByNetwork,
   explorerAddressUrl,
   explorerTxUrl,
   getChain,
-  MAINNET_CHAINS,
-  TESTNET_CHAINS,
-  tryChainByDomain,
+  isChainId,
+  isEvmChain,
   tryChainByEvmChainId,
-  tryGetChain,
+  type CctpChain,
+  type ChainId,
 } from "./index.js";
 
+const ALL: readonly CctpChain[] = CHAINS;
+
 describe("registry shape", () => {
-  it("includes 10 mainnet chains (9 EVM + Solana)", () => {
-    expect(MAINNET_CHAINS).toHaveLength(10);
+  it("lists 28 chains on each network", () => {
+    expect(chainsByNetwork("mainnet")).toHaveLength(28);
+    expect(chainsByNetwork("testnet")).toHaveLength(28);
   });
 
-  it("includes 10 testnet chains, one per mainnet", () => {
-    expect(TESTNET_CHAINS).toHaveLength(10);
-    for (const mainnet of MAINNET_CHAINS) {
-      const testnet = TESTNET_CHAINS.find(
-        (c) => c.cctpDomain === mainnet.cctpDomain,
+  it("pairs every mainnet with a testnet on the same domain and ecosystem", () => {
+    const testnets = chainsByNetwork("testnet");
+    for (const main of chainsByNetwork("mainnet")) {
+      const test = testnets.find((t) => t.cctpDomain === main.cctpDomain);
+      expect(test?.ecosystem, main.id).toBe(main.ecosystem);
+    }
+  });
+
+  it("has unique ids, EVM chain ids, and domains per network", () => {
+    const evm = ALL.filter(isEvmChain);
+    expect(new Set(ALL.map((c) => c.id)).size).toBe(ALL.length);
+    expect(new Set(evm.map((c) => c.evmChainId)).size).toBe(evm.length);
+    expect(new Set(ALL.map((c) => `${c.cctpDomain}:${c.network}`)).size).toBe(
+      ALL.length,
+    );
+  });
+
+  it("leaves out BNB, Noble, Sui and Aptos", () => {
+    expect(ALL.map((c) => c.cctpDomain)).not.toContain(17);
+    for (const domain of [4, 8, 9]) {
+      expect(ALL.map((c) => c.cctpDomain)).not.toContain(domain);
+    }
+  });
+
+  it("gives USDC 7 decimals on Stellar and 6 everywhere else", () => {
+    for (const c of ALL) {
+      expect(c.usdcDecimals, c.id).toBe(c.ecosystem === "stellar" ? 7 : 6);
+    }
+  });
+
+  it("uses the shared EVM contracts everywhere except EDGE mainnet", () => {
+    for (const c of ALL.filter(isEvmChain)) {
+      if (c.id === Edge.id) continue;
+      const mainnet = c.network === "mainnet";
+      expect(c.tokenMessenger, c.id).toBe(
+        mainnet
+          ? TOKEN_MESSENGER_V2_EVM_MAINNET
+          : TOKEN_MESSENGER_V2_EVM_TESTNET,
       );
-      expect(testnet).toBeDefined();
+      expect(c.messageTransmitter, c.id).toBe(
+        mainnet
+          ? MESSAGE_TRANSMITTER_V2_EVM_MAINNET
+          : MESSAGE_TRANSMITTER_V2_EVM_TESTNET,
+      );
     }
+    expect(Edge.tokenMessenger).toBe(
+      "0x98706A006bc632Df31CAdFCBD43F38887ce2ca5c",
+    );
+    expect(Edge.messageTransmitter).toBe(
+      "0x5b61381Fc9e58E70EfC13a4A97516997019198ee",
+    );
   });
 
-  it("allChains() returns mainnet + testnet (incl. Solana + Stellar + Starknet)", () => {
-    // 10 EVM mainnet + 10 EVM testnet + Solana (2) + Stellar (2) + Starknet (2) = 24
-    expect(allChains()).toHaveLength(24);
+  it("derives the Stellar USDC contracts Circle publishes", () => {
+    expect(Stellar.usdc).toBe(
+      "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+    );
+    expect(StellarTestnet.usdc).toBe(
+      "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+    );
   });
 
-  it("every EVM chain has a hex USDC address; Solana uses base58; Stellar uses strkey; Starknet uses felt", () => {
-    for (const c of allChains()) {
-      if (c.ecosystem === "evm") {
-        expect(c.usdc).toMatch(/^0x[a-fA-F0-9]{40}$/);
-      } else if (c.ecosystem === "solana") {
-        expect(c.usdc).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
-      } else if (c.ecosystem === "stellar") {
-        expect(c.usdc).toMatch(/^C[A-Z2-7]{55}$/);
-      } else {
-        // Starknet felt252 — `0x` + up to 64 hex chars.
-        expect(c.usdc).toMatch(/^0x[a-fA-F0-9]{1,64}$/);
+  it("pays Arc gas in 18-decimal USDC", () => {
+    expect(Arc.nativeCurrency).toEqual({ symbol: "USDC", decimals: 18 });
+    expect(ArcTestnet.evmChainId).toBe(5_042_002);
+    expect(ArcTestnet.cctpDomain).toBe(26);
+  });
+
+  it("offers no Forwarding to Stellar, Starknet and six EVM chains", () => {
+    const noForwarding = ALL.filter(
+      (c) => c.network === "mainnet" && !c.capabilities.forwardingDestination,
+    ).map((c) => c.id);
+    expect(noForwarding.sort()).toEqual(
+      [
+        "Cronos",
+        "Injective",
+        "Morph",
+        "Pharos",
+        "Plasma",
+        "Starknet",
+        "Stellar",
+        "X_Layer",
+      ].sort(),
+    );
+  });
+
+  it("gives every chain an https RPC and explorer", () => {
+    for (const c of ALL) {
+      expect(c.defaultRpcUrls.length, c.id).toBeGreaterThan(0);
+      for (const url of [...c.defaultRpcUrls, c.explorerUrl]) {
+        expect(url, c.id).toMatch(/^https:\/\/[^\s]+[^/]$/);
       }
     }
   });
-
-  it("every chain has a TokenMessenger and MessageTransmitter", () => {
-    for (const c of allChains()) {
-      if (c.ecosystem === "evm") {
-        expect(c.tokenMessenger).toMatch(/^0x[a-fA-F0-9]{40}$/);
-        expect(c.messageTransmitter).toMatch(/^0x[a-fA-F0-9]{40}$/);
-      } else if (c.ecosystem === "solana") {
-        expect(c.tokenMessengerMinter).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
-        expect(c.messageTransmitter).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
-      } else if (c.ecosystem === "stellar") {
-        expect(c.tokenMessengerMinter).toMatch(/^C[A-Z2-7]{55}$/);
-        expect(c.messageTransmitter).toMatch(/^C[A-Z2-7]{55}$/);
-        expect(c.cctpForwarder).toMatch(/^C[A-Z2-7]{55}$/);
-      } else {
-        // Starknet felt252 addresses — `0x` + up to 64 hex chars.
-        expect(c.tokenMessengerMinter).toMatch(/^0x[a-fA-F0-9]{1,64}$/);
-        expect(c.messageTransmitter).toMatch(/^0x[a-fA-F0-9]{1,64}$/);
-      }
-    }
-  });
-
-  it("every chain has at least one RPC URL", () => {
-    for (const c of allChains()) {
-      expect(c.defaultRpcUrls.length).toBeGreaterThan(0);
-      expect(c.defaultRpcUrls[0]).toMatch(/^https?:\/\//);
-    }
-  });
 });
 
-describe("mainnet EVM contract addresses are uniform", () => {
-  const evmChains = MAINNET_CHAINS.filter((c) => c.ecosystem === "evm");
-  const addr = evmChains[0]!;
-  it("share the same tokenMessenger", () => {
-    for (const c of evmChains) {
-      expect(c.tokenMessenger).toBe(addr.tokenMessenger);
-    }
-  });
-  it("share the same messageTransmitter", () => {
-    for (const c of evmChains) {
-      expect(c.messageTransmitter).toBe(addr.messageTransmitter);
-    }
-  });
-});
-
-describe("testnet EVM contract addresses are uniform", () => {
-  const evmChains = TESTNET_CHAINS.filter((c) => c.ecosystem === "evm");
-  const addr = evmChains[0]!;
-  it("share the same tokenMessenger", () => {
-    for (const c of evmChains) {
-      expect(c.tokenMessenger).toBe(addr.tokenMessenger);
-    }
-  });
-  it("share the same messageTransmitter", () => {
-    for (const c of evmChains) {
-      expect(c.messageTransmitter).toBe(addr.messageTransmitter);
-    }
-  });
-});
-
-describe("getChain", () => {
-  it("returns the chain by name", () => {
-    expect(getChain("Ethereum")).toBe(Ethereum);
-    expect(getChain("ArbitrumSepolia")).toBe(ArbitrumSepolia);
+describe("lookups", () => {
+  it("finds a chain by its App Kit id", () => {
+    expect(getChain("Base_Sepolia")).toBe(BaseSepolia);
+    expect(isChainId("Arc")).toBe(true);
+    expect(isChainId("BaseSepolia")).toBe(false);
   });
 
-  it("throws UnknownChainError on missing name", () => {
-    expect(() => getChain("Nope")).toThrow(UnknownChainError);
+  it("throws UnknownChainError for an id outside the registry", () => {
+    expect(() => getChain("Nope" as ChainId)).toThrow(UnknownChainError);
   });
 
-  it("tryGetChain returns undefined on miss", () => {
-    expect(tryGetChain("Nope")).toBeUndefined();
-  });
-});
-
-describe("chainByEvmChainId", () => {
-  it("finds Ethereum mainnet by id 1", () => {
-    expect(chainByEvmChainId(1)).toBe(Ethereum);
+  it("finds EVM chains by chain id", () => {
+    expect(chainByEvmChainId(8453)).toBe(Base);
+    expect(chainByEvmChainId(5042)).toBe(Arc);
+    expect(() => chainByEvmChainId(999_999_999)).toThrow(UnknownChainError);
+    expect(tryChainByEvmChainId(999_999_999)).toBeUndefined();
   });
 
-  it("finds Base Sepolia by id 84532", () => {
-    expect(chainByEvmChainId(84532)).toBe(BaseSepolia);
-  });
-
-  it("throws on unknown id", () => {
-    expect(() => chainByEvmChainId(99999)).toThrow(UnknownChainError);
-  });
-
-  it("tryChainByEvmChainId returns undefined on miss", () => {
-    expect(tryChainByEvmChainId(99999)).toBeUndefined();
-  });
-});
-
-describe("chainByDomain", () => {
-  it("requires the network discriminator (mainnet vs testnet share domain)", () => {
-    expect(chainByDomain(0, "mainnet")).toBe(Ethereum);
-    expect(chainByDomain(0, "testnet")).toBe(EthereumSepolia);
-  });
-
-  it("finds every valid domain pair", () => {
-    expect(chainByDomain(7, "mainnet")).toBe(Polygon);
-    expect(chainByDomain(7, "testnet")).toBe(PolygonAmoy);
-    expect(chainByDomain(6, "mainnet")).toBe(Base);
-    expect(chainByDomain(6, "testnet")).toBe(BaseSepolia);
-  });
-
-  it("throws on unknown domain", () => {
-    expect(() => chainByDomain(99, "mainnet")).toThrow(UnknownChainError);
-  });
-
-  it("tryChainByDomain returns undefined on miss", () => {
-    expect(tryChainByDomain(99, "mainnet")).toBeUndefined();
-  });
-});
-
-describe("chainsByNetwork", () => {
-  it("returns mainnet chains only", () => {
-    const list = chainsByNetwork("mainnet");
-    // 9 EVM + Solana mainnet-beta + Stellar mainnet + Starknet mainnet
-    expect(list.length).toBe(12);
-    for (const c of list) expect(c.network).toBe("mainnet");
-  });
-
-  it("returns testnet chains only", () => {
-    const list = chainsByNetwork("testnet");
-    // 9 EVM + Solana devnet + Stellar testnet + Starknet Sepolia
-    expect(list.length).toBe(12);
-    for (const c of list) expect(c.network).toBe("testnet");
+  it("tells mainnet from testnet on a shared domain", () => {
+    expect(chainByDomain(26, "mainnet")).toBe(Arc);
+    expect(chainByDomain(26, "testnet")).toBe(ArcTestnet);
+    expect(() => chainByDomain(17, "mainnet")).toThrow(UnknownChainError);
   });
 });
 
 describe("explorer URLs", () => {
-  it("explorerTxUrl appends /tx/<hash>", () => {
-    expect(explorerTxUrl(Arbitrum, "0xdeadbeef")).toBe(
-      "https://arbiscan.io/tx/0xdeadbeef",
+  it("builds tx and address links", () => {
+    expect(explorerTxUrl(Base, "0xabc")).toBe("https://basescan.org/tx/0xabc");
+    expect(explorerAddressUrl(Base, "0xdef")).toBe(
+      "https://basescan.org/address/0xdef",
     );
   });
 
-  it("explorerAddressUrl appends /address/<addr>", () => {
-    expect(explorerAddressUrl(Base, "0x1234")).toBe(
-      "https://basescan.org/address/0x1234",
+  it("adds the cluster to Solana devnet links", () => {
+    expect(explorerTxUrl(SolanaDevnet, "sig")).toBe(
+      "https://explorer.solana.com/tx/sig?cluster=devnet",
+    );
+  });
+
+  it("uses account and contract paths where the explorer needs them", () => {
+    expect(explorerAddressUrl(StellarTestnet, "GABC")).toBe(
+      "https://stellar.expert/explorer/testnet/account/GABC",
+    );
+    expect(explorerAddressUrl(StellarTestnet, "CABC")).toBe(
+      "https://stellar.expert/explorer/testnet/contract/CABC",
+    );
+    expect(explorerAddressUrl(StarknetSepolia, "0x1")).toBe(
+      "https://sepolia.voyager.online/contract/0x1",
     );
   });
 });

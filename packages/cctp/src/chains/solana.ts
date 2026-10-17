@@ -1,11 +1,4 @@
-/**
- * CCTP V2 Solana chains.
- *
- * Both mainnet-beta and devnet share the same program IDs; only the
- * USDC SPL mint differs. The cluster discriminator picks the right RPC
- * + USDC mint.
- */
-import type { SolanaCctpChain } from "./types.js";
+import type { SolanaChain } from "./types.js";
 import {
   MESSAGE_TRANSMITTER_V2_SOLANA,
   SOLANA_CCTP_DOMAIN,
@@ -14,32 +7,48 @@ import {
   USDC_SPL_MAINNET,
 } from "./constants.js";
 
-export const Solana: SolanaCctpChain = {
-  ecosystem: "solana",
-  name: "Solana",
+export const Solana = {
+  id: "Solana",
   label: "Solana",
+  ecosystem: "solana",
   network: "mainnet",
   cluster: "mainnet-beta",
   cctpDomain: SOLANA_CCTP_DOMAIN,
   usdc: USDC_SPL_MAINNET,
+  usdcDecimals: 6,
   tokenMessengerMinter: TOKEN_MESSENGER_MINTER_V2_SOLANA,
   messageTransmitter: MESSAGE_TRANSMITTER_V2_SOLANA,
-  defaultRpcUrls: ["https://api.mainnet-beta.solana.com"],
-  explorerUrl: "https://solscan.io",
-  supportsFastTransfer: true,
-};
+  nativeCurrency: { symbol: "SOL", decimals: 9 },
+  defaultRpcUrls: [
+    "https://api.mainnet.solana.com",
+    "https://api.mainnet-beta.solana.com",
+  ],
+  explorerUrl: "https://explorer.solana.com",
+  capabilities: {
+    fastSource: true,
+    forwardingDestination: true,
+    upfrontFeeSource: false,
+  },
+} as const satisfies SolanaChain;
 
-export const SolanaDevnet: SolanaCctpChain = {
-  ecosystem: "solana",
-  name: "SolanaDevnet",
+export const SolanaDevnet = {
+  id: "Solana_Devnet",
   label: "Solana Devnet",
+  ecosystem: "solana",
   network: "testnet",
   cluster: "devnet",
   cctpDomain: SOLANA_CCTP_DOMAIN,
   usdc: USDC_SPL_DEVNET,
+  usdcDecimals: 6,
   tokenMessengerMinter: TOKEN_MESSENGER_MINTER_V2_SOLANA,
   messageTransmitter: MESSAGE_TRANSMITTER_V2_SOLANA,
+  nativeCurrency: { symbol: "SOL", decimals: 9 },
   defaultRpcUrls: ["https://api.devnet.solana.com"],
-  explorerUrl: "https://solscan.io",
-  supportsFastTransfer: true,
-};
+  explorerUrl: "https://explorer.solana.com",
+  explorerQuery: "?cluster=devnet",
+  capabilities: {
+    fastSource: true,
+    forwardingDestination: true,
+    upfrontFeeSource: false,
+  },
+} as const satisfies SolanaChain;

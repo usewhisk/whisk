@@ -153,18 +153,19 @@ export type {
  * --------------------------------------------------------------------- */
 
 export {
-  chainInfo,
-  chainByEvmId,
-  allChains,
+  CHAINS,
+  addressFormat,
+  chainByDomain,
+  chainByEvmChainId,
   chainsByNetwork,
-  chainsByKind,
-  explorerTxUrl,
   explorerAddressUrl,
-  supportedTokensFor,
-  tokenAddressFor,
+  explorerTxUrl,
+  getChain,
+  isChainId,
+  tryChainByEvmChainId,
 } from "./chains/index.js";
-export type { ChainInfo, SupportedTokenAlias } from "./chains/index.js";
-export { cctpDomainFor, chainForCctpDomain } from "./chains/cctpDomain.js";
+export type { AddressFormat } from "./chains/index.js";
+export type { CctpChain } from "@usewhisk/cctp";
 export { inferMode, resolveMode } from "./chains/mode.js";
 
 export { decideRoute } from "./routing/index.js";

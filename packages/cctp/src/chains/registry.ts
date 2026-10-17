@@ -1,26 +1,16 @@
-/**
- * Chain registry — single source of truth for every supported chain.
- *
- * Lookup functions throw `UnknownChainError` rather than returning
- * `undefined`. Callers can assume the value is valid once a lookup
- * succeeds. This trades flexibility for fewer null checks downstream.
- */
 import type {
   CctpChain,
   CctpDomain,
-  CctpNetwork,
-  ChainName,
+  EvmChain,
   EvmChainId,
-  EvmCctpChain,
-  SolanaCctpChain,
-  SolanaCluster,
-  StarknetCctpChain,
-  StarknetNetwork,
-  StellarCctpChain,
-  StellarNetwork,
+  Network,
+  SolanaChain,
+  StarknetChain,
+  StellarChain,
 } from "./types.js";
-import { MAINNET_CHAINS } from "./mainnet.js";
-import { TESTNET_CHAINS } from "./testnet.js";
+import { EVM_MAINNET_CHAINS } from "./mainnet.js";
+import { EVM_TESTNET_CHAINS } from "./testnet.js";
+import { Solana, SolanaDevnet } from "./solana.js";
 import { Stellar, StellarTestnet } from "./stellar.js";
 import { Starknet, StarknetSepolia } from "./starknet.js";
 import { InvalidInputError } from "../errors.js";
@@ -32,135 +22,75 @@ export class UnknownChainError extends InvalidInputError {
   }
 }
 
-const ALL_CHAINS: readonly CctpChain[] = [
-  ...MAINNET_CHAINS,
-  ...TESTNET_CHAINS,
+export const CHAINS = [
+  ...EVM_MAINNET_CHAINS,
+  ...EVM_TESTNET_CHAINS,
+  Solana,
+  SolanaDevnet,
   Stellar,
   StellarTestnet,
   Starknet,
   StarknetSepolia,
-];
+] as const satisfies readonly CctpChain[];
 
-const BY_NAME = new Map<ChainName, CctpChain>(
-  ALL_CHAINS.map((c) => [c.name, c]),
+export type ChainId = (typeof CHAINS)[number]["id"];
+
+const ALL: readonly CctpChain[] = CHAINS;
+
+const BY_ID = new Map(ALL.map((c) => [c.id, c]));
+
+const BY_EVM_CHAIN_ID = new Map(
+  ALL.filter(isEvmChain).map((c) => [c.evmChainId, c]),
 );
 
-const BY_EVM_CHAIN_ID = new Map<EvmChainId, EvmCctpChain>(
-  ALL_CHAINS.filter(isEvmChain).map((c) => [c.evmChainId, c]),
+const BY_DOMAIN_AND_NETWORK = new Map(
+  ALL.map((c) => [`${c.cctpDomain}:${c.network}`, c]),
 );
 
-const BY_SOLANA_CLUSTER = new Map<SolanaCluster, SolanaCctpChain>(
-  ALL_CHAINS.filter(isSolanaChain).map((c) => [c.cluster, c]),
-);
-
-const BY_STELLAR_NETWORK = new Map<StellarNetwork, StellarCctpChain>(
-  ALL_CHAINS.filter(isStellarChain).map((c) => [c.stellarNetwork, c]),
-);
-
-const BY_STARKNET_NETWORK = new Map<StarknetNetwork, StarknetCctpChain>(
-  ALL_CHAINS.filter(isStarknetChain).map((c) => [c.starknetNetwork, c]),
-);
-
-function isEvmChain(chain: CctpChain): chain is EvmCctpChain {
+export function isEvmChain(chain: CctpChain): chain is EvmChain {
   return chain.ecosystem === "evm";
 }
 
-function isSolanaChain(chain: CctpChain): chain is SolanaCctpChain {
+export function isSolanaChain(chain: CctpChain): chain is SolanaChain {
   return chain.ecosystem === "solana";
 }
 
-function isStellarChain(chain: CctpChain): chain is StellarCctpChain {
+export function isStellarChain(chain: CctpChain): chain is StellarChain {
   return chain.ecosystem === "stellar";
 }
 
-function isStarknetChain(chain: CctpChain): chain is StarknetCctpChain {
+export function isStarknetChain(chain: CctpChain): chain is StarknetChain {
   return chain.ecosystem === "starknet";
 }
 
-/**
- * One chain can have multiple entries with the same domain (mainnet +
- * testnet). The lookup needs a network discriminator.
- */
-const BY_DOMAIN_AND_NETWORK = new Map<string, CctpChain>(
-  ALL_CHAINS.map((c) => [`${c.cctpDomain}:${c.network}`, c]),
-);
-
-export function allChains(): readonly CctpChain[] {
-  return ALL_CHAINS;
+export function isChainId(value: string): value is ChainId {
+  return BY_ID.has(value);
 }
 
-export function chainsByNetwork(network: CctpNetwork): readonly CctpChain[] {
-  return ALL_CHAINS.filter((c) => c.network === network);
-}
-
-export function getChain(name: ChainName): CctpChain {
-  const chain = BY_NAME.get(name);
-  if (!chain) throw new UnknownChainError(`name="${name}"`);
+export function getChain(id: ChainId): CctpChain {
+  const chain = BY_ID.get(id);
+  if (!chain) throw new UnknownChainError(`id="${id}"`);
   return chain;
 }
 
-export function tryGetChain(name: ChainName): CctpChain | undefined {
-  return BY_NAME.get(name);
+export function chainsByNetwork(network: Network): readonly CctpChain[] {
+  return ALL.filter((c) => c.network === network);
 }
 
-export function chainByEvmChainId(evmChainId: EvmChainId): EvmCctpChain {
+export function chainByEvmChainId(evmChainId: EvmChainId): EvmChain {
   const chain = BY_EVM_CHAIN_ID.get(evmChainId);
   if (!chain) throw new UnknownChainError(`evmChainId=${evmChainId}`);
   return chain;
 }
 
+/** For wallet chain ids, which can be any chain the wallet knows. */
 export function tryChainByEvmChainId(
   evmChainId: EvmChainId,
-): EvmCctpChain | undefined {
+): EvmChain | undefined {
   return BY_EVM_CHAIN_ID.get(evmChainId);
 }
 
-export function chainBySolanaCluster(cluster: SolanaCluster): SolanaCctpChain {
-  const chain = BY_SOLANA_CLUSTER.get(cluster);
-  if (!chain) throw new UnknownChainError(`solanaCluster=${cluster}`);
-  return chain;
-}
-
-export function tryChainBySolanaCluster(
-  cluster: SolanaCluster,
-): SolanaCctpChain | undefined {
-  return BY_SOLANA_CLUSTER.get(cluster);
-}
-
-export function chainByStellarNetwork(
-  stellarNetwork: StellarNetwork,
-): StellarCctpChain {
-  const chain = BY_STELLAR_NETWORK.get(stellarNetwork);
-  if (!chain) throw new UnknownChainError(`stellarNetwork=${stellarNetwork}`);
-  return chain;
-}
-
-export function tryChainByStellarNetwork(
-  stellarNetwork: StellarNetwork,
-): StellarCctpChain | undefined {
-  return BY_STELLAR_NETWORK.get(stellarNetwork);
-}
-
-export function chainByStarknetNetwork(
-  starknetNetwork: StarknetNetwork,
-): StarknetCctpChain {
-  const chain = BY_STARKNET_NETWORK.get(starknetNetwork);
-  if (!chain) throw new UnknownChainError(`starknetNetwork=${starknetNetwork}`);
-  return chain;
-}
-
-export function tryChainByStarknetNetwork(
-  starknetNetwork: StarknetNetwork,
-): StarknetCctpChain | undefined {
-  return BY_STARKNET_NETWORK.get(starknetNetwork);
-}
-
-export { isEvmChain, isSolanaChain, isStellarChain, isStarknetChain };
-
-export function chainByDomain(
-  domain: CctpDomain,
-  network: CctpNetwork,
-): CctpChain {
+export function chainByDomain(domain: CctpDomain, network: Network): CctpChain {
   const chain = BY_DOMAIN_AND_NETWORK.get(`${domain}:${network}`);
   if (!chain) {
     throw new UnknownChainError(`domain=${domain} network=${network}`);
@@ -168,23 +98,21 @@ export function chainByDomain(
   return chain;
 }
 
-export function tryChainByDomain(
-  domain: CctpDomain,
-  network: CctpNetwork,
-): CctpChain | undefined {
-  return BY_DOMAIN_AND_NETWORK.get(`${domain}:${network}`);
-}
-
-/**
- * Explorer URL for a transaction on a given chain.
- */
 export function explorerTxUrl(chain: CctpChain, txHash: string): string {
-  return `${chain.explorerUrl}/tx/${txHash}`;
+  return `${chain.explorerUrl}/tx/${txHash}${chain.explorerQuery ?? ""}`;
 }
 
-/**
- * Explorer URL for an address on a given chain.
- */
 export function explorerAddressUrl(chain: CctpChain, address: string): string {
-  return `${chain.explorerUrl}/address/${address}`;
+  return `${chain.explorerUrl}/${addressPath(chain, address)}/${address}${chain.explorerQuery ?? ""}`;
+}
+
+function addressPath(chain: CctpChain, address: string): string {
+  switch (chain.ecosystem) {
+    case "starknet":
+      return "contract";
+    case "stellar":
+      return address.startsWith("C") ? "contract" : "account";
+    default:
+      return "address";
+  }
 }

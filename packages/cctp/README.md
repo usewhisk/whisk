@@ -150,24 +150,46 @@ request. Use `err.code` for stable programmatic dispatch.
 
 ## Supported chains
 
-| Chain      | Ecosystem | Mainnet | Testnet   | Domain | Fast |
-| ---------- | --------- | ------- | --------- | ------ | ---- |
-| Ethereum   | EVM       | yes     | Sepolia   | 0      | yes  |
-| Avalanche  | EVM       | yes     | Fuji      | 1      | yes  |
-| Optimism   | EVM       | yes     | Sepolia   | 2      | yes  |
-| Arbitrum   | EVM       | yes     | Sepolia   | 3      | yes  |
-| Solana     | Solana    | yes     | Devnet    | 5      | yes  |
-| Base       | EVM       | yes     | Sepolia   | 6      | yes  |
-| Polygon    | EVM       | yes     | Amoy      | 7      | yes  |
-| Unichain   | EVM       | yes     | Sepolia   | 10     | yes  |
-| Linea      | EVM       | yes     | Sepolia   | 11     | yes  |
-| WorldChain | EVM       | yes     | Sepolia   | 14     | yes  |
-| Starknet   | Starknet  | yes     | Sepolia   | 25     | yes  |
-| Stellar    | Stellar   | yes     | Testnet   | 27     | yes  |
+Chain ids are Circle App Kit `Blockchain` strings. `getChain(id)` returns the
+entry, and `CHAINS` lists them all. "Fast source" means Circle offers Fast
+Transfer for burns from that chain; on the others, Circle's standard
+attestation is the only option. "Forwarding" means Circle's Forwarding Service
+can mint on that chain.
 
-Whisk covers the four ecosystems it supports natively; Aptos, Sui,
-Sei, Noble, Codex, and XRPL EVM are not built out yet but ride on the
-same protocol layer if you need to add them.
+| Chain | Mainnet id | Testnet id | Domain | Fast source | Forwarding |
+| --- | --- | --- | --- | --- | --- |
+| Ethereum | `Ethereum` | `Ethereum_Sepolia` | 0 | yes | yes |
+| Avalanche | `Avalanche` | `Avalanche_Fuji` | 1 | no | yes |
+| OP Mainnet | `Optimism` | `Optimism_Sepolia` | 2 | yes | yes |
+| Arbitrum | `Arbitrum` | `Arbitrum_Sepolia` | 3 | yes | yes |
+| Base | `Base` | `Base_Sepolia` | 6 | yes | yes |
+| Polygon PoS | `Polygon` | `Polygon_Amoy_Testnet` | 7 | no | yes |
+| Unichain | `Unichain` | `Unichain_Sepolia` | 10 | yes | yes |
+| Linea | `Linea` | `Linea_Sepolia` | 11 | yes | yes |
+| Codex | `Codex` | `Codex_Testnet` | 12 | yes | yes |
+| Sonic | `Sonic` | `Sonic_Testnet` | 13 | no | yes |
+| World Chain | `World_Chain` | `World_Chain_Sepolia` | 14 | yes | yes |
+| Monad | `Monad` | `Monad_Testnet` | 15 | no | yes |
+| Sei | `Sei` | `Sei_Testnet` | 16 | no | yes |
+| XDC | `XDC` | `XDC_Apothem` | 18 | no | yes |
+| HyperEVM | `HyperEVM` | `HyperEVM_Testnet` | 19 | no | yes |
+| Ink | `Ink` | `Ink_Testnet` | 21 | yes | yes |
+| Plume | `Plume` | `Plume_Testnet` | 22 | yes | yes |
+| Arc | `Arc` | `Arc_Testnet` | 26 | no | yes |
+| EDGE | `Edge` | `Edge_Testnet` | 28 | yes | yes |
+| Injective | `Injective` | `Injective_Testnet` | 29 | no | no |
+| Morph | `Morph` | `Morph_Testnet` | 30 | yes | no |
+| Pharos | `Pharos` | `Pharos_Testnet` | 31 | no | no |
+| Cronos | `Cronos` | `Cronos_Testnet` | 32 | no | no |
+| Plasma | `Plasma` | `Plasma_Testnet` | 33 | no | no |
+| X Layer | `X_Layer` | `X_Layer_Testnet` | 37 | yes | no |
+| Solana | `Solana` | `Solana_Devnet` | 5 | yes | yes |
+| Stellar | `Stellar` | `Stellar_Testnet` | 27 | no | no |
+| Starknet | `Starknet` | `Starknet_Sepolia` | 25 | yes | no |
+
+`pnpm --filter @usewhisk/cctp check:registry` reads each EVM entry back from
+its public RPCs: chain id, `localDomain()`, the TokenMessenger's transmitter,
+and the USDC symbol and decimals.
 
 ## Live tests
 

@@ -15,7 +15,7 @@ import {
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import type { SolanaCctpChain, SolanaInstruction } from "@usewhisk/cctp";
+import type { SolanaChain, SolanaInstruction } from "@usewhisk/cctp";
 import {
   InvalidAddressError,
   toWhiskError,
@@ -26,7 +26,7 @@ import type { SendListeners, SendResult, SolanaAdapter } from "../types.js";
 
 export type ExecuteSameChainSolanaSendInput = {
   /** Source chain (Solana mainnet or Devnet). */
-  chain: SolanaCctpChain;
+  chain: SolanaChain;
   /** Recipient pubkey as a base58 string. */
   recipientAddress: string;
   /** Amount in USDC subunits (6 decimals). */

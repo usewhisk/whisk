@@ -6,13 +6,9 @@
  * sender pays. Bridge quotes fetch fees from Iris.
  */
 import {
-  chainByEvmChainId,
-  chainBySolanaCluster,
-  chainByStarknetNetwork,
-  chainByStellarNetwork,
+  getChain,
   isValidStarknetFelt,
   isValidStellarStrkey,
-  type CctpChain,
   type ForwarderFeeTier,
 } from "@usewhisk/cctp";
 import { PublicKey } from "@solana/web3.js";
@@ -20,13 +16,11 @@ import { isAddress as viemIsAddress } from "viem";
 import type { Quote } from "../types/quote.js";
 import type { QuoteParams } from "./types.js";
 import type { WhiskConfig } from "../types/config.js";
-import type { Chain } from "../types/chain.js";
 import { decideRoute } from "../routing/decide.js";
-import { ConfigError, InvalidAddressError } from "../errors/errors.js";
+import { InvalidAddressError } from "../errors/errors.js";
 import { buildCustomFeeEntries, sumFees } from "../fees/calculate.js";
 import { DEFAULT_FEE_BEARER } from "../types/fee.js";
 import { DEFAULT_TOKEN } from "../types/token.js";
-import { chainInfo } from "../chains/registry.js";
 import {
   buildBridgeQuote,
   type BuildBridgeQuoteResult,
@@ -60,18 +54,18 @@ export async function buildQuote(
   //   Solana   base58 32-byte pubkey
   //   Stellar  G/M/C strkey
   //   Starknet 0x-prefixed felt252 (up to 64 hex chars)
-  const destInfo = chainInfo(params.destinationChain);
-  if (destInfo.kind === "solana") {
+  const destination = getChain(params.destinationChain);
+  if (destination.ecosystem === "solana") {
     try {
       new PublicKey(params.recipient.address);
     } catch {
       throw new InvalidAddressError(params.recipient.address);
     }
-  } else if (destInfo.kind === "stellar") {
+  } else if (destination.ecosystem === "stellar") {
     if (!isValidStellarStrkey(params.recipient.address)) {
       throw new InvalidAddressError(params.recipient.address);
     }
-  } else if (destInfo.kind === "starknet") {
+  } else if (destination.ecosystem === "starknet") {
     if (!isValidStarknetFelt(params.recipient.address)) {
       throw new InvalidAddressError(params.recipient.address);
     }
@@ -103,8 +97,7 @@ export async function buildQuote(
     return { quote };
   }
 
-  const source = lookupCctpChain(params.sourceChain);
-  const destination = lookupCctpChain(params.destinationChain);
+  const source = getChain(params.sourceChain);
   const network = options.config.mode ?? source.network;
 
   const result = await buildBridgeQuote({
@@ -131,24 +124,4 @@ export async function buildQuote(
 function formatNumber(n: number): string {
   const fixed = n.toFixed(6);
   return fixed.replace(/\.?0+$/, "") || "0";
-}
-
-function lookupCctpChain(chain: Chain): CctpChain {
-  const info = chainInfo(chain);
-  if (info.kind === "solana") {
-    const cluster = chain === "Solana" ? "mainnet-beta" : "devnet";
-    return chainBySolanaCluster(cluster);
-  }
-  if (info.kind === "stellar") {
-    const stellarNetwork = chain === "Stellar" ? "public" : "testnet";
-    return chainByStellarNetwork(stellarNetwork);
-  }
-  if (info.kind === "starknet") {
-    const starknetNetwork = chain === "Starknet" ? "mainnet" : "sepolia";
-    return chainByStarknetNetwork(starknetNetwork);
-  }
-  if (info.evmChainId === undefined) {
-    throw new ConfigError(`Chain "${chain}" has no EVM chain ID. Unsupported.`);
-  }
-  return chainByEvmChainId(info.evmChainId);
 }

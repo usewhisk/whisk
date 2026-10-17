@@ -7,16 +7,14 @@
  * underlying protocol-layer details.
  */
 import {
+  getChain,
   getMessages,
   irisBaseUrl as cctpIrisBaseUrl,
   IRIS_MAINNET_URL as CCTP_IRIS_MAINNET_URL,
   IRIS_SANDBOX_URL as CCTP_IRIS_SANDBOX_URL,
-  type CctpDomain,
   type IrisMessage as CctpIrisMessage,
 } from "@usewhisk/cctp";
 import type { Chain } from "../types/chain.js";
-import { cctpDomainFor } from "../chains/cctpDomain.js";
-import { chainInfo } from "../chains/registry.js";
 
 /** Iris API base URLs, re-exported so consumers can override `baseUrl`. */
 export const IRIS_MAINNET_URL = CCTP_IRIS_MAINNET_URL;
@@ -58,36 +56,24 @@ export type PollAttestationOptions = FetchAttestationOptions & {
 
 /** Resolve the Iris base URL for a Whisk chain. */
 export function getIrisBaseUrl(chain: Chain): string {
-  return cctpIrisBaseUrl(
-    chainInfo(chain).network === "mainnet" ? "mainnet" : "testnet",
-  );
+  return cctpIrisBaseUrl(getChain(chain).network);
 }
 
-/**
- * Single-shot attestation lookup. Returns `"not_found"` when the chain
- * isn't part of the CCTP V2 fleet or when Iris hasn't observed the
- * burn.
- */
+/** Single-shot attestation lookup. Returns `"not_found"` until Iris sees the burn. */
 export async function fetchAttestationOnce(
   sourceChain: Chain,
   burnTxHash: string,
   options: FetchAttestationOptions = {},
 ): Promise<IrisMessage> {
-  const domain = cctpDomainFor(sourceChain);
-  if (domain === undefined) {
-    return { status: "not_found" };
-  }
-
-  const network =
-    chainInfo(sourceChain).network === "mainnet" ? "mainnet" : "testnet";
+  const source = getChain(sourceChain);
   const fetchOpts: Parameters<typeof getMessages>[1] = {
-    network,
+    network: source.network,
     ...(options.signal && { signal: options.signal }),
     ...(options.baseUrl && { baseUrl: options.baseUrl }),
     ...(options.fetch && { fetch: options.fetch }),
   };
   const messages = await getMessages(
-    { sourceDomain: domain as CctpDomain, transactionHash: burnTxHash },
+    { sourceDomain: source.cctpDomain, transactionHash: burnTxHash },
     fetchOpts,
   );
   const first = messages[0];

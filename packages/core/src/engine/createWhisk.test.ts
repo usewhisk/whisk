@@ -72,6 +72,21 @@ describe("createWhisk", () => {
     expect(quote.fees.total).toBe("0");
   });
 
+  it("quotes a bridge to Arc Testnet on domain 26", async () => {
+    const engine = createWhisk({ chains: ["Base_Sepolia", "Arc_Testnet"] });
+    const quote = await engine.quote({
+      sourceChain: "Base_Sepolia",
+      destinationChain: "Arc_Testnet",
+      recipient: { address: RECIPIENT, chain: "Arc_Testnet" },
+      amount: "10",
+      adapter: makeAdapter({ chainId: 84_532 }),
+    });
+    expect(quote.route.kind).toBe("bridge");
+    expect(iris.requests.map((r) => `${r.url.host}${r.url.pathname}`)).toEqual([
+      "iris-api-sandbox.circle.com/v2/burn/USDC/fees/6/26",
+    ]);
+  });
+
   it("issues a bridge quote with protocol + forwarder fee entries", async () => {
     const engine = createWhisk({
       chains: ["Base", "Arbitrum"],

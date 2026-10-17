@@ -1,9 +1,9 @@
 "use client";
 
-import { allChains, chainsByNetwork, type Chain } from "@usewhisk/react";
+import { chainsByNetwork, type Chain } from "@usewhisk/react";
 import type { InvoiceDraft } from "../hooks/use-invoice-link";
 
-const CHAIN_OPTIONS: Chain[] = chainsByNetwork("testnet").map((c) => c.chain);
+const CHAIN_OPTIONS = chainsByNetwork("testnet");
 
 export type InvoiceFormProps = {
   draft: InvoiceDraft;
@@ -52,14 +52,11 @@ export function InvoiceForm({ draft, set }: InvoiceFormProps) {
               onChange={(e) => set("chain", e.target.value as Chain)}
               className="w-full appearance-none rounded-lg border border-line bg-paper px-3 py-2.5 text-[15px] text-ink outline-none focus:border-coral focus:ring-1 focus:ring-coral/20"
             >
-              {CHAIN_OPTIONS.map((c) => {
-                const info = allChains().find((x) => x.chain === c)!;
-                return (
-                  <option key={c} value={c}>
-                    {info.label}
-                  </option>
-                );
-              })}
+              {CHAIN_OPTIONS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
             </select>
           </Field>
         </div>

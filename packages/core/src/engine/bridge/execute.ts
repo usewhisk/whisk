@@ -20,8 +20,8 @@ import {
   buildMintIntent,
   pollMessages,
   type BurnFeeTier,
-  type EvmCctpChain,
-  type CctpNetwork,
+  type EvmChain,
+  type Network,
   type ForwarderFeeTier,
   type IrisMessage,
 } from "@usewhisk/cctp";
@@ -36,9 +36,9 @@ import type {
 } from "../types.js";
 
 export type ExecuteBridgeInput = {
-  network: CctpNetwork;
-  source: EvmCctpChain;
-  destination: EvmCctpChain;
+  network: Network;
+  source: EvmChain;
+  destination: EvmChain;
   /** Recipient address on the destination chain. */
   recipientAddress: string;
   /** USDC subunits to burn on the source chain. */
@@ -82,7 +82,7 @@ export type ExecuteBridgeInput = {
  */
 export type BridgeRecoverySnapshot = {
   kind: "bridge";
-  network: CctpNetwork;
+  network: Network;
   sourceDomain: number;
   destinationDomain: number;
   burnTxHash?: `0x${string}`;
