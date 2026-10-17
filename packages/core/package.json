@@ -70,7 +70,7 @@
   },
   "dependencies": {
     "@circle-fin/app-kit": "^1.6.1",
-    "nanoevents": "^9.0.0"
+    "nanoevents": "^10.0.0"
   },
   "devDependencies": {
     "tsup": "^8.3.5",
