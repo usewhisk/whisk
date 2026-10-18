@@ -266,6 +266,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         amount: input.amount,
         feeBearer,
         useForwarder: forwarded,
+        plan,
         ...(resolvedConfig.feePolicy && {
           customFee: resolvedConfig.feePolicy,
         }),

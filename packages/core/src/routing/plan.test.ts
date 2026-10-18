@@ -185,15 +185,26 @@ describe("planRoute", () => {
     expect(plan.mint).toEqual({ kind: "adapter", ecosystem: "evm" });
   });
 
-  it("refuses a source with no Fast Transfer", () => {
-    expect(() =>
-      planRoute({
-        source: "Avalanche",
-        destination: "Base",
-        connected: ["evm"],
-        useForwarder: true,
-      }),
-    ).toThrow(expect.objectContaining({ reason: "standard_only_source" }));
+  it("plans a source with no Fast Transfer as Standard", () => {
+    const plan = planRoute({
+      source: "Avalanche",
+      destination: "Base",
+      connected: ["evm"],
+      useForwarder: true,
+    });
+    expect(plan.speed).toBe("standard");
+    expect(plan.etaSeconds).toEqual({ min: 8, max: 8 });
+  });
+
+  it("gives a Fast source Circle's Fast attestation time", () => {
+    const plan = planRoute({
+      source: "Ethereum",
+      destination: "Base",
+      connected: ["evm"],
+      useForwarder: true,
+    });
+    expect(plan.speed).toBe("fast");
+    expect(plan.etaSeconds).toEqual({ min: 20, max: 20 });
   });
 
   it("refuses the same chain on both sides", () => {

@@ -10,8 +10,13 @@
 import type { CctpDomain, Network } from "../chains/types.js";
 import { irisBaseUrl } from "./urls.js";
 import { fetchIrisJson, type FetchJsonOptions } from "./fetch.js";
-import type { BurnFeeTier, ForwarderFeeTier } from "./types.js";
-import { FINALITY_FAST } from "./types.js";
+import type {
+  BurnFeeTier,
+  FinalityThreshold,
+  ForwarderFeeTier,
+  TransferSpeed,
+} from "./types.js";
+import { FINALITY_FAST, FINALITY_STANDARD } from "./types.js";
 import { IrisParseError, ProtocolError } from "../errors.js";
 import {
   parseFeeBps,
@@ -47,10 +52,6 @@ export async function getBurnFees(
   if (!Array.isArray(raw)) {
     throw new IrisParseError("Iris burn-fees response is not an array");
   }
-  // Iris returns both Fast (1000) and Standard (2000) tiers. Whisk
-  // only supports Fast, so filter Standard out here — callers never
-  // see it. Routes where Iris doesn't return a Fast tier surface as
-  // an empty array; `pickFeeTier` then throws cleanly.
   return raw
     .map((row) => normalizeTier(row))
     .filter((t): t is BurnFeeTier => t !== null);
@@ -61,9 +62,12 @@ function normalizeTier(row: unknown): BurnFeeTier | null {
     throw new IrisParseError("Iris fee tier is not an object");
   }
   const r = row as Record<string, unknown>;
-  if (r.finalityThreshold !== FINALITY_FAST) return null;
+  const threshold = r.finalityThreshold;
+  if (threshold !== FINALITY_FAST && threshold !== FINALITY_STANDARD) {
+    return null;
+  }
   const out: BurnFeeTier = {
-    finalityThreshold: FINALITY_FAST,
+    finalityThreshold: threshold,
     minimumFee: parseFeeBps(r.minimumFee),
   };
   if (r.forwardFee && typeof r.forwardFee === "object") {
@@ -77,17 +81,18 @@ function normalizeTier(row: unknown): BurnFeeTier | null {
   return out;
 }
 
-/**
- * Pick the Fast tier from the Iris response. Throws if the route
- * doesn't support Fast Transfer (the chain pair is bridge-blocked
- * under Whisk's Fast-only policy).
- */
-export function pickFeeTier(tiers: readonly BurnFeeTier[]): BurnFeeTier {
-  const tier = tiers[0];
+/** The row for `speed`. Throws if Iris returned none for this route. */
+export function pickFeeTier(
+  tiers: readonly BurnFeeTier[],
+  speed: TransferSpeed,
+): BurnFeeTier {
+  const threshold: FinalityThreshold =
+    speed === "fast" ? FINALITY_FAST : FINALITY_STANDARD;
+  const tier = tiers.find((t) => t.finalityThreshold === threshold);
   if (!tier) {
     throw new ProtocolError(
       "tier_not_found",
-      "No Fast Transfer fee tier returned by Iris for this route. Whisk does not bridge over Standard Transfer.",
+      `Iris returned no ${speed === "fast" ? "Fast" : "Standard"} Transfer fee for this route.`,
     );
   }
   return tier;

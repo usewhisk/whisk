@@ -4,9 +4,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Keypair } from "@solana/web3.js";
-import { Base, Arbitrum, Morph } from "@usewhisk/cctp";
-import type { IrisMessage } from "@usewhisk/cctp";
-import type { EvmAdapter, SolanaAdapter } from "./adapter.js";
+import { Keypair as StellarKeypair, scValToNative } from "@stellar/stellar-sdk";
+import { ArcTestnet, Arbitrum, Base, BaseSepolia, Morph } from "@usewhisk/cctp";
+import type { IrisMessage, StellarInvocation } from "@usewhisk/cctp";
+import type { EvmAdapter, SolanaAdapter, StellarAdapter } from "./adapter.js";
 import type { WhiskConfig } from "../types/config.js";
 import { ConfigError } from "../errors/errors.js";
 import { createWhisk as createEngine } from "./createWhisk.js";
@@ -386,5 +387,85 @@ describe("route planning", () => {
     expect(wallet.burns[0]?.hookData).toBeUndefined();
     expect(quote.fees.entries.map((e) => e.kind)).not.toContain("forwarder");
     expect(wallet.mints.map((m) => m.chainId)).toEqual([Morph.evmChainId]);
+  });
+});
+
+const UNFORWARDED_MESSAGE: IrisMessage = {
+  message: FORWARDED_MESSAGE.message,
+  attestation: FORWARDED_MESSAGE.attestation,
+  eventNonce: "1",
+  status: "complete",
+  cctpVersion: 2,
+};
+
+describe("Standard-only sources", () => {
+  it("#91 bridges from Arc as a Standard transfer", async () => {
+    const engine = createWhisk({ chains: ["Arc_Testnet", "Base_Sepolia"] });
+    const wallet = createFakeEvmWallet({ chainId: ArcTestnet.evmChainId });
+    wallet.fund(ArcTestnet.evmChainId, ArcTestnet.usdc, 100_000_000n);
+    const params = {
+      sourceChain: "Arc_Testnet",
+      destinationChain: "Base_Sepolia",
+      recipient: { address: RECIPIENT, chain: "Base_Sepolia" },
+      amount: "5",
+      adapter: wallet.adapter,
+    } as const;
+    const quote = await engine.quote(params);
+    expect(quote.plan?.speed).toBe("standard");
+    expect(quote.plan?.etaSeconds).toEqual({ min: 0.5, max: 0.5 });
+    expect(quote.fees.entries.map((e) => e.kind)).toEqual(["forwarder"]);
+
+    const result = await engine.send({ ...params, quote });
+    expect(result.kind).toBe("success");
+    expect(wallet.burns).toHaveLength(1);
+    expect(wallet.burns[0]?.minFinalityThreshold).toBe(2000);
+    expect(wallet.burns[0]?.destinationDomain).toBe(BaseSepolia.cctpDomain);
+    expect(
+      iris.requests.map((r) => `${r.url.host}${r.url.pathname}`),
+    ).toContain(
+      `iris-api-sandbox.circle.com/v2/burn/USDC/fees/${ArcTestnet.cctpDomain}/${BaseSepolia.cctpDomain}`,
+    );
+  });
+
+  it("#91 burns from Stellar with the Standard threshold", async () => {
+    iris.replyToMessages({ message: UNFORWARDED_MESSAGE });
+    const engine = createWhisk({
+      chains: ["Stellar_Testnet", "Base_Sepolia"],
+    });
+    const invocations: StellarInvocation[] = [];
+    const stellar: StellarAdapter = {
+      kind: "stellar",
+      address: StellarKeypair.random().publicKey(),
+      async getNetwork() {
+        return "testnet";
+      },
+      async submitInvocation(batch) {
+        invocations.push(...batch);
+        return { hashes: batch.map((_, i) => `${i}`.padStart(64, "a")) };
+      },
+      async confirmTransaction() {
+        return { status: "success" as const, ledger: 1 };
+      },
+      async getLatestLedger() {
+        return 1;
+      },
+    };
+    const evm = createFakeEvmWallet({ chainId: BaseSepolia.evmChainId });
+    const params = {
+      sourceChain: "Stellar_Testnet",
+      destinationChain: "Base_Sepolia",
+      recipient: { address: RECIPIENT, chain: "Base_Sepolia" },
+      amount: "5",
+      adapter: stellar,
+      destinationAdapter: evm.adapter,
+    } as const;
+    const quote = await engine.quote(params);
+    expect(quote.plan?.speed).toBe("standard");
+
+    const result = await engine.send({ ...params, quote });
+    expect(result.kind).toBe("success");
+    const burn = invocations.find((i) => i.functionName === "deposit_for_burn");
+    expect(scValToNative(burn!.args[7]!)).toBe(2000);
+    expect(evm.mints.map((m) => m.chainId)).toEqual([BaseSepolia.evmChainId]);
   });
 });

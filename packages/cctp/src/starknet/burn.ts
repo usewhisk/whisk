@@ -25,7 +25,7 @@
  * the burn Call.
  */
 import type { StarknetChain, StarknetFelt } from "../chains/types.js";
-import { FINALITY_FAST } from "../iris/types.js";
+import type { FinalityThreshold } from "../iris/types.js";
 import { InvalidInputError } from "../errors.js";
 import {
   bytesToByteArrayFelts,
@@ -63,8 +63,8 @@ export type BuildStarknetBurnIntentInput = {
   destinationCaller: bigint;
   /** Optional hookData; when set, builds `deposit_for_burn_with_hook`. */
   hookData?: Uint8Array;
-  /** Finality threshold — defaults to Fast Transfer (1000). */
-  minFinalityThreshold?: number;
+  /** Take it from the fee tier. */
+  minFinalityThreshold: FinalityThreshold;
 };
 
 export type StarknetBurnIntent = {
@@ -108,7 +108,6 @@ export function buildStarknetBurnIntent(
   const entrypoint = withHook
     ? "deposit_for_burn_with_hook"
     : "deposit_for_burn";
-  const minFinality = input.minFinalityThreshold ?? FINALITY_FAST;
 
   const [amountLo, amountHi] = u256ToFelts(input.amount);
   const [recipLo, recipHi] = u256ToFelts(input.mintRecipient);
@@ -126,7 +125,7 @@ export function buildStarknetBurnIntent(
     callerHi,
     maxFeeLo,
     maxFeeHi,
-    feltToString(minFinality),
+    feltToString(input.minFinalityThreshold),
   ];
 
   if (withHook) {

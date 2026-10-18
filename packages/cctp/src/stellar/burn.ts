@@ -34,7 +34,7 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import type { StellarChain } from "../chains/types.js";
-import { FINALITY_FAST } from "../iris/types.js";
+import type { FinalityThreshold } from "../iris/types.js";
 import { InvalidInputError } from "../errors.js";
 import { decodeStrkeyToBytes32, isValidStellarStrkey } from "./strkey.js";
 
@@ -83,8 +83,8 @@ export type BuildStellarBurnIntentInput = {
    * `deposit_for_burn`.
    */
   hookData?: Uint8Array;
-  /** Finality threshold — defaults to Fast Transfer (1000). */
-  minFinalityThreshold?: number;
+  /** 2000 on Stellar, which has no Fast Transfer. Take it from the fee tier. */
+  minFinalityThreshold: FinalityThreshold;
 };
 
 export type StellarBurnIntent = {
@@ -142,8 +142,6 @@ export function buildStellarBurnIntent(
   const tmm = input.source.tokenMessengerMinter;
   const usdcSac = input.source.usdc;
 
-  const minFinality = input.minFinalityThreshold ?? FINALITY_FAST;
-
   const args: xdr.ScVal[] = [
     new Address(input.caller).toScVal(), // caller: Address
     nativeToScVal(input.amount, { type: "i128" }), // amount: i128
@@ -156,7 +154,7 @@ export function buildStellarBurnIntent(
       type: "bytes",
     }),
     nativeToScVal(input.maxFee, { type: "i128" }), // max_fee: i128
-    nativeToScVal(minFinality, { type: "u32" }), // min_finality_threshold
+    nativeToScVal(input.minFinalityThreshold, { type: "u32" }), // min_finality_threshold
   ];
 
   if (withHook) {

@@ -126,6 +126,7 @@ export async function executeSolanaToEvm(
   let intent: ReturnType<typeof buildSolanaBurnIntent>;
   try {
     intent = buildSolanaBurnIntent({
+      minFinalityThreshold: input.tier.finalityThreshold,
       source: input.source,
       destinationDomain: input.destination.cctpDomain,
       amount: input.burnAmount,

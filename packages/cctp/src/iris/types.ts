@@ -3,13 +3,13 @@
  */
 import type { CctpDomain } from "../chains/types.js";
 
-/**
- * Finality threshold value used by Whisk. CCTP V2 also defines a
- * Standard tier (`2000`, 13–19 min); Whisk does not support it.
- * Every bridge ships as a Fast Transfer.
- */
+/** Fast Transfer attests after a block or two, before hard finality. */
 export const FINALITY_FAST = 1000 as const;
-export type FinalityThreshold = typeof FINALITY_FAST;
+/** Standard Transfer attests after hard finality. */
+export const FINALITY_STANDARD = 2000 as const;
+export type FinalityThreshold = typeof FINALITY_FAST | typeof FINALITY_STANDARD;
+
+export type TransferSpeed = "fast" | "standard";
 
 /**
  * Forwarder fee levels returned per finality level, in USDC subunits.
@@ -22,7 +22,7 @@ export type ForwarderFeeTier = {
 };
 
 /**
- * A Fast row of the `/v2/burn/USDC/fees/{src}/{dst}` response, parsed.
+ * A Fast or Standard row of the `/v2/burn/USDC/fees/{src}/{dst}` response, parsed.
  *
  * `minimumFee` is in hundredths of a basis point: Iris's `1.3` is `130n`.
  * `forwardFee` is present only when `?forward=true` is set on the request.

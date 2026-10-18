@@ -71,6 +71,16 @@ Technical shape, per
   forwarding hook data that Circle ignores, and stalled until someone minted it.
 - Solana to EVM with forwarding off mints with the connected EVM wallet. Before, it
   burned and then failed.
+- Chains without Fast Transfer bridge as Standard instead of being refused: Arc,
+  Avalanche, Polygon, Sonic, Monad, Sei, XDC, HyperEVM, Injective, Pharos, Cronos,
+  Plasma and Stellar. On these chains Standard attests in about half a second to
+  ten seconds. `RoutePlan` carries `speed` and `etaSeconds`, Circle's published
+  attestation time for the source, and bridge quotes carry their `plan`.
+  `attestationSeconds(chain, speed)` in `@usewhisk/cctp` returns that table.
+- `getBurnFees` keeps Iris's Standard row, and `pickFeeTier(tiers, speed)` takes
+  the speed. Every burn builder takes its finality threshold from the fee tier:
+  `minFinalityThreshold` is required on the Solana, Stellar and Starknet builders,
+  and the EVM builder refuses a Fast tier on a chain without Fast.
 - The default resolver picks Sepolia or mainnet ENS from the destination chain's
   network.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

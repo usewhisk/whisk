@@ -6,10 +6,11 @@ export { IRIS_MAINNET_URL, IRIS_SANDBOX_URL, irisBaseUrl } from "./urls.js";
 export { fetchIrisJson } from "./fetch.js";
 export type { FetchJsonOptions } from "./fetch.js";
 
-export { FINALITY_FAST } from "./types.js";
+export { FINALITY_FAST, FINALITY_STANDARD } from "./types.js";
 export type {
   BurnFeeTier,
   FinalityThreshold,
+  TransferSpeed,
   ForwarderFeeTier,
   ForwardState,
   GetMessagesQuery,

@@ -125,6 +125,7 @@ export async function executeSolanaToStellar(
   let intent: ReturnType<typeof buildSolanaBurnIntent>;
   try {
     intent = buildSolanaBurnIntent({
+      minFinalityThreshold: input.tier.finalityThreshold,
       source: input.source,
       destinationDomain: input.destination.cctpDomain,
       amount: input.burnAmount,

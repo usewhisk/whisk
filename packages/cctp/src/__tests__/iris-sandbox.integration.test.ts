@@ -16,7 +16,7 @@ describe.skipIf(!LIVE)("Iris sandbox (live)", () => {
   it("getBurnFees(Base Sepolia → Arbitrum Sepolia, ?forward=true)", async () => {
     const tiers = await getBurnFees("testnet", 6, 3);
     expect(tiers.length).toBeGreaterThan(0);
-    const fast = pickFeeTier(tiers);
+    const fast = pickFeeTier(tiers, "fast");
     expect(fast.minimumFee).toBeGreaterThanOrEqual(0n);
     if (fast.forwardFee) {
       expect(fast.forwardFee.low).toBeGreaterThan(0n);

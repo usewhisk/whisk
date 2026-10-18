@@ -221,9 +221,20 @@ describe("buildSolanaBurnIntent", () => {
       owner: OWNER,
       messageSentEventDataKey: EVENT_DATA,
       ownerUsdcAta: USER_ATA,
+      minFinalityThreshold: 1000 as const,
       ...overrides,
     };
   }
+
+  it("encodes the finality threshold it is given", () => {
+    const fast = buildSolanaBurnIntent(input());
+    const standard = buildSolanaBurnIntent(
+      input({ minFinalityThreshold: 2000 }),
+    );
+    // discriminator 8, amount 8, domain 4, recipient 32, caller 32, max fee 8
+    expect(fast.instruction.data.readUInt32LE(92)).toBe(1000);
+    expect(standard.instruction.data.readUInt32LE(92)).toBe(2000);
+  });
 
   it("emits an 18-account instruction for the no-hook variant", () => {
     const intent = buildSolanaBurnIntent(input());
