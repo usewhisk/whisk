@@ -85,6 +85,41 @@ describe("recovery persistence", () => {
     expect(loadInflight("testnet", "evm", "0xabc", "Arc_Testnet")).toBeNull();
   });
 
+  it("round-trips merchant metadata through save → load", () => {
+    const withMetadata = {
+      ...baseSnapshot,
+      metadata: {
+        orderId: "ORD-12345",
+        amount: 99.5,
+        priority: true,
+      },
+    };
+    expect(saveInflight(withMetadata)).toBe(true);
+    const loaded = loadInflight(
+      withMetadata.mode,
+      withMetadata.walletKind,
+      withMetadata.walletAddress,
+      withMetadata.sourceChain,
+    );
+    expect(loaded?.metadata).toEqual({
+      orderId: "ORD-12345",
+      amount: 99.5,
+      priority: true,
+    });
+  });
+
+  it("loads snapshots without metadata cleanly (backward compatibility)", () => {
+    // baseSnapshot has no `metadata` field — proves v1-era snapshots still load.
+    expect(saveInflight(baseSnapshot)).toBe(true);
+    const loaded = loadInflight(
+      baseSnapshot.mode,
+      baseSnapshot.walletKind,
+      baseSnapshot.walletAddress,
+      baseSnapshot.sourceChain,
+    );
+    expect(loaded?.metadata).toBeUndefined();
+  });
+
   it("clears stale entries on load when TTL has expired", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));

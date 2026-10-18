@@ -30,7 +30,7 @@ So this works:
 ```ts
 const config = createWhiskConfig({
   wallets: [evm({ projectId: WC_PROJECT_ID })],
-  chains: ["Arc_Testnet", "Base_Sepolia"],
+  chains: ["Ethereum_Sepolia", "Base_Sepolia"],
 });
 ```
 
@@ -79,7 +79,7 @@ const config = createWhiskConfig({
     evm({
       projectId: WC_PROJECT_ID,
       rpcUrls: {
-        Arc_Testnet: [
+        Ethereum_Sepolia: [
           "https://rpc.testnet.arc.network",
           "https://arc-testnet.drpc.org",
           "https://rpc.blockdaemon.testnet.arc.network",
@@ -92,7 +92,7 @@ const config = createWhiskConfig({
       },
     }),
   ],
-  chains: ["Arc_Testnet", "Base"],
+  chains: ["Ethereum_Sepolia", "Base"],
 });
 ```
 

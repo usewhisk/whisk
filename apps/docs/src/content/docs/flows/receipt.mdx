@@ -1,0 +1,146 @@
+---
+title: Settlement-status pages
+description: Drop a live receipt on the page customers see after they pay. Polls Circle Iris and shows the bridge state without you wiring anything.
+---
+
+After a customer hits **Send**, they want a page that says
+_"yes, I paid"_. The block explorer is good for engineers, not for
+shoppers. The drop-in answer is `<WhiskReceipt>` — give it the
+source tx hash and the two chains, and it polls Circle Iris,
+renders the live step rail, and links the explorers. Same-chain
+transfers settle instantly; CCTP bridges show burn → attestation
+→ mint with stage-aware copy you can override.
+
+## The minimum integration
+
+```tsx title="app/receipt/page.tsx"
+"use client";
+
+import { WhiskReceipt } from "@usewhisk/react";
+import "@usewhisk/react/styles.css";
+import { useSearchParams } from "next/navigation";
+
+export default function ReceiptPage() {
+  const search = useSearchParams();
+
+  return (
+    <WhiskReceipt
+      sourceChain={search.get("source")! as any}
+      destinationChain={search.get("dest")! as any}
+      sourceTxHash={search.get("tx")!}
+      amount={search.get("amount") ?? undefined}
+      recipientAddress={search.get("to") ?? undefined}
+    />
+  );
+}
+```
+
+Wire your `onSuccess` callback in `<WhiskSend>` to redirect to
+this page with the query params. That's the whole integration.
+
+```tsx title="app/checkout/page.tsx" {6-13}
+<WhiskSend
+  // ...your usual config...
+  onSuccess={(result, sendParams) => {
+    if (result.kind !== "success" || !result.finalTxHash) return;
+    const url = new URL("/receipt", window.location.origin);
+    url.searchParams.set("tx", result.finalTxHash);
+    url.searchParams.set("source", sendParams.sourceChain);
+    url.searchParams.set("dest", sendParams.destinationChain);
+    url.searchParams.set("amount", sendParams.amount);
+    url.searchParams.set("to", sendParams.recipient.address);
+    router.push(url.toString());
+  }}
+/>
+```
+
+## What it renders
+
+The widget collapses Whisk's five lifecycle states into copy any
+customer can read:
+
+| Stage                  | What it means                                              |
+| ---------------------- | ---------------------------------------------------------- |
+| `submitted`            | Source tx is on chain; Iris hasn't picked it up yet.       |
+| `awaiting_attestation` | Burn confirmed; Circle is signing the cross-chain message. |
+| `attested`             | Attestation ready; mint is in flight on the destination.   |
+| `settled`              | Funds landed. Done.                                        |
+| `failed`               | Either Iris reported failure or you passed `hasError`.     |
+
+Same-chain transfers skip the middle three and go straight to
+`settled` (or `failed`). The step rail collapses to a single
+`transfer` step.
+
+## When to use the hook directly
+
+`<WhiskReceipt>` is opinionated about layout. If you need a
+different shell (an inline status pill, a wallet-app style card,
+a modal), drive your own UI off `useReceipt`:
+
+```tsx title="components/CompactReceipt.tsx"
+"use client";
+
+import { useReceipt } from "@usewhisk/react";
+import { RECEIPT_STAGE_LABELS } from "@usewhisk/core";
+
+export function CompactReceipt({ tx, source, dest }) {
+  const { view, isPolling } = useReceipt({
+    sourceChain: source,
+    sourceTxHash: tx,
+    destinationChain: dest,
+  });
+
+  return (
+    <span>
+      {RECEIPT_STAGE_LABELS[view.stage]}
+      {isPolling && " …"}
+    </span>
+  );
+}
+```
+
+The hook polls when there's something to poll and stops on its
+own. You don't need a `useEffect` cleanup; the abort controller
+fires on unmount, on `enabled: false`, and the moment the
+destination tx is known.
+
+## If you already have the destination tx
+
+Pass it. The widget skips polling entirely and renders the
+settled state immediately. This is the right pattern when your
+backend has already observed the mint via its own indexer and
+just wants the UI to render the receipt:
+
+```tsx
+<WhiskReceipt
+  sourceChain="Base_Sepolia"
+  destinationChain="Ethereum_Sepolia"
+  sourceTxHash={burnTx}
+  destinationTxHash={mintTx} // ← skip the poll loop entirely
+  amount="10.00"
+/>
+```
+
+## Tuning the poll cadence
+
+Iris responses are usually sub-second to a few seconds. The
+defaults (4s interval, 15-minute window) work for almost
+every flow. If you're running a status board that aggregates
+many receipts, you might want a longer interval per card to
+avoid hammering the API; `pollIntervalMs` takes a number in
+milliseconds.
+
+```tsx
+<WhiskReceipt
+  /* ... */
+  pollIntervalMs={15_000}
+/>
+```
+
+## Overriding the copy
+
+`RECEIPT_STAGE_LABELS` and `RECEIPT_STAGE_HELP` are exported as
+plain `Record<ReceiptStage, string>` objects. If you need the
+copy in Portuguese, or branded ("Your dough is rising…" for
+your bakery checkout), wrap your own component around
+`useReceipt` and read your dictionary instead of the defaults.

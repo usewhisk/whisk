@@ -48,22 +48,10 @@ toward 10 USDC. Donors can change it before confirming.
 
 ## Reading back what the user picked
 
-Pair any unlocked field with a change callback to mirror its value
-in your app's state:
-
-```tsx
-const [amount, setAmount] = useState("10");
-
-<WhiskSend
-  defaultAmount={amount}
-  onAmountChange={setAmount}
-  recipient="0xDAOTreasury…"
-/>;
-```
-
-The full set: `onAmountChange`, `onRecipientChange`,
-`onSourceChainChange`, `onDestinationChainChange`. Each receives the
-new value as a string (or `Chain` literal for the chain callbacks).
+For observability, use `onSuccess`/`onFailure` on the widget or drop
+down to [`useWhisk`](/docs/hooks/use-whisk), which owns the flow's
+state machine and gives you every transition plus the resolved
+inputs.
 
 ## Common shapes
 

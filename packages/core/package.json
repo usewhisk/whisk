@@ -17,10 +17,12 @@
     "whisk",
     "usdc",
     "circle",
-    "app-kit",
+    "cctp",
+    "cctp-v2",
     "stablecoin",
     "send",
-    "bridge"
+    "bridge",
+    "payments"
   ],
   "type": "module",
   "sideEffects": false,
@@ -60,6 +62,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:live": "tsx scripts/live-testnet.ts",
     "lint": "tsc --noEmit"
   },
   "engines": {
@@ -69,8 +72,13 @@
     "access": "public"
   },
   "dependencies": {
-    "@circle-fin/app-kit": "^1.6.1",
-    "nanoevents": "^9.0.0"
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.0",
+    "@stellar/stellar-sdk": "^14.1.1",
+    "@usewhisk/cctp": "workspace:*",
+    "starknet": "^7.0.0",
+    "bs58": "^6.0.0",
+    "viem": "^2.23.0"
   },
   "devDependencies": {
     "tsup": "^8.3.5",

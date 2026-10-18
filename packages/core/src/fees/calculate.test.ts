@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { ConfigError } from "../errors/errors.js";
 import {
   buildCustomFeeEntries,
-  fromAppKitFees,
   sumFees,
+  sumForwarderFees,
   sumProtocolFees,
-  type AppKitEstimateFee,
 } from "./calculate.js";
 import type { FeeEntry } from "../types/fee.js";
 
-const HOST = "0xH00000000000000000000000000000000000000h";
+const MERCHANT = "0xH00000000000000000000000000000000000000h";
 
 describe("buildCustomFeeEntries", () => {
   it("returns an empty list when no policy is configured", () => {
@@ -17,84 +17,74 @@ describe("buildCustomFeeEntries", () => {
 
   it("returns an empty list when value is zero", () => {
     expect(
-      buildCustomFeeEntries({ value: "0", recipient: HOST }, "USDC"),
+      buildCustomFeeEntries({ value: "0", recipient: MERCHANT }, "USDC"),
     ).toEqual([]);
   });
 
   it("returns an empty list when value is malformed", () => {
     expect(
-      buildCustomFeeEntries({ value: "not-a-number", recipient: HOST }, "USDC"),
+      buildCustomFeeEntries(
+        { value: "not-a-number", recipient: MERCHANT },
+        "USDC",
+      ),
     ).toEqual([]);
   });
 
-  it("splits a $1 fee 90/10 between host and Arc", () => {
+  it("splits the fee 90/10 between merchant and the Whisk treasury", async () => {
+    const { WHISK_TREASURY_ADDRESS } = await import("./treasury.js");
     const entries = buildCustomFeeEntries(
-      { value: "1", recipient: HOST },
+      { value: "1", recipient: MERCHANT },
       "USDC",
     );
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
       kind: "custom",
       amount: "0.9",
-      recipient: HOST,
-      description: "Host fee (90%)",
+      token: "USDC",
+      recipient: MERCHANT,
+      description: "Merchant fee (90%)",
     });
     expect(entries[1]).toMatchObject({
       kind: "custom",
       amount: "0.1",
-      description: "Arc share (10%)",
+      token: "USDC",
+      recipient: WHISK_TREASURY_ADDRESS,
+      description: "Whisk platform fee (10%)",
     });
-    // Arc share has no recipient — App Kit injects it server-side.
-    expect(entries[1]?.recipient).toBeUndefined();
   });
 
-  it("formats fractional fees to USDC's six decimals, trimmed", () => {
+  it("merchant + whisk amounts sum exactly to the configured total", () => {
     const entries = buildCustomFeeEntries(
-      { value: "0.000001", recipient: HOST },
+      { value: "1.5", recipient: MERCHANT },
       "USDC",
     );
-    // 0.000001 * 0.9 = 0.0000009 → rounded to 6dp = 0.000001
-    // The exact rounding behaviour matters less than the invariant: every
-    // amount parses cleanly back to a number.
-    for (const e of entries) {
-      expect(Number.isFinite(parseFloat(e.amount))).toBe(true);
-    }
-  });
-});
-
-describe("fromAppKitFees", () => {
-  it("maps every App Kit fee `type` to a Whisk `FeeEntryKind`", () => {
-    const input: AppKitEstimateFee[] = [
-      { type: "kit", token: "USDC", amount: "0.1" },
-      { type: "provider", token: "USDC", amount: "0.2" },
-      { type: "forwarder", token: "USDC", amount: "0.05" },
-      { type: "gasFee", token: "USDC", amount: "0.01" },
-    ];
-    const entries = fromAppKitFees(input, "USDC");
-    expect(entries.map((e) => e.kind)).toEqual([
-      "protocol",
-      "provider",
-      "forwarder",
-      "gas",
-    ]);
+    const total = entries.reduce((acc, e) => acc + parseFloat(e.amount), 0);
+    expect(total).toBeCloseTo(1.5, 6);
   });
 
-  it("drops entries with null amount", () => {
-    const input: AppKitEstimateFee[] = [
-      { type: "kit", token: "USDC", amount: null },
-      { type: "provider", token: "USDC", amount: "0.2" },
-    ];
-    const entries = fromAppKitFees(input, "USDC");
+  it("formats fee amounts at USDC precision and strips trailing zeros", () => {
+    const entries = buildCustomFeeEntries(
+      { value: "10", recipient: MERCHANT },
+      "USDC",
+    );
+    expect(entries[0]?.amount).toBe("9");
+    expect(entries[1]?.amount).toBe("1");
+  });
+
+  it("emits only the merchant entry when the 10% share rounds to zero", () => {
+    // 5 subunits → 10% truncates to 0; merchant takes the whole fee.
+    const entries = buildCustomFeeEntries(
+      { value: "0.000005", recipient: MERCHANT },
+      "USDC",
+    );
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ kind: "provider", amount: "0.2" });
+    expect(entries[0]?.recipient).toBe(MERCHANT);
   });
 
-  it("falls back to defaultToken when fee.token is missing", () => {
-    const input = [
-      { type: "kit", token: undefined as unknown as string, amount: "0.1" },
-    ] as AppKitEstimateFee[];
-    const entries = fromAppKitFees(input, "USDC");
-    expect(entries[0]?.token).toBe("USDC");
+  it("ignores `bps` (reserved for Swap)", () => {
+    expect(
+      buildCustomFeeEntries({ bps: 50, recipient: MERCHANT }, "USDC"),
+    ).toEqual([]);
   });
 });
 
@@ -110,7 +100,6 @@ describe("sumFees", () => {
     );
     expect(breakdown.total).toBe("0.3");
     expect(breakdown.token).toBe("USDC");
-    // Non-USDC entries still appear in the breakdown for the UI to render.
     expect(breakdown.entries).toHaveLength(3);
   });
 
@@ -120,6 +109,23 @@ describe("sumFees", () => {
       "USDC",
     );
     expect(breakdown.total).toBe("0");
+  });
+
+  it("adds amounts a float cannot hold exactly", () => {
+    const breakdown = sumFees(
+      [
+        { kind: "protocol", amount: "90071992547.409931", token: "USDC" },
+        { kind: "forwarder", amount: "0.000001", token: "USDC" },
+      ],
+      "USDC",
+    );
+    expect(breakdown.total).toBe("90071992547.409932");
+  });
+
+  it("throws on an entry amount that is not a USDC amount", () => {
+    expect(() =>
+      sumFees([{ kind: "protocol", amount: "1e-6", token: "USDC" }], "USDC"),
+    ).toThrow(ConfigError);
   });
 
   it("returns zero total when entry list is empty", () => {
@@ -134,22 +140,37 @@ describe("sumProtocolFees", () => {
     { kind: "provider", amount: "0.0007", token: "USDC" },
     { kind: "forwarder", amount: "2.43", token: "USDC" },
     { kind: "protocol", amount: "0.01", token: "USDC" },
-    // Excluded: gas is paid in native token, not deducted from the transfer.
     { kind: "gas", amount: "0.005", token: "NATIVE" },
-    // Excluded: custom host fee is added on top, not deducted from the transfer.
-    { kind: "custom", amount: "0.9", token: "USDC" },
+    { kind: "custom", amount: "0.9", token: "USDC", recipient: MERCHANT },
   ];
 
   it("sums only the fees deducted from the bridged amount", () => {
-    // 0.0007 + 2.43 + 0.01 — excludes gas (native) and custom (added on top)
-    expect(sumProtocolFees(entries, "USDC")).toBeCloseTo(2.4407, 6);
+    expect(sumProtocolFees(entries, "USDC")).toBe(2_440_700n);
   });
 
   it("ignores entries denominated in a different token", () => {
-    expect(sumProtocolFees(entries, "EURC")).toBe(0);
+    expect(sumProtocolFees(entries, "EURC")).toBe(0n);
+  });
+
+  it("excludes the merchant `custom` fee", () => {
+    expect(sumProtocolFees(entries, "USDC")).not.toBe(3_340_700n);
   });
 
   it("returns zero for an empty list", () => {
-    expect(sumProtocolFees([], "USDC")).toBe(0);
+    expect(sumProtocolFees([], "USDC")).toBe(0n);
+  });
+});
+
+describe("sumForwarderFees", () => {
+  it("isolates only the forwarder share", () => {
+    expect(
+      sumForwarderFees(
+        [
+          { kind: "forwarder", amount: "0.25", token: "USDC" },
+          { kind: "protocol", amount: "0.01", token: "USDC" },
+        ],
+        "USDC",
+      ),
+    ).toBe(250_000n);
   });
 });

@@ -4,10 +4,11 @@
 [![types](https://img.shields.io/badge/types-TypeScript-3178c6?style=flat-square)](https://www.typescriptlang.org/)
 [![license MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](./LICENSE)
 
-Drop-in React widget for sending and bridging USDC. One component
-handles wallet connect, recipient resolution, fee preview, and the
-full transaction lifecycle. Built on
-[Circle App Kit](https://docs.arc.network/app-kit), powered by
+Drop-in React widget for USDC payments and cross-chain bridges. One
+component handles wallet connect, recipient resolution, fee preview,
+and the full transaction lifecycle. Speaks EVM, Solana, Stellar, and
+Starknet natively. Built directly on
+[Circle's CCTP V2](https://developers.circle.com/cctp), powered by
 [`@usewhisk/core`](https://www.npmjs.com/package/@usewhisk/core).
 
 ```tsx
@@ -16,30 +17,35 @@ full transaction lifecycle. Built on
 </WhiskProvider>
 ```
 
-> **Status:** Live on testnets today. Mainnet support is in progress.
-> The API doesn't change between testnet and mainnet — only the chain
-> identifiers you pass to `createWhiskConfig`.
+> **Status:** Live-tested on testnet across all four ecosystems.
+> Mainnet support is next. The API doesn't change between testnet
+> and mainnet — only the chain identifiers you pass to
+> `createWhiskConfig`.
 
 ## Install
 
 ```bash
-pnpm add @usewhisk/react @usewhisk/core
+pnpm add @usewhisk/react @tanstack/react-query
 ```
 
 (`npm install`, `yarn add`, and `bun add` work the same way.)
 
 ### Peer dependencies
 
-| Peer | Range |
-|---|---|
-| `react` | `>=18` |
-| `react-dom` | `>=18` |
-| `@tanstack/react-query` | `>=5` |
+| Peer                    | Range   |
+| ----------------------- | ------- |
+| `react`                 | `>=18`  |
+| `react-dom`             | `>=18`  |
+| `@tanstack/react-query` | `>=5`   |
 
-`wagmi`, `viem`, `@solana/wallet-adapter-react`, and `@solana/web3.js`
-ship as direct dependencies, so you don't need to install them
-separately. If you already use wagmi in your app, Whisk reuses an
-outer `<WagmiProvider>` automatically — no double-mount.
+`wagmi`, `viem`, `@usewhisk/core`, and `@usewhisk/cctp` ship as
+direct dependencies. Non-EVM ecosystems (Solana, Stellar, Starknet)
+add their own optional peer packages that you install only when you
+enable the matching ecosystem in `config.wallets`. See
+[Ecosystems](#ecosystems) below.
+
+If you already use wagmi in your app, Whisk reuses an outer
+`<WagmiProvider>` automatically — no double-mount.
 
 ## Quickstart
 
@@ -51,7 +57,6 @@ import {
   WhiskSend,
   createWhiskConfig,
   evm,
-  solana,
 } from "@usewhisk/react";
 import "@usewhisk/react/styles.css";
 
@@ -61,11 +66,10 @@ const config = createWhiskConfig({
       projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
       appName: "My App",
     }),
-    solana(), // omit this entry entirely if you don't want Solana
   ],
-  chains: ["Arc_Testnet", "Base_Sepolia", "Solana_Devnet"],
-  defaultSourceChain: "Arc_Testnet",
-  defaultDestinationChain: "Arc_Testnet",
+  chains: ["Base_Sepolia", "Ethereum_Sepolia"],
+  defaultSourceChain: "Base_Sepolia",
+  defaultDestinationChain: "Ethereum_Sepolia",
   appLabel: "my-app",
 });
 
@@ -84,44 +88,46 @@ export function Checkout() {
 }
 ```
 
-Same-chain sends and CCTP v2 cross-chain bridges share a single UI
-flow: connect → input → review → progress. The widget switches
-between modes automatically based on source and destination chain.
+Same-chain sends and CCTP V2 cross-chain bridges share a single UI
+flow: connect → input → review → progress. The widget picks the tab
+(Send or Bridge) based on the source/destination chains you choose.
 
 ## Surface
 
 ### Components
 
-| Export | What it is |
-|---|---|
-| `<WhiskProvider>` | Provider stack — wagmi + react-query + (optional) Solana adapters + Whisk context. Detects and reuses an outer `<WagmiProvider>` / `<QueryClientProvider>`. |
-| `<WhiskSend>` | The full inline widget — transfer and (optional) swap tabs. |
-| `<SwapTab>` | The swap surface as a standalone component. Useful when you want a trade-only flow without the transfer UI. |
-| `<ConnectModal>` | The wallet picker on its own. Reach for it when you want to launch connection outside the widget. |
+| Export             | What it is                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| `<WhiskProvider>`  | Provider stack — wagmi + react-query + (opt-in) Solana / Stellar / Starknet contexts + Whisk context. Detects and reuses an outer `<WagmiProvider>` / `<QueryClientProvider>`. |
+| `<WhiskSend>`      | The full inline widget — Send and Bridge tabs.                                                 |
+| `<ConnectModal>`   | The wallet picker on its own. Reach for it when you want to launch connection outside the widget. |
 | `<AccountChip>` / `<NetworkPill>` | Header-friendly status elements you can drop anywhere in your app shell. |
 
 ### Hooks
 
 ```ts
 import {
-  useWhisk,           // engine state + actions
-  useWhiskAccount,    // connected address, chain, connector name
-  useWhiskSwap,       // swap state machine
-  useWhiskAdapter,    // builds a WhiskAdapter for the active wallet
-  useWhiskContext,    // raw provider context (config, engine, theme)
-  useChainBalance,    // poll a token balance on any supported chain
+  useWhisk,             // engine state + actions
+  useWhiskContext,      // raw provider context (config, engine, theme)
+  useEvmAdapter,        // builds a WhiskAdapter for the connected EVM wallet
+  useSolanaAdapter,     // …for Solana
+  useStellarAdapter,    // …for Stellar
+  useStarknetAdapter,   // …for Starknet
+  useReceipt,           // poll for receipt / attestation status
+  useRefund,            // fire a refund from React
 } from "@usewhisk/react";
 ```
 
-`useWhisk()` returns `{ state, actions, connected, address }`. The
-state machine surfaces every transition (`idle`, `resolving`,
-`quoting`, `reviewing`, `sending`, `success`, `failed`) so you can
-build telemetry, custom UI, or background flows on the same engine.
+`useWhisk()` returns the engine's state machine plus the action
+callbacks (`resolve`, `quote`, `send`, `reset`). Every transition
+(`idle`, `resolving`, `quoting`, `reviewing`, `sending`, `success`,
+`failed`) surfaces here so you can build telemetry, custom UI, or
+background flows on the same engine.
 
 ### `<WhiskSend>` props
 
-The widget supports both **controlled** and **default** patterns. Any
-prop you pass directly is treated as the source of truth — the
+The widget supports both **controlled** and **default** patterns.
+Any prop you pass directly is treated as the source of truth — the
 corresponding field becomes read-only in the UI. `default*` variants
 prefill the field but leave it editable.
 
@@ -130,26 +136,22 @@ prefill the field but leave it editable.
   // Controlled (locks the field):
   amount="49.99"
   recipient="alice.eth"
-  sourceChain="Arc_Testnet"
-  destinationChain="Base_Sepolia"
+  sourceChain="Base_Sepolia"
+  destinationChain="Ethereum_Sepolia"
 
   // Or prefill but leave editable:
   defaultAmount="49.99"
   defaultRecipient="alice.eth"
+  defaultSourceChain="Base_Sepolia"
+  defaultDestinationChain="Ethereum_Sepolia"
 
-  // Change handlers (controlled mode):
-  onAmountChange={(v) => setAmount(v)}
-  onRecipientChange={(v) => setRecipient(v)}
+  // Restrict which tabs are visible:
+  tabs={["send", "bridge"]}          // default
+  // tabs={["bridge"]}                // bridge-only surface
 
   // Lifecycle:
-  onSuccess={({ quote, finalTxHash }) => …}
-  onError={(error) => …}
-  onStateChange={(state) => …}
-
-  // Swap tab (optional — requires Circle Console kit key):
-  kitKey={process.env.NEXT_PUBLIC_CIRCLE_KIT_KEY}
-  tabs={["transfer", "swap"]}
-  defaultTab="transfer"
+  onSuccess={({ finalTxHash, steps }) => …}
+  onFailure={({ error, steps }) => …}
 />
 ```
 
@@ -159,12 +161,12 @@ subscription, or one-product checkout flows.
 
 ### Who pays the bridge fees
 
-By default the recipient absorbs the CCTP and Forwarding fees, so a
-$50 transfer arrives a little short. For checkout, payroll, and invoice
-flows where the recipient needs an exact figure, set `feeBearer:
-"sender"` on the config. Whisk then sizes the burn up by the estimated
-fees so the recipient nets the full amount and the sender's debit grows
-to cover them.
+By default the recipient absorbs the CCTP and Forwarder fees, so a
+$50 transfer arrives a little short. For checkout, payroll, and
+invoice flows where the recipient needs an exact figure, set
+`feeBearer: "sender"` on the config. Whisk then sizes the burn up
+by the estimated fees so the recipient nets the full amount and the
+sender's debit grows to cover them.
 
 ```tsx
 const config = createWhiskConfig({
@@ -188,13 +190,57 @@ import {
   WhiskProvider,
   createWhiskConfig,
   evm,
+  solana,
+  stellar,
+  starknet,
   useWhisk,
-  useWhiskAccount,
+  useEvmAdapter,
 } from "@usewhisk/react/headless";
 ```
 
-No CSS, no components — just the provider, the config helpers, and
+No CSS, no components — just the providers, the config helpers, and
 the engine hooks. Same engine, your UI.
+
+## Ecosystems
+
+Add each ecosystem you want to accept by including its factory in
+`config.wallets`. Whisk mounts each ecosystem's provider stack only
+when its factory is present — EVM-only apps don't pay for Solana or
+Starknet code they won't run.
+
+```tsx
+import { evm, solana, stellar, starknet } from "@usewhisk/react";
+
+const config = createWhiskConfig({
+  wallets: [evm(), solana(), stellar(), starknet()],
+  chains: [
+    "Base_Sepolia",
+    "Solana_Devnet",
+    "Stellar_Testnet",
+    "Starknet_Sepolia",
+  ],
+});
+```
+
+Per-ecosystem peer packages (install only when you enable that
+ecosystem):
+
+```bash
+# Solana
+pnpm add @solana/wallet-adapter-react @solana/wallet-adapter-base
+
+# Stellar
+pnpm add @creit.tech/stellar-wallets-kit
+
+# Starknet
+pnpm add @starknet-io/get-starknet-core starknet
+```
+
+**On Vite with Solana:** `@solana/web3.js` needs Node's `Buffer`
+global, which Vite doesn't shim. Add a one-line polyfill at the top
+of your entry file or the first Solana operation throws
+`Buffer is not defined`. Next.js handles this automatically. See
+the [install guide](https://www.usewhisk.xyz/docs/getting-started/install#vite-solana-polyfill-buffer).
 
 ## Theming
 
@@ -250,8 +296,7 @@ const WhiskSend = dynamic(
 ```
 
 See the [`playground` example](https://github.com/Signor1/whisk/tree/main/examples/playground)
-for a complete setup, including `next.config.ts` webpack fallbacks
-for transitive Node-only deps.
+for a complete setup.
 
 ## BYO wagmi / QueryClient
 
@@ -274,33 +319,15 @@ them:
 </QueryClientProvider>
 ```
 
-## Solana
-
-```ts
-solana({
-  network: "devnet",                       // or "mainnet-beta"
-  endpoint: "https://my.helius.rpc/...",   // optional; public default otherwise
-  autoConnect: false,                      // default
-});
-```
-
-Phantom, Solflare, Backpack, and every Wallet-Standard wallet are
-auto-discovered. There's no adapter list to maintain.
-
-**On Vite:** `@solana/web3.js` needs Node's `Buffer` global, which Vite
-doesn't shim. Add a one-line polyfill at the top of your entry file or the
-first Solana operation throws `Buffer is not defined`. Next.js handles this
-automatically. See the [install guide](https://www.usewhisk.xyz/docs/getting-started/install#vite-solana-polyfill-buffer).
-
 ## Subpath exports
 
-| Import path | What you get |
-|---|---|
-| `@usewhisk/react` | Full surface — components, hooks, config helpers. |
-| `@usewhisk/react/headless` | Provider + config + engine hooks. No UI. |
-| `@usewhisk/react/styles.css` | The default theme. Required for the bundled components. |
-| `@usewhisk/react/tailwind` | Tailwind preset that maps `--whisk-*` to utility classes. |
-| `@usewhisk/react/fonts.css` | Optional Inter font face — opt in when your app doesn't already load Inter. |
+| Import path                   | What you get                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| `@usewhisk/react`             | Full surface — components, hooks, config helpers.                                                |
+| `@usewhisk/react/headless`    | Provider + config + engine hooks. No UI.                                                         |
+| `@usewhisk/react/styles.css`  | The default theme. Required for the bundled components.                                          |
+| `@usewhisk/react/tailwind`    | Tailwind preset that maps `--whisk-*` to utility classes.                                        |
+| `@usewhisk/react/fonts.css`   | Optional Inter font face — opt in when your app doesn't already load Inter.                      |
 
 ## Docs and examples
 
@@ -308,7 +335,7 @@ automatically. See the [install guide](https://www.usewhisk.xyz/docs/getting-sta
 - **Live playground:** <https://whisk-playground.vercel.app>
 - **Examples in the repo:** [`examples/`](https://github.com/Signor1/whisk/tree/main/examples)
   (e-commerce checkout, donate button, themed SaaS, payroll batch,
-  invoice link, Next.js basic)
+  invoice link, plus `node-headless` and `vue-headless`)
 
 ## License
 

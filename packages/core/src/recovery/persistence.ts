@@ -1,9 +1,27 @@
+/**
+ * Mid-flight recovery snapshot persistence.
+ *
+ * RUNTIME: every function in this module is **browser-only**. They read
+ * and write `window.localStorage` so a customer who reloads or crashes
+ * mid-bridge can pick the flow back up where it left off.
+ *
+ * On the server, in a Worker, or anywhere `window` is undefined, the
+ * read functions return `null` / `[]` and the write functions return
+ * `false` without throwing. Node and Vue consumers can ignore this
+ * surface — CCTP recovery is a page-refresh concern, not a server one.
+ *
+ * If you need server-side persistence (e.g. a fulfilment service that
+ * tracks long-running bridges), build it against the engine's
+ * `onStep` listener and your own datastore; the snapshot shape here
+ * isn't a recommended on-the-wire format.
+ */
 import type { Quote } from "../types/quote.js";
 import type { Step } from "../types/step.js";
 import type { WhiskErrorCategory, WhiskErrorCode } from "../errors/errors.js";
 import { WhiskError } from "../errors/errors.js";
 import type { StepName } from "../types/step.js";
 import type { WhiskMode } from "../types/config.js";
+import type { WhiskMetadata } from "../metadata/types.js";
 
 export type WalletKind = "evm" | "solana";
 
@@ -34,6 +52,12 @@ export type InflightSnapshot = {
   raw: unknown;
   savedAt: number;
   expiresAt: number;
+  /**
+   * Merged metadata captured at send time. Survives the recovery cycle so a
+   * resumed transfer keeps merchant order/ref correlation. Optional for
+   * backward compatibility with v1 snapshots written before this field shipped.
+   */
+  metadata?: WhiskMetadata;
 };
 
 function storageKey(
@@ -82,7 +106,13 @@ export function deserializeError(s: SerializedError): WhiskError {
   return err;
 }
 
-/** Persist a mid-flight failure snapshot. Returns false on SSR or storage failure. */
+/**
+ * Persist a mid-flight failure snapshot.
+ *
+ * Browser-only. Returns `false` on SSR / Node / Worker (no `window`),
+ * when localStorage is unavailable (Safari private mode), or on any
+ * storage exception (quota exceeded, blocked by user settings).
+ */
 export function saveInflight(
   input: Omit<InflightSnapshot, "version" | "savedAt" | "expiresAt">,
 ): boolean {
@@ -114,7 +144,14 @@ export function saveInflight(
   }
 }
 
-/** Read a snapshot for the given (mode, wallet, source). Auto-clears stale entries. */
+/**
+ * Read a snapshot for the given (mode, wallet, source). Auto-clears
+ * stale entries.
+ *
+ * Browser-only. Returns `null` on SSR / Node / Worker, when localStorage
+ * is unavailable, when no snapshot exists, or when the stored payload
+ * is from an older schema version.
+ */
 export function loadInflight(
   mode: WhiskMode,
   walletKind: WalletKind,
@@ -160,6 +197,12 @@ export function loadInflight(
   }
 }
 
+/**
+ * Remove the snapshot for a given (mode, wallet, source) — typically
+ * called once the bridge resolves successfully via retry.
+ *
+ * Browser-only. No-op on SSR / Node / Worker.
+ */
 export function clearInflight(
   mode: WhiskMode,
   walletKind: WalletKind,
@@ -175,7 +218,12 @@ export function clearInflight(
   }
 }
 
-/** Every non-expired snapshot in storage. Clears stale entries as a side effect. */
+/**
+ * Every non-expired snapshot in storage. Clears stale entries as a
+ * side effect.
+ *
+ * Browser-only. Returns `[]` on SSR / Node / Worker.
+ */
 export function listInflightSnapshots(): InflightSnapshot[] {
   const storage = getStorage();
   if (!storage) return [];

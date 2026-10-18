@@ -14,11 +14,12 @@ if [ "${1:-}" = "--fast" ]; then SKIP_BUILD="true"; fi
 echo -e "${BLUE}=== Governance Preflight ===${NC}"
 
 echo -e "\n${BLUE}[1/5] Format check...${NC}"; pnpm format:check
-echo -e "\n${BLUE}[2/5] Lint...${NC}";         pnpm lint
 
-# Apps and examples resolve package types from dist, so the packages are built first.
-echo -e "\n${BLUE}[3/5] Typecheck...${NC}"
+# Workspace packages resolve each other's types from dist, so build before linting.
+echo -e "\n${BLUE}[2/5] Lint...${NC}"
 pnpm build
+pnpm lint
+echo -e "\n${BLUE}[3/5] Typecheck...${NC}"
 pnpm typecheck
 echo -e "\n${BLUE}[4/5] Tests...${NC}";        pnpm test
 

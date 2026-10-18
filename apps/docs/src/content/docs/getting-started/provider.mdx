@@ -21,7 +21,7 @@ const config = createWhiskConfig({
       projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
     }),
   ],
-  chains: ["Arc_Testnet", "Base_Sepolia"],
+  chains: ["Base_Sepolia", "Ethereum_Sepolia"],
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -63,7 +63,7 @@ explicitly:
 ```tsx
 createWhiskConfig({
   mode: "testnet", // optional, inferred from chains
-  chains: ["Arc_Testnet", "Base_Sepolia"],
+  chains: ["Base_Sepolia", "Ethereum_Sepolia"],
   // ...
 });
 ```
@@ -86,23 +86,41 @@ Mixed configs (some mainnet chains, some testnet) almost always
 indicate a copy-paste mistake. Whisk defaults to `testnet` for safety
 in that case and logs a console warning so you notice.
 
-## Adding Solana
+## Adding non-EVM ecosystems
 
-Drop the `solana()` adapter into the `wallets` array. Whisk only
-mounts the Solana provider stack when this adapter is present, so
-EVM-only apps don't pay for code they won't run.
+Whisk mounts each ecosystem's wallet stack only when its factory is
+in `config.wallets`, so EVM-only apps don't pay for Solana or
+Stellar code they won't run.
 
 ```tsx
-import { createWhiskConfig, evm, solana } from "@usewhisk/react";
+import {
+  createWhiskConfig,
+  evm,
+  solana,
+  stellar,
+  starknet,
+} from "@usewhisk/react";
 
 const config = createWhiskConfig({
   wallets: [
     evm({ projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID! }),
     solana({ network: "devnet" }),
+    stellar({ network: "testnet" }),
+    starknet({ network: "sepolia" }),
   ],
-  chains: ["Arc_Testnet", "Base_Sepolia", "Solana_Devnet"],
+  chains: [
+    "Base_Sepolia",
+    "Ethereum_Sepolia",
+    "Solana_Devnet",
+    "Stellar_Testnet",
+    "Starknet_Sepolia",
+  ],
 });
 ```
+
+Each factory takes a `network` option (`"mainnet"` or the ecosystem's
+testnet) plus optional RPC overrides. Defaults match your provider
+`mode` (testnet vs mainnet).
 
 ## Reusing your existing wagmi setup
 

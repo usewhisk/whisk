@@ -260,7 +260,6 @@ function ActivePayeeCard({
           amount={String(payee.amount)}
           recipient={STUDIO_TREASURY}
           destinationChain={payee.chainCode}
-          showFooter={false}
           onSuccess={() => onPaid()}
         />
       </div>

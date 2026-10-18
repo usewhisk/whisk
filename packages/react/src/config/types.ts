@@ -7,7 +7,11 @@ import type {
   WhiskMode,
 } from "@usewhisk/core";
 
-export type WalletAdapterFactory = EvmAdapterFactory | SolanaAdapterFactory;
+export type WalletAdapterFactory =
+  | EvmAdapterFactory
+  | SolanaAdapterFactory
+  | StellarAdapterFactory
+  | StarknetAdapterFactory;
 
 export type EvmAdapterFactory = {
   kind: "evm";
@@ -18,6 +22,18 @@ export type EvmAdapterFactory = {
 export type SolanaAdapterFactory = {
   kind: "solana";
   config?: unknown;
+};
+
+export type StellarAdapterFactory = {
+  kind: "stellar";
+  /** {@link StellarConfig} — opaque to the type system so the kit dep is lazy. */
+  config: unknown;
+};
+
+export type StarknetAdapterFactory = {
+  kind: "starknet";
+  /** {@link StarknetConfig} — opaque so the wallet SDK stays lazy. */
+  config: unknown;
 };
 
 export type WhiskClientConfig = {

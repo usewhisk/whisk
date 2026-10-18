@@ -1,29 +1,31 @@
-import type { Adapter } from "@solana/wallet-adapter-base";
+/**
+ * Solana adapter factory — placeholder for v1.
+ *
+ * The factory exists so ConnectModal can render a "Solana — coming
+ * soon" entry alongside EVM connectors, but it is not mounted by
+ * `WhiskProvider` today. Solana send / bridge support arrives in v1.1
+ * (see ROADMAP.md). When it ships, the factory will start producing a
+ * working adapter and the provider will mount the wallet-adapter-react
+ * tree.
+ */
 import type { SolanaAdapterFactory } from "../types.js";
 
 export type SolanaNetwork = "mainnet-beta" | "devnet" | "testnet";
 
-/** @deprecated Use {@link SolanaNetwork}. */
-export type SolanaCluster = SolanaNetwork;
-
 export type SolanaConfig = {
   network: SolanaNetwork;
   endpoint: string;
+  /** Reserved — `WhiskProvider` ignores this in v1. */
   autoConnect: boolean;
-  /** Modern wallets advertise via Wallet Standard; only needed for legacy adapters. */
-  wallets: Adapter[];
 };
 
 export type SolanaFactoryOptions = {
-  /** Defaults to `devnet`. */
+  /** Defaults to `devnet` while Solana support is in preview. */
   network?: SolanaNetwork;
-  /** @deprecated Renamed to `network`. Removed in v0.3. */
-  cluster?: SolanaNetwork;
   /** Defaults to the public network endpoint — pass a paid RPC for production. */
   endpoint?: string;
-  /** Default `false` — explicit user action is saner for embedded widgets. */
+  /** Default `false`. Has no effect until Solana support lands in v1.1. */
   autoConnect?: boolean;
-  wallets?: Adapter[];
 };
 
 const NETWORK_RPC: Record<SolanaNetwork, string> = {
@@ -35,12 +37,11 @@ const NETWORK_RPC: Record<SolanaNetwork, string> = {
 export function solana(
   options: SolanaFactoryOptions = {},
 ): SolanaAdapterFactory {
-  const network = options.network ?? options.cluster ?? "devnet";
+  const network = options.network ?? "devnet";
   const config: SolanaConfig = {
     network,
     endpoint: options.endpoint ?? NETWORK_RPC[network],
     autoConnect: options.autoConnect ?? false,
-    wallets: options.wallets ?? [],
   };
   return { kind: "solana", config };
 }

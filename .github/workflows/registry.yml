@@ -1,0 +1,28 @@
+name: Registry
+
+# Reads every EVM chain entry back from its public RPCs. Kept out of CI because
+# it depends on third-party endpoints.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: registry matches the chains
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # pnpm/action-setup reads the version from packageManager; passing one here is an error.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @usewhisk/cctp check:registry

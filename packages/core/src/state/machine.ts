@@ -3,7 +3,6 @@ import type { Quote } from "../types/quote.js";
 import type { Step, StepName } from "../types/step.js";
 import type { WhiskState } from "../types/state.js";
 import type { WhiskError } from "../errors/errors.js";
-import { chainInfo } from "../chains/registry.js";
 
 export type HydrateFailedPayload = {
   error: WhiskError;
@@ -30,28 +29,16 @@ export type WhiskAction =
   | { type: "RETRY_START" }
   | { type: "HYDRATE_FAILED"; payload: HydrateFailedPayload };
 
-const ALL_BRIDGE_STEPS: StepName[] = [
+const BRIDGE_STEPS: StepName[] = [
   "approve",
   "burn",
   "fetchAttestation",
   "mint",
 ];
-const ALL_SEND_STEPS: StepName[] = ["approve", "transfer"];
+const SEND_STEPS: StepName[] = ["approve", "transfer"];
 
-// Solana bridges sign burn instruction directly — no `approve` step.
-const SOLANA_BRIDGE_STEPS: StepName[] = ["burn", "fetchAttestation", "mint"];
-const SOLANA_SEND_STEPS: StepName[] = ["transfer"];
-
-export function initialSteps(
-  routeKind: "send" | "bridge",
-  sourceKind: "evm" | "solana" = "evm",
-): Step[] {
-  let names: StepName[];
-  if (routeKind === "send") {
-    names = sourceKind === "solana" ? SOLANA_SEND_STEPS : ALL_SEND_STEPS;
-  } else {
-    names = sourceKind === "solana" ? SOLANA_BRIDGE_STEPS : ALL_BRIDGE_STEPS;
-  }
+export function initialSteps(routeKind: "send" | "bridge"): Step[] {
+  const names = routeKind === "send" ? SEND_STEPS : BRIDGE_STEPS;
   return names.map((name) => ({ name, state: "pending" }));
 }
 
@@ -101,11 +88,7 @@ export function reduce(state: WhiskState, action: WhiskAction): WhiskState {
 
     case "SEND_START": {
       if (state.kind !== "review") return state;
-      const route = state.quote.route;
-      const sourceChain =
-        route.kind === "send" ? route.chain : route.sourceChain;
-      const sourceKind = chainInfo(sourceChain).kind;
-      const steps = initialSteps(route.kind, sourceKind);
+      const steps = initialSteps(state.quote.route.kind);
       const first = steps[0];
       if (!first) return state;
       return {

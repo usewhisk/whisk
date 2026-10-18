@@ -1,0 +1,383 @@
+---
+title: End-to-end checkout
+description: The canonical Whisk integration. Order nonce, on-chain verification, signed webhook fan-out, receipt page, refund support — wired together.
+---
+
+This is the integration pattern most real Whisk deployments
+end up with. It threads through every primitive Whisk exposes
+and shows _why_ each one exists. Read this once and you have
+the mental model for any real-world payment flow on Whisk.
+
+The actors:
+
+- **Browser** runs your Next.js page, mounts `<WhiskSend>`,
+  the customer's wallet signs.
+- **Your backend** (Next route handlers, Express, whatever)
+  owns the order book and the secrets.
+- **The chain** is the source of truth for what actually
+  moved.
+- **Internal services** (fulfilment, email, accounting)
+  receive signed webhooks when an order settles.
+
+## The five-step shape
+
+1. Backend creates an order with a server-side **nonce**.
+2. Frontend includes the nonce in Whisk `metadata`.
+3. Customer signs; Whisk emits `onSuccess` with the tx hash.
+4. Frontend pings backend with `{ orderId, txHash }`.
+5. Backend independently fetches the tx, verifies it matches
+   the order, fulfils, and signs webhooks to downstream
+   services.
+
+The asymmetry is the point. The browser provides _claims_;
+the backend trusts only what it can verify against the chain
+or its own secrets.
+
+## Step 1. Create the order on your backend
+
+```ts title="app/api/orders/route.ts"
+import { randomUUID } from "node:crypto";
+
+export async function POST(req: Request) {
+  const { sku, amount } = await req.json();
+
+  const order = await db.orders.insert({
+    id: randomUUID(),
+    sku,
+    expectedAmount: amount,
+    expectedRecipient: process.env.MERCHANT_ADDRESS!,
+    expectedChain: "Ethereum_Sepolia",
+    status: "pending",
+    createdAt: new Date(),
+  });
+
+  return Response.json({
+    orderId: order.id,
+    nonce: order.id, // The order id IS the nonce. One per checkout.
+  });
+}
+```
+
+The nonce is just the order id — it's already unique, you're
+already storing it, no need for a second value.
+
+## Step 2. Mount the widget with the nonce in metadata
+
+```tsx title="app/checkout/page.tsx"
+"use client";
+
+import {
+  WhiskProvider,
+  WhiskSend,
+  createWhiskConfig,
+  evm,
+} from "@usewhisk/react";
+import "@usewhisk/react/styles.css";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+const config = createWhiskConfig({
+  wallets: [
+    evm({ projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID! }),
+  ],
+  chains: ["Ethereum_Sepolia", "Base_Sepolia"],
+});
+
+export default function CheckoutPage() {
+  const router = useRouter();
+  const [order, setOrder] = useState<{ orderId: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/orders", {
+      method: "POST",
+      body: JSON.stringify({ sku: "tee-001", amount: "12.00" }),
+    })
+      .then((r) => r.json())
+      .then(setOrder);
+  }, []);
+
+  if (!order) return <p>Loading…</p>;
+
+  return (
+    <WhiskProvider config={config}>
+      <WhiskSend
+        defaultSourceChain="Base_Sepolia"
+        defaultDestinationChain="Ethereum_Sepolia"
+        recipientAddress={process.env.NEXT_PUBLIC_MERCHANT_ADDRESS!}
+        amount="12.00"
+        amountLocked
+        metadata={{ orderId: order.orderId }}
+        onSuccess={async (result, sendParams) => {
+          if (result.kind !== "success" || !result.finalTxHash) return;
+
+          // Tell the backend the customer paid. The backend will verify
+          // independently — this call is a hint, not authorization.
+          await fetch(`/api/orders/${order.orderId}/paid`, {
+            method: "POST",
+            body: JSON.stringify({
+              txHash: result.finalTxHash,
+              sourceChain: sendParams.sourceChain,
+            }),
+          });
+
+          // Send the customer to the receipt page.
+          const url = new URL("/receipt", window.location.origin);
+          url.searchParams.set("tx", result.finalTxHash);
+          url.searchParams.set("source", sendParams.sourceChain);
+          url.searchParams.set("dest", sendParams.destinationChain);
+          url.searchParams.set("amount", sendParams.amount);
+          router.push(url.toString());
+        }}
+      />
+    </WhiskProvider>
+  );
+}
+```
+
+A few details:
+
+- `amountLocked` prevents the customer from editing the
+  amount in the widget. The backend already committed to a
+  price.
+- The metadata `{ orderId }` rides along through Whisk's
+  recovery snapshot. If the customer's tab crashes mid-bridge
+  and they recover later, the orderId comes back too.
+- The frontend's POST to `/api/orders/{id}/paid` is the
+  _claim_. The backend must verify it before fulfilment.
+
+## Step 3. Verify on-chain in the backend
+
+The browser cannot be trusted to tell you the tx is real.
+Pull it from the chain yourself:
+
+```ts title="app/api/orders/[id]/paid/route.ts"
+import { createPublicClient, http, parseUnits } from "viem";
+import { baseSepolia } from "viem/chains";
+
+const USDC_BASE_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+
+export async function POST(req: Request, ctx: { params: { id: string } }) {
+  const { txHash, sourceChain } = await req.json();
+  const order = await db.orders.findUnique({ where: { id: ctx.params.id } });
+
+  if (!order || order.status !== "pending") {
+    return Response.json(
+      { ok: false, reason: "order_not_pending" },
+      { status: 400 },
+    );
+  }
+
+  // Fetch the burn tx on the source chain. The merchant's mint on the
+  // destination is what the customer actually paid for, but for a
+  // CCTP bridge the burn is the binding moment — the customer signed
+  // that, and it's deterministic to verify.
+  if (sourceChain !== "Base_Sepolia") {
+    return Response.json(
+      { ok: false, reason: "wrong_source" },
+      { status: 400 },
+    );
+  }
+
+  const client = createPublicClient({ chain: baseSepolia, transport: http() });
+  const receipt = await client.getTransactionReceipt({ hash: txHash });
+
+  // Walk the receipt logs for a USDC Transfer event from the customer
+  // to the CCTP TokenMessenger of the right amount. (Production: use
+  // the CCTP depositForBurn signature explicitly — covered in the
+  // CCTP recovery docs.)
+  const expectedAmount = parseUnits(order.expectedAmount, 6);
+  const usdcTransfers = receipt.logs.filter(
+    (l) =>
+      l.address.toLowerCase() === USDC_BASE_SEPOLIA.toLowerCase() &&
+      l.topics[0] ===
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef", // Transfer
+  );
+
+  const matched = usdcTransfers.some((l) => {
+    const value = BigInt(l.data);
+    return value >= expectedAmount;
+  });
+
+  if (!matched) {
+    return Response.json(
+      { ok: false, reason: "amount_mismatch" },
+      { status: 400 },
+    );
+  }
+
+  // Atomically flip status to paid — guards double-fulfilment if the
+  // customer hits the button twice or the page reloads.
+  const updated = await db.orders.updateMany({
+    where: { id: order.id, status: "pending" },
+    data: { status: "paid", paidTxHash: txHash, paidAt: new Date() },
+  });
+
+  if (updated.count === 0) {
+    return Response.json({ ok: true, idempotent: true });
+  }
+
+  await fulfilOrder(order);
+  await notifyDownstream(order);
+  return Response.json({ ok: true });
+}
+```
+
+Three guard rails worth calling out:
+
+1. **Order status check.** Only fulfil orders that are still
+   `pending`. Stops replay of the same tx hash.
+2. **Amount check.** Any value below `expectedAmount` is
+   rejected. Customer underpaid? Order doesn't fulfil.
+3. **Atomic flip from pending to paid.** Stops the race where
+   two concurrent requests both pass the status check and
+   both fulfil.
+
+## Step 4. Fan out to internal services via signed webhooks
+
+Once fulfilled, your accounting, email, and CRM services
+need to know. Sign each outgoing notification:
+
+```ts title="server/notify.ts"
+import { signWebhook } from "@usewhisk/core";
+
+export async function notifyDownstream(order: Order) {
+  const payload = {
+    type: "order.paid",
+    orderId: order.id,
+    sku: order.sku,
+    amount: order.expectedAmount,
+    txHash: order.paidTxHash,
+    customerAddress: order.expectedRecipient,
+  };
+
+  await Promise.allSettled([
+    post(
+      "https://accounting.internal/events",
+      payload,
+      process.env.ACCOUNTING_SECRET!,
+    ),
+    post("https://email.internal/events", payload, process.env.EMAIL_SECRET!),
+    post("https://crm.internal/events", payload, process.env.CRM_SECRET!),
+  ]);
+}
+
+async function post(url: string, payload: unknown, secret: string) {
+  const { body, headers } = await signWebhook(payload, secret);
+  await fetch(url, { method: "POST", headers, body });
+}
+```
+
+Each downstream service verifies with its own secret — same
+`verifyWebhook` pattern as on the [webhooks page](/docs/flows/webhooks).
+Per-service secrets mean a compromise of one service doesn't
+expose your other endpoints.
+
+## Step 5. Receipt page
+
+The customer landed on `/receipt?tx=…` from the widget's
+`onSuccess`. `<WhiskReceipt>` polls Iris on its own:
+
+```tsx title="app/receipt/page.tsx"
+"use client";
+
+import { WhiskReceipt } from "@usewhisk/react";
+import "@usewhisk/react/styles.css";
+import { useSearchParams } from "next/navigation";
+
+export default function ReceiptPage() {
+  const s = useSearchParams();
+
+  return (
+    <WhiskReceipt
+      sourceChain={s.get("source")! as any}
+      destinationChain={s.get("dest")! as any}
+      sourceTxHash={s.get("tx")!}
+      amount={s.get("amount") ?? undefined}
+    />
+  );
+}
+```
+
+See the [settlement-status docs](/docs/flows/receipt) for the
+full surface.
+
+## Step 6. Refund handling
+
+When you need to refund, your admin dashboard reads the order
+and calls `engine.refund` server-side or `useRefund` from the
+operator's browser. Either way, the metadata makes the
+correlation traceable:
+
+```ts title="server/refund-route.ts"
+import { engine } from "@/server/engine";
+
+export async function POST(req: Request, ctx: { params: { id: string } }) {
+  const order = await db.orders.findUnique({ where: { id: ctx.params.id } });
+  if (!order || order.status !== "paid") {
+    return Response.json({ ok: false }, { status: 400 });
+  }
+
+  const result = await engine.refund({
+    originalTxHash: order.paidTxHash,
+    originalDestinationChain: order.expectedChain,
+    refundDestinationChain: order.payerChain,
+    originalSenderAddress: order.payerAddress,
+    amount: order.expectedAmount,
+    reason: "customer_request",
+    merchantAdapter,
+  });
+
+  if (result.kind === "success") {
+    await db.orders.update({
+      where: { id: order.id },
+      data: { status: "refunded", refundTxHash: result.finalTxHash },
+    });
+    // Fan out an "order.refunded" event with the same signWebhook pattern.
+  }
+
+  return Response.json({ ok: result.kind === "success" });
+}
+```
+
+See the [refund docs](/docs/flows/refund) for the full surface.
+
+## What this pattern is _not_
+
+- **Not a replacement for fraud screening.** Whisk verifies
+  the chain receipt; it doesn't sanction-screen the source
+  address, run heuristics on velocity, or flag mismatched
+  identity. That belongs in your compliance layer.
+- **Not idempotent at the Whisk layer.** Idempotency lives in
+  your `(orderId, status)` invariant. Whisk's engine will
+  cheerfully sign two transfers if you call `send` twice.
+- **Not a webhook delivery system.** `signWebhook` produces a
+  signed request; it doesn't retry, queue, or guarantee
+  delivery. Use Vercel Queues, AWS EventBridge, Inngest, or
+  your platform's own primitive for that.
+
+## Where this lives in production code
+
+Putting the full pattern in one repo:
+
+```text
+your-app/
+├── app/
+│   ├── checkout/page.tsx       ← step 2: mount the widget
+│   ├── receipt/page.tsx        ← step 5: settlement status
+│   ├── api/
+│   │   ├── orders/route.ts                ← step 1: create order
+│   │   ├── orders/[id]/paid/route.ts      ← step 3: verify on chain
+│   │   ├── orders/[id]/refund/route.ts    ← step 6: refund
+│   │   └── webhooks/[svc]/route.ts        ← verify incoming webhooks
+├── server/
+│   ├── engine.ts               ← createWhisk + DCW adapter (server-only)
+│   ├── notify.ts               ← step 4: signWebhook fan-out
+│   └── db.ts                   ← order book
+└── lib/
+    └── chain-verify.ts         ← on-chain receipt verification helpers
+```
+
+The Whisk pieces are thin. Most of the code is your order
+book and your verification logic — and that's by design.
+Whisk handles the chain dance; your business logic handles
+what an order _means_.

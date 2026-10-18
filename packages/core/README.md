@@ -5,34 +5,57 @@
 [![types](https://img.shields.io/badge/types-TypeScript-3178c6?style=flat-square)](https://www.typescriptlang.org/)
 [![license MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](./LICENSE)
 
-Framework-agnostic engine that powers the Whisk USDC widget. No React,
-no wagmi, no wallet-adapter dependencies — just the state machine,
-resolvers, chain registry, fees, and error model.
+Framework-agnostic engine that powers the Whisk USDC widget. No
+React, no wagmi, no wallet-adapter dependencies — just the state
+machine, per-ecosystem adapter interfaces, resolvers, chain
+registry, fees, and error model. Built directly on
+[`@usewhisk/cctp`](https://www.npmjs.com/package/@usewhisk/cctp) for
+the CCTP V2 protocol layer.
 
 > **Most apps want [`@usewhisk/react`](https://www.npmjs.com/package/@usewhisk/react) instead.**
 > Reach for `@usewhisk/core` directly when you're building a Whisk
-> frontend outside React, running engine logic on a server, or writing
-> tests that don't pull in a wallet adapter.
+> frontend outside React, running engine logic on a server, or
+> writing tests that don't pull in a wallet adapter.
 
 ```ts
-const engine = createWhisk({ chains: ["Arc_Testnet"], resolver });
-const recipient = await engine.resolve("alice.eth", "Arc_Testnet");
+const engine = createWhisk({
+  chains: ["Base_Sepolia", "Ethereum_Sepolia"],
+  mode: "testnet",
+});
+const recipient = await engine.resolve("alice.eth", "Ethereum_Sepolia");
 const quote = await engine.quote({ ..., recipient, amount: "10" });
 const result = await engine.send({ ..., quote, adapter });
 ```
 
-> **Status:** Live on testnets today. Mainnet support is in progress.
+> **Status:** Live-tested on testnet across all four ecosystems.
+> Mainnet support is next.
 
 ## Install
 
 ```bash
-pnpm add @usewhisk/core
+pnpm add @usewhisk/core @usewhisk/cctp
 ```
 
-`@circle-fin/app-kit` ships as a direct dependency. Whisk delegates
-the on-chain work (transfers, CCTP bridge, attestation polling) to
-App Kit and wraps that surface in something typed, composable, and
-easy to test.
+`@usewhisk/cctp` ships as a direct dependency. This is where the
+protocol layer lives (chain registry, ABIs, Iris client, burn +
+mint builders across EVM, Solana, Stellar, Starknet).
+
+## Runtime support
+
+`@usewhisk/core` runs on Node 20+, Deno, Bun, Cloudflare Workers,
+and Vercel Edge / Fluid Compute. Almost every export is universal —
+the engine, fees, chains, errors, resolvers, metadata, refund,
+webhook, settlement-status (`deriveReceiptView`), Iris polling, and
+manual mint helpers all work anywhere `fetch` exists.
+
+The one exception is the `localStorage`-backed mid-flight recovery
+snapshot helpers (`saveInflight` / `loadInflight` / `clearInflight` /
+`listInflightSnapshots`). They read and write `window.localStorage`,
+so on the server they return `null` / `false` without throwing.
+
+The webhook primitives (`signWebhook` / `verifyWebhook`) need
+`globalThis.crypto.subtle`, which is available on every supported
+runtime out of the box.
 
 ## Quick tour
 
@@ -44,33 +67,46 @@ import {
 } from "@usewhisk/core";
 
 const engine = createWhisk({
-  chains: ["Arc_Testnet", "Base_Sepolia", "Solana_Devnet"],
-  defaultSourceChain: "Arc_Testnet",
+  chains: [
+    "Base_Sepolia",
+    "Ethereum_Sepolia",
+    "Solana_Devnet",
+    "Stellar_Testnet",
+    "Starknet_Sepolia",
+  ],
+  defaultSourceChain: "Base_Sepolia",
   resolver: composeResolvers([addressResolver]),
   // "sender" grosses up the burn so the recipient nets the exact amount.
   // Default "receiver" deducts the bridge fees from the transfer.
-  feeBearer: "receiver",
+  feeBearer: "sender",
   appLabel: "my-checkout",
 });
 
 // 1. Resolve free-text recipient input.
 const recipient = await engine.resolve(
   "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1",
-  "Arc_Testnet",
+  "Ethereum_Sepolia",
 );
 
 // 2. Quote a transfer (same-chain or cross-chain — auto-routed).
 const quote = await engine.quote({
-  sourceChain: "Arc_Testnet",
-  destinationChain: "Arc_Testnet",
+  sourceChain: "Base_Sepolia",
+  destinationChain: "Ethereum_Sepolia",
   recipient,
   amount: "10",
-  adapter, // see "Building a WhiskAdapter" below
+  adapter, // see "Building an adapter" below
 });
 
 // 3. Send, with per-step progress callbacks.
 const result = await engine.send(
-  { ...quote.input, adapter, quote },
+  {
+    recipient,
+    amount: "10",
+    sourceChain: "Base_Sepolia",
+    destinationChain: "Ethereum_Sepolia",
+    adapter,
+    quote,
+  },
   { onStep: (step) => console.log(step.name, step.state) },
 );
 
@@ -79,18 +115,6 @@ if (result.kind === "success") {
 } else {
   console.error(result.error.code, result.error.message);
 }
-```
-
-The state machine is exported separately for UIs that want their own
-reducer wiring:
-
-```ts
-import { reduce, initialState, type WhiskAction } from "@usewhisk/core";
-
-let state = initialState; // { kind: "disconnected" }
-state = reduce(state, { type: "CONNECTED" });
-state = reduce(state, { type: "RESOLVE_START", input: "alice.eth" });
-// ...
 ```
 
 ## Engine surface
@@ -102,47 +126,78 @@ interface WhiskEngine {
   readonly config: WhiskConfig;
   resolve(input: string, chain: Chain): Promise<ResolvedRecipient>;
   quote(params: QuoteParams): Promise<Quote>;
-  send(params: SendParams, listeners?: SendListeners): Promise<SendResult>;
-  retry(params: RetryParams, listeners?: SendListeners): Promise<SendResult>;
-  estimateSwap(params: SwapParams): Promise<SwapEstimate>;
-  swap(params: SwapParams): Promise<SwapResult>;
+  send(params: SendParams, listeners?: SendListeners):
+    Promise<SendSuccess | SendFailure>;
+  refund(params: RefundParams, listeners?: SendListeners):
+    Promise<SendSuccess | SendFailure>;
 }
 ```
 
-`SendResult` is a discriminated union of `SendSuccess` and
-`SendFailure` — branch on `result.kind` and TypeScript narrows the
-rest of the shape.
+The `SendSuccess | SendFailure` return type is a discriminated union
+— branch on `result.kind` and TypeScript narrows the rest of the
+shape.
 
-## Building a WhiskAdapter
+## Building an adapter
 
-A `WhiskAdapter` is the bridge between Whisk's engine and your wallet
-layer. Wrap whatever you have (a wagmi connector, a Solana
-wallet-adapter wallet, a server keypair) into the shape App Kit's
-adapters expect, then pass it to `engine.quote` / `engine.send`.
+An adapter is the bridge between Whisk's engine and your wallet
+layer. Whisk defines four adapter interfaces, one per ecosystem, and
+picks the right one for the source chain automatically:
 
 ```ts
-import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
-import type { WhiskAdapter } from "@usewhisk/core";
-
-const provider = await wagmiConnector.getProvider();
-const appKitAdapter = await createViemAdapterFromProvider({ provider });
-
-const adapter: WhiskAdapter = {
-  appKitAdapter,
-  kind: "evm",
-  address: walletAddress,
-};
+import type {
+  EvmAdapter,
+  SolanaAdapter,
+  StellarAdapter,
+  StarknetAdapter,
+  WhiskAdapter,
+} from "@usewhisk/core";
 ```
 
-The React package builds this for you automatically via
-`useWhiskAdapter()`.
+Each interface is small (5–6 methods). Here's the EVM shape:
+
+```ts
+interface EvmAdapter {
+  readonly kind: "evm";
+  readonly address: `0x${string}`;
+  getChainId(): Promise<number>;
+  switchChain(chainId: number): Promise<void>;
+  sendCalls(calls: EvmCall[]): Promise<SendCallsResult>;
+  waitForReceipt(hash: `0x${string}`): Promise<CallReceipt>;
+}
+```
+
+Wrap whatever you have — a wagmi connector, a viem `WalletClient`, a
+Node signing key — into this shape and pass it to `engine.send`. The
+React package builds these for you via `useEvmAdapter()`,
+`useSolanaAdapter()`, `useStellarAdapter()`, `useStarknetAdapter()`.
+
+For server-side flows, see
+[`examples/node-headless`](https://github.com/Signor1/whisk/tree/main/examples/node-headless)
+for a runnable viem-backed adapter.
+
+## Cross-ecosystem: the destination adapter
+
+Bridges to non-EVM destinations (Solana, Stellar, Starknet) need a
+`destinationAdapter` on `engine.send` to sign the mint on the target
+chain, because Circle's Iris auto-forwarder only relays to EVM. For
+EVM→EVM and Solana→EVM, the Forwarder auto-mints and
+`destinationAdapter` is unused.
+
+```ts
+await engine.send({
+  ...,
+  adapter,             // signs the burn on the source
+  destinationAdapter,  // signs the mint on Stellar / Starknet / Solana
+});
+```
 
 ## Resolvers
 
 The engine resolves free-text recipient input through a chain of
 `Resolver` objects. The default chain just contains
-`addressResolver` (EVM hex + Solana base58). Add ENS, email, handle,
-or any custom lookup by composing:
+`addressResolver` (EVM hex + Solana base58 + Stellar strkey +
+Starknet felt). Add ENS, email, handle, or any custom lookup by
+composing:
 
 ```ts
 import {
@@ -163,29 +218,25 @@ const resolver = composeResolvers([addressResolver, ensResolver]);
 Resolvers run in order; the first non-null match wins. Throws are
 tagged with the resolver's name for clean error reporting.
 
-(`@usewhisk/react` ships an ENS resolver out of the box. The bare
-core gives you the address resolver and the composition helper — wire
-your own.)
-
 ## Errors
 
-Every failure path returns a `WhiskError`, or one of its subclasses.
-Branch on `code` in your UI:
+Every failure path returns a `WhiskError` or subclass. Branch on
+`code` in your UI:
 
-| Code | Class | Retryable |
-|------|-------|-----------|
-| `NO_ADAPTER` | `NoAdapterError` | no |
-| `WRONG_CHAIN` | `WrongChainError` | yes |
-| `INSUFFICIENT_BALANCE` | `InsufficientBalanceError` | no |
-| `INVALID_ADDRESS` | `InvalidAddressError` | no |
-| `RESOLVER_FAILED` | `ResolverError` | yes |
-| `BRIDGE_STEP_FAILED` | `BridgeStepError` | yes |
-| `USER_REJECTED` | `UserRejectedError` | yes |
-| `NETWORK_ERROR` | `NetworkError` | yes |
-| `WALLET_CAPABILITY` | `WalletCapabilityError` | no |
-| `ONCHAIN_REVERT` | `OnchainRevertError` | no |
-| `CONFIG_ERROR` | `ConfigError` | no |
-| `UNKNOWN` | `WhiskError` | no |
+| Code                    | Class                       | Retryable |
+| ----------------------- | --------------------------- | --------- |
+| `NO_ADAPTER`            | `NoAdapterError`            | no        |
+| `WRONG_CHAIN`           | `WrongChainError`           | yes       |
+| `INSUFFICIENT_BALANCE`  | `InsufficientBalanceError`  | no        |
+| `INVALID_ADDRESS`       | `InvalidAddressError`       | no        |
+| `RESOLVER_FAILED`       | `ResolverError`             | yes       |
+| `BRIDGE_STEP_FAILED`    | `BridgeStepError`           | yes       |
+| `USER_REJECTED`         | `UserRejectedError`         | yes       |
+| `NETWORK_ERROR`         | `NetworkError`              | yes       |
+| `WALLET_CAPABILITY`     | `WalletCapabilityError`     | no        |
+| `ONCHAIN_REVERT`        | `OnchainRevertError`        | no        |
+| `CONFIG_ERROR`          | `ConfigError`               | no        |
+| `UNKNOWN`               | `WhiskError`                | no        |
 
 `toWhiskError(unknown)` wraps any thrown value into the right
 subclass — drop it in a top-level try/catch and you always get a
@@ -195,22 +246,21 @@ typed error back.
 
 ```ts
 import {
-  allChains,
-  chainInfo,
-  chainByEvmId,
-  chainsByKind,
+  CHAINS,
+  chainByEvmChainId,
   chainsByNetwork,
   explorerTxUrl,
-  explorerAddressUrl,
-  supportedTokensFor,
-  tokenAddressFor,
+  getChain,
 } from "@usewhisk/core";
 
-chainInfo("Arc_Testnet").label;            // "Arc Testnet"
-chainsByNetwork("testnet").length;         // every supported testnet
-chainByEvmId(8453)?.chain;                 // "Base"
-explorerTxUrl("Solana_Devnet", "sig123");  // includes ?cluster=devnet
+getChain("Base_Sepolia").label;             // "Base Sepolia"
+chainsByNetwork("testnet").length;          // every supported testnet
+chainByEvmChainId(8453).id;                 // "Base"
+explorerTxUrl("Solana_Devnet", "sig123");   // includes ?cluster=devnet
 ```
+
+The registry lives in `@usewhisk/cctp`; core re-exports it, and `Chain` is
+the union of its ids.
 
 ## Type-safe everywhere
 
@@ -220,25 +270,13 @@ Typos fail the build, not the user:
 ```ts
 import type { Chain, Token } from "@usewhisk/core";
 
-const chain: Chain = "Arc_Testnet"; // ✓
-const token: Token = "USDC";        // ✓
+const chain: Chain = "Base_Sepolia"; // ✓
+const token: Token = "USDC";         // ✓
 
 const bad: Chain = "Mainnet";
 //                   ^^^^^^^^^
 // Type '"Mainnet"' is not assignable to type 'Chain'.
 ```
-
-## Subpath exports
-
-For tighter dead-code-elimination in apps that only touch one slice
-of the surface:
-
-| Import path | What you get |
-|---|---|
-| `@usewhisk/core` | Full surface — engine, resolvers, chains, errors, state machine. |
-| `@usewhisk/core/types` | Just the types — `Chain`, `Quote`, `Resolver`, etc. |
-| `@usewhisk/core/errors` | Just the error classes + `toWhiskError`. |
-| `@usewhisk/core/resolvers` | Just `addressResolver` and `composeResolvers`. |
 
 ## Testing
 
@@ -246,14 +284,15 @@ of the surface:
 pnpm --filter @usewhisk/core test
 ```
 
-108 tests across 10 files — the engine, state machine, resolver
-chain, address resolver, fee math, routing, error mapping, chain
-registry, and recovery primitives. Runs in under 100 ms.
+271 tests across 27 files — the engine, state machine, resolvers,
+address resolvers per ecosystem, fee math, routing, error mapping,
+chain registry, and recovery primitives. Runs in under 3 s.
 
 ## Docs and examples
 
 - **Full docs:** <https://www.usewhisk.xyz/docs>
 - **React widget:** [`@usewhisk/react`](https://www.npmjs.com/package/@usewhisk/react)
+- **CCTP protocol layer:** [`@usewhisk/cctp`](https://www.npmjs.com/package/@usewhisk/cctp)
 - **Source:** <https://github.com/Signor1/whisk>
 
 ## License

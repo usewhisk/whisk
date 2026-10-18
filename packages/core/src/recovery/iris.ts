@@ -1,10 +1,30 @@
+/**
+ * Iris attestation client — recovery layer.
+ *
+ * Thin adapter over `@usewhisk/cctp`'s Iris client. Exposes a stable
+ * `IrisMessage` shape (with a synthetic `"not_found"` status) so the
+ * receipt view and the React `useReceipt` hook stay decoupled from the
+ * underlying protocol-layer details.
+ */
+import {
+  getChain,
+  getMessages,
+  irisBaseUrl as cctpIrisBaseUrl,
+  IRIS_MAINNET_URL as CCTP_IRIS_MAINNET_URL,
+  IRIS_SANDBOX_URL as CCTP_IRIS_SANDBOX_URL,
+  type IrisMessage as CctpIrisMessage,
+} from "@usewhisk/cctp";
 import type { Chain } from "../types/chain.js";
-import { cctpDomainFor } from "../chains/cctpDomain.js";
-import { chainInfo } from "../chains/registry.js";
 
-export const IRIS_MAINNET_URL = "https://iris-api.circle.com";
-export const IRIS_SANDBOX_URL = "https://iris-api-sandbox.circle.com";
+/** Iris API base URLs, re-exported so consumers can override `baseUrl`. */
+export const IRIS_MAINNET_URL = CCTP_IRIS_MAINNET_URL;
+export const IRIS_SANDBOX_URL = CCTP_IRIS_SANDBOX_URL;
 
+/**
+ * Attestation lifecycle for a single burn. `"not_found"` is synthesized
+ * by this client when Iris hasn't observed the burn yet — the upstream
+ * API returns an empty list rather than a status string.
+ */
 export type IrisStatus =
   | "pending_confirmations"
   | "complete"
@@ -19,67 +39,53 @@ export type IrisMessage = {
 };
 
 export type FetchAttestationOptions = {
+  /** Override the Iris base URL. Defaults to the chain's network base. */
   baseUrl?: string;
   signal?: AbortSignal;
+  /** Defaults to the global `fetch`. */
+  fetch?: typeof fetch;
 };
 
 export type PollAttestationOptions = FetchAttestationOptions & {
+  /** Total polling deadline in ms. Default 10 minutes. */
   timeout?: number;
+  /** Interval between polls in ms. Default 3 s. */
   pollingInterval?: number;
   onUpdate?: (msg: IrisMessage) => void;
 };
 
+/** Resolve the Iris base URL for a Whisk chain. */
 export function getIrisBaseUrl(chain: Chain): string {
-  return chainInfo(chain).network === "mainnet"
-    ? IRIS_MAINNET_URL
-    : IRIS_SANDBOX_URL;
+  return cctpIrisBaseUrl(getChain(chain).network);
 }
 
-/** Single-shot attestation lookup against Iris. */
+/** Single-shot attestation lookup. Returns `"not_found"` until Iris sees the burn. */
 export async function fetchAttestationOnce(
   sourceChain: Chain,
   burnTxHash: string,
   options: FetchAttestationOptions = {},
 ): Promise<IrisMessage> {
-  const domain = cctpDomainFor(sourceChain);
-  if (domain === undefined) {
-    return { status: "not_found" };
-  }
-  const base = options.baseUrl ?? getIrisBaseUrl(sourceChain);
-  const url = `${base}/v2/messages/${domain}/${burnTxHash}`;
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    signal: options.signal,
-  });
-
-  if (response.status === 404) {
-    return { status: "not_found" };
-  }
-  if (!response.ok) {
-    throw new Error(
-      `Iris responded ${response.status} ${response.statusText} for ${burnTxHash}`,
-    );
-  }
-
-  const data = (await response.json()) as { messages?: unknown[] };
-  const entry = Array.isArray(data.messages) ? data.messages[0] : undefined;
-  if (!entry || typeof entry !== "object") {
-    return { status: "not_found" };
-  }
-  const e = entry as Record<string, unknown>;
-  const status =
-    typeof e.status === "string" ? (e.status as IrisStatus) : "not_found";
-  return {
-    status,
-    message: typeof e.message === "string" ? e.message : undefined,
-    attestation: typeof e.attestation === "string" ? e.attestation : undefined,
-    eventNonce: typeof e.eventNonce === "string" ? e.eventNonce : undefined,
+  const source = getChain(sourceChain);
+  const fetchOpts: Parameters<typeof getMessages>[1] = {
+    network: source.network,
+    ...(options.signal && { signal: options.signal }),
+    ...(options.baseUrl && { baseUrl: options.baseUrl }),
+    ...(options.fetch && { fetch: options.fetch }),
   };
+  const messages = await getMessages(
+    { sourceDomain: source.cctpDomain, transactionHash: burnTxHash },
+    fetchOpts,
+  );
+  const first = messages[0];
+  if (!first) return { status: "not_found" };
+  return toIrisMessage(first);
 }
 
-/** Poll Iris until the attestation is terminal or the timeout elapses. */
+/**
+ * Poll Iris until the attestation reaches a terminal state or the
+ * timeout elapses. Yields intermediate states via `onUpdate` so the UI
+ * can render `pending_confirmations` while it waits.
+ */
 export async function pollAttestation(
   sourceChain: Chain,
   burnTxHash: string,
@@ -107,6 +113,14 @@ export async function pollAttestation(
     }
   }
   return latest;
+}
+
+function toIrisMessage(raw: CctpIrisMessage): IrisMessage {
+  const out: IrisMessage = { status: raw.status };
+  if (raw.message) out.message = raw.message;
+  if (raw.attestation) out.attestation = raw.attestation;
+  if (raw.eventNonce) out.eventNonce = raw.eventNonce;
+  return out;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  UnknownChainError,
+  type IrisMessage as CctpIrisMessage,
+} from "@usewhisk/cctp";
+import type { Chain } from "../types/chain.js";
+import { createFakeIris } from "../test/harness/index.js";
+import {
   IRIS_MAINNET_URL,
   IRIS_SANDBOX_URL,
   fetchAttestationOnce,
@@ -43,12 +49,11 @@ describe("getIrisBaseUrl", () => {
 });
 
 describe("fetchAttestationOnce", () => {
-  it("returns not_found when the source chain has no CCTP domain", async () => {
-    // Monad_Testnet is in the chain registry but has no CCTP domain entry.
+  it("throws for a chain outside the registry without calling Iris", async () => {
     const fetchMock = stubFetch();
-    const msg = await fetchAttestationOnce("Monad_Testnet", "0xburn");
-    expect(msg.status).toBe("not_found");
-    // Iris should never have been called.
+    await expect(
+      fetchAttestationOnce("__unknown__" as Chain, "0xburn"),
+    ).rejects.toBeInstanceOf(UnknownChainError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -85,9 +90,16 @@ describe("fetchAttestationOnce", () => {
   });
 
   it("throws on non-OK non-404 responses", async () => {
-    stubFetch({ ok: false, status: 500, statusText: "Server Error" });
+    // Iris client retries 5xx with backoff before giving up, so the
+    // stub needs to fail every attempt.
+    const failing: FakeResponse = {
+      ok: false,
+      status: 500,
+      statusText: "Server Error",
+    };
+    stubFetch(failing, failing, failing, failing, failing);
     await expect(fetchAttestationOnce("Arc_Testnet", "0xburn")).rejects.toThrow(
-      /500/,
+      /Iris/,
     );
   });
 });
@@ -149,4 +161,32 @@ describe("pollAttestation", () => {
     expect(result.status).toBe("pending_confirmations");
     expect(fetchMock).toHaveBeenCalled();
   });
+});
+
+describe("non-EVM source domains", () => {
+  const COMPLETE: CctpIrisMessage = {
+    message: "0x11",
+    attestation: "0x22",
+    eventNonce: "3",
+    status: "complete",
+    cctpVersion: 2,
+  };
+
+  it.each([
+    ["Stellar", 27],
+    ["Starknet", 25],
+  ] as const)(
+    "asks Iris about a %s burn on domain %i",
+    async (chain, domain) => {
+      const iris = createFakeIris();
+      iris.replyToMessages({ message: COMPLETE });
+      const msg = await fetchAttestationOnce(chain, "0xburn", {
+        fetch: iris.fetch,
+      });
+      expect(msg.status).toBe("complete");
+      expect(iris.requests.map((r) => r.url.pathname)).toEqual([
+        `/v2/messages/${domain}`,
+      ]);
+    },
+  );
 });

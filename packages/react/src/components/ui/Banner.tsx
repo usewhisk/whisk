@@ -1,37 +1,42 @@
 "use client";
 
-import { AlertTriangle, Info } from "lucide-react";
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
+import { cn } from "../../lib/cn.js";
 
-export type BannerProps = {
-  /** Visual tone. */
-  variant?: "warning" | "info";
-  children: ReactNode;
-  /** Optional inline action button. */
-  action?: { label: string; onClick: () => void; disabled?: boolean };
+export type BannerVariant = "info" | "warning" | "error";
+
+export type BannerProps = HTMLAttributes<HTMLDivElement> & {
+  variant?: BannerVariant;
+  /** Optional leading icon — rendered before the text. */
+  icon?: ReactNode;
+  /** Optional trailing action — typically a retry / cancel button. */
+  action?: ReactNode;
 };
 
 /**
- * Inline banner used for chain-mismatch warnings, low-gas warnings, and
- * any other non-blocking advisories the widget surfaces during the
- * compose flow.
+ * Status banner for receipts, results, and inline alerts. Themes via
+ * `whisk-banner--{variant}` so the colour mode tracks the active
+ * theme.
  */
-export function Banner({ variant = "info", children, action }: BannerProps) {
-  const Icon = variant === "warning" ? AlertTriangle : Info;
+export function Banner({
+  variant = "info",
+  icon,
+  action,
+  children,
+  className,
+  role,
+  ...rest
+}: BannerProps) {
+  const resolvedRole = role ?? (variant === "error" ? "alert" : "status");
   return (
-    <div className={`whisk-banner whisk-banner--${variant}`}>
-      <Icon size={13} strokeWidth={2} style={{ flex: "0 0 auto" }} />
-      <span style={{ flex: 1 }}>{children}</span>
-      {action ? (
-        <button
-          type="button"
-          className="whisk-banner__action"
-          onClick={action.onClick}
-          disabled={action.disabled}
-        >
-          {action.label}
-        </button>
-      ) : null}
+    <div
+      className={cn("whisk-banner", `whisk-banner--${variant}`, className)}
+      role={resolvedRole}
+      {...rest}
+    >
+      {icon}
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+      {action}
     </div>
   );
 }

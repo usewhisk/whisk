@@ -52,7 +52,7 @@ import {
 
 export function MyShell() {
   const { state, actions } = useWhisk();
-  const [sourceChain, setSourceChain] = useState<Chain>("Arc_Testnet");
+  const [sourceChain, setSourceChain] = useState<Chain>("Ethereum_Sepolia");
 
   return (
     <Card data-whisk>
@@ -73,7 +73,7 @@ export function MyShell() {
       <ChainPicker
         label="From"
         value={sourceChain}
-        options={["Arc_Testnet", "Base_Sepolia"]}
+        options={["Ethereum_Sepolia", "Base_Sepolia"]}
         onChange={setSourceChain}
       />
 
