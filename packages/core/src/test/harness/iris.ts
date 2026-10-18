@@ -14,6 +14,11 @@ export type FakeIris = {
   /** Queued in order. The last reply repeats once the queue drains. */
   replyToMessages(...replies: IrisReply[]): void;
   replyToReattest(...replies: IrisReply[]): void;
+  /**
+   * What every TokenMessengerV2 answers to `getMinFeeAmount` over JSON-RPC.
+   * Defaults to 0, which is what each chain returns today.
+   */
+  setStandardMinFee(fee: bigint): void;
 };
 
 export const FAST_FEE_ROW = {
@@ -35,6 +40,8 @@ export const STANDARD_FEE_ROW = {
   forwardFee: { low: 100_000, med: 250_000, high: 500_000 },
 };
 
+const GET_MIN_FEE_AMOUNT = "0x516990e3";
+
 const IRIS_HOSTS = new Set([
   "iris-api.circle.com",
   "iris-api-sandbox.circle.com",
@@ -45,6 +52,7 @@ export function createFakeIris(): FakeIris {
   const fees = new Map<string, unknown>();
   const messageReplies: IrisReply[] = [];
   const reattestReplies: IrisReply[] = [];
+  let standardMinFee = 0n;
 
   function next(queue: IrisReply[]): IrisReply | undefined {
     return queue.length > 1 ? queue.shift() : queue[0];
@@ -62,6 +70,24 @@ export function createFakeIris(): FakeIris {
     );
     const method = (init?.method ?? "GET").toUpperCase();
     requests.push({ method, url });
+
+    if (method === "POST" && typeof init?.body === "string") {
+      const rpc = JSON.parse(init.body) as {
+        id?: number;
+        method?: string;
+        params?: [{ data?: string }];
+      };
+      if (
+        rpc.method === "eth_call" &&
+        rpc.params?.[0]?.data?.startsWith(GET_MIN_FEE_AMOUNT)
+      ) {
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: `0x${standardMinFee.toString(16).padStart(64, "0")}`,
+        });
+      }
+    }
 
     // 400 rather than 5xx so the Iris client fails at once instead of retrying.
     if (!IRIS_HOSTS.has(url.host)) {
@@ -92,6 +118,9 @@ export function createFakeIris(): FakeIris {
   return {
     fetch: fakeFetch,
     requests,
+    setStandardMinFee(fee) {
+      standardMinFee = fee;
+    },
     setFees(sourceDomain, destinationDomain, rows) {
       fees.set(`${sourceDomain}:${destinationDomain}`, rows);
     },
