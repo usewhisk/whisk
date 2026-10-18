@@ -226,3 +226,22 @@ describe("standard fee switch", () => {
     expect([...flagged].sort()).toEqual([...SWITCHED].sort());
   });
 });
+
+describe("TokenMessengerWithFees", () => {
+  it("is set exactly on EVM chains that take upfront fees, at Circle's address", () => {
+    for (const chain of ALL) {
+      const address = isEvmChain(chain)
+        ? chain.tokenMessengerWithFees
+        : undefined;
+      if (!chain.capabilities.upfrontFeeSource) {
+        expect(address, chain.id).toBeUndefined();
+        continue;
+      }
+      expect(address, chain.id).toBe(
+        chain.network === "mainnet"
+          ? "0x71f54F818671cD0D7ea140Da213e5C8b5C92a408"
+          : "0x8745D906D67C346E5eb1aEEED38Eb87F34DF0C0A",
+      );
+    }
+  });
+});

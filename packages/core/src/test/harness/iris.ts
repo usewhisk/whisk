@@ -1,3 +1,4 @@
+import { encodeAbiParameters } from "viem";
 import type { BurnFeeTier, IrisMessage } from "@usewhisk/cctp";
 
 export type IrisRequest = {
@@ -6,6 +7,25 @@ export type IrisRequest = {
 };
 
 export type IrisReply = { message: IrisMessage } | { status: number };
+
+/**
+ * A signed-quote reply. By default the fee is Iris's rate on the amount
+ * (1.3 bps for `PRE_FINALITY`, `med` for `FORWARD`) and the quote lasts 60
+ * blocks past the current one.
+ */
+export type QuoteReply =
+  | { fee?: bigint; expiresAtBlock?: number }
+  | { status: number; errorCode: string };
+
+export type QuoteRequest = {
+  sourceDomain: number;
+  destinationDomain: number;
+  body: {
+    amount: string;
+    feeToken?: string;
+    requests: { type: string }[];
+  };
+};
 
 export type FakeIris = {
   fetch: typeof fetch;
@@ -19,7 +39,26 @@ export type FakeIris = {
    * Defaults to 0, which is what each chain returns today.
    */
   setStandardMinFee(fee: bigint): void;
+  readonly quoteRequests: readonly QuoteRequest[];
+  /** Queued in order. The last reply repeats once the queue drains. */
+  replyToQuote(...replies: QuoteReply[]): void;
+  /** Circle's remaining Fast allowance, in USDC subunits. */
+  setFastAllowance(subunits: bigint): void;
+  /** What every chain answers to `eth_blockNumber`. Defaults to 100. */
+  setBlockNumber(block: number): void;
 };
+
+/**
+ * The fake's `signedQuote`: a version byte, then the fee and amount, so the
+ * fake wallet can charge what was quoted.
+ */
+export function fakeSignedQuote(fee: bigint, amount: bigint): `0x${string}` {
+  const encoded = encodeAbiParameters(
+    [{ type: "uint256" }, { type: "uint256" }],
+    [fee, amount],
+  );
+  return `0x01${encoded.slice(2)}`;
+}
 
 export const FAST_FEE_ROW = {
   finalityThreshold: 1000,
@@ -53,6 +92,10 @@ export function createFakeIris(): FakeIris {
   const messageReplies: IrisReply[] = [];
   const reattestReplies: IrisReply[] = [];
   let standardMinFee = 0n;
+  const quoteRequests: QuoteRequest[] = [];
+  const quoteReplies: QuoteReply[] = [];
+  let fastAllowance = 10n ** 15n;
+  let blockNumber = 100;
 
   function next(queue: IrisReply[]): IrisReply | undefined {
     return queue.length > 1 ? queue.shift() : queue[0];
@@ -77,6 +120,13 @@ export function createFakeIris(): FakeIris {
         method?: string;
         params?: [{ data?: string }];
       };
+      if (rpc.method === "eth_blockNumber") {
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: `0x${blockNumber.toString(16)}`,
+        });
+      }
       if (
         rpc.method === "eth_call" &&
         rpc.params?.[0]?.data?.startsWith(GET_MIN_FEE_AMOUNT)
@@ -104,6 +154,60 @@ export function createFakeIris(): FakeIris {
       ];
       return json(200, rows);
     }
+    const quotePath = url.pathname.match(
+      /^\/v2\/quote\/burn\/usdc\/(\d+)\/(\d+)$/,
+    );
+    if (quotePath && method === "POST") {
+      const body = JSON.parse(String(init?.body)) as QuoteRequest["body"];
+      quoteRequests.push({
+        sourceDomain: Number(quotePath[1]),
+        destinationDomain: Number(quotePath[2]),
+        body,
+      });
+      const r =
+        quoteReplies.length > 1 ? quoteReplies.shift() : quoteReplies[0];
+      if (r && "status" in r) {
+        return json(r.status, { errorCode: r.errorCode, error: r.errorCode });
+      }
+      const amount = BigInt(body.amount);
+      const items = body.requests.map(({ type }) => ({
+        type,
+        amount:
+          type === "PRE_FINALITY"
+            ? (amount * 130n + 999_999n) / 1_000_000n
+            : 250_000n,
+        args: [],
+        argsHash: `0x${"00".repeat(32)}`,
+      }));
+      const fee = r?.fee ?? items.reduce((sum, i) => sum + i.amount, 0n);
+      // An override puts the whole fee on the first item so they still add up.
+      if (r?.fee !== undefined) {
+        items.forEach((item, i) => (item.amount = i === 0 ? fee : 0n));
+      }
+      return json(200, {
+        signedQuote: fakeSignedQuote(fee, amount),
+        issuedAt: 1_783_407_750,
+        expiry: {
+          mode: "BLOCK_NUMBER",
+          expiresAtBlock: r?.expiresAtBlock ?? blockNumber + 60,
+          blockEstimatedAt: 1_783_407_870,
+        },
+        feeTotalAmount: fee.toString(),
+        burnAmount: body.amount,
+        feeToken: body.feeToken,
+        items: items.map((i) => ({ ...i, amount: i.amount.toString() })),
+        nonce: "0",
+      });
+    }
+    if (url.pathname === "/v2/fastBurn/USDC/allowance" && method === "GET") {
+      const whole = fastAllowance / 1_000_000n;
+      const frac = (fastAllowance % 1_000_000n).toString().padStart(6, "0");
+      // Iris sends the allowance as a JSON number of whole USDC.
+      return new Response(
+        `{"allowance":${whole}.${frac},"lastUpdated":"2026-10-18T14:03:27.355Z"}`,
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
     if (/^\/v2\/messages\/\d+$/.test(url.pathname) && method === "GET") {
       return reply(next(messageReplies));
     }
@@ -120,6 +224,16 @@ export function createFakeIris(): FakeIris {
     requests,
     setStandardMinFee(fee) {
       standardMinFee = fee;
+    },
+    quoteRequests,
+    replyToQuote(...replies) {
+      quoteReplies.splice(0, quoteReplies.length, ...replies);
+    },
+    setFastAllowance(subunits) {
+      fastAllowance = subunits;
+    },
+    setBlockNumber(block) {
+      blockNumber = block;
     },
     setFees(sourceDomain, destinationDomain, rows) {
       fees.set(`${sourceDomain}:${destinationDomain}`, rows);
