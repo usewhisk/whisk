@@ -48,7 +48,7 @@ export type BuildBridgeQuoteInput = {
   feeBearer: FeeBearer;
   /** Defaults to `"med"`. */
   forwarderLevel?: keyof ForwarderFeeTier;
-  /** Default `true` — Whisk uses the Forwarder by default. */
+  /** Whether the plan has Circle forward the mint. Default `true`. */
   useForwarder?: boolean;
   /** Pre-fetched tier; supply to skip the Iris call. */
   tier?: BurnFeeTier;
@@ -86,23 +86,7 @@ export async function buildBridgeQuote(
       "buildBridgeQuote: source and destination chains are identical — use a same-chain Send.",
     );
   }
-  if (!input.source.capabilities.fastSource) {
-    throw new ConfigError(
-      `Chain "${input.source.id}" does not support Fast Transfer. Bridges from this chain are not available in this build.`,
-    );
-  }
-
-  // Iris's auto-relayer ("Forwarding Service") only relays to a subset
-  // of destination chains — Stellar and Starknet aren't included. For
-  // those destinations the engine queries Iris fees WITHOUT
-  // `?forward=true` and skips the forwarder-fee component of maxFee
-  // (the on-chain manual receive_message pays its own gas).
-  const destSkipsIrisForwarder =
-    input.destination.ecosystem === "stellar" ||
-    input.destination.ecosystem === "starknet";
-  const useForwarder = destSkipsIrisForwarder
-    ? false
-    : (input.useForwarder ?? true);
+  const useForwarder = input.useForwarder ?? true;
   const forwarderLevel = input.forwarderLevel ?? "med";
   const amount = parseUsdcAmount(input.amount);
   const token = input.token ?? DEFAULT_TOKEN;
@@ -115,7 +99,7 @@ export async function buildBridgeQuote(
         input.source.cctpDomain,
         input.destination.cctpDomain,
         {
-          includeForwarderFee: !destSkipsIrisForwarder,
+          includeForwarderFee: useForwarder,
           ...(input.fetch && { fetch: input.fetch }),
         },
       ),

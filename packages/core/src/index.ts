@@ -109,7 +109,6 @@ export type {
   Step,
   Quote,
   WhiskConfig,
-  WhiskMode,
   Resolver,
   ResolverContext,
   WhiskState,
@@ -139,6 +138,8 @@ export {
   WalletCapabilityError,
   OnchainRevertError,
   ConfigError,
+  NetworkMismatchError,
+  RouteUnavailableError,
   toWhiskError,
   cleanErrorMessage,
 } from "./errors/index.js";
@@ -146,6 +147,7 @@ export type {
   WhiskErrorCode,
   WhiskErrorCategory,
   WhiskErrorOptions,
+  RouteUnavailableReason,
 } from "./errors/index.js";
 
 /* --------------------------------------------------------------------- *
@@ -166,9 +168,12 @@ export {
 } from "./chains/index.js";
 export type { AddressFormat } from "./chains/index.js";
 export type { CctpChain } from "@usewhisk/cctp";
-export { inferMode, resolveMode } from "./chains/mode.js";
-
-export { decideRoute } from "./routing/index.js";
+export {
+  connectedEcosystems,
+  decideRoute,
+  planRoute,
+} from "./routing/index.js";
+export type { PlanRouteInput, RouteMint, RoutePlan } from "./routing/index.js";
 
 export { addressResolver, composeResolvers } from "./resolvers/index.js";
 

@@ -9,10 +9,6 @@ export type {
   WhiskClientConfig,
 } from "./types.js";
 
-// Re-export `WhiskMode` from core so consumers can type-annotate their
-// own `mode: WhiskMode` props without importing core directly.
-export type { WhiskMode } from "@usewhisk/core";
-
 export { evm } from "./adapters/evm.js";
 export type { EvmFactoryOptions } from "./adapters/evm.js";
 

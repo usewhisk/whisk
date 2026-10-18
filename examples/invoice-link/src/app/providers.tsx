@@ -20,7 +20,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const config = useMemo(
     () =>
       createWhiskConfig({
-        mode: "testnet",
         // Payer covers the bridge fees so the freelancer receives the exact
         // invoiced amount.
         feeBearer: "sender",

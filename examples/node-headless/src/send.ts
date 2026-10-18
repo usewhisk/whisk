@@ -19,7 +19,6 @@ const AMOUNT = process.env.AMOUNT ?? "1.00";
 
 const engine = createWhisk({
   chains: ["Base_Sepolia", "Ethereum_Sepolia"],
-  mode: "testnet",
 });
 
 const adapter = createEvmAdapter({

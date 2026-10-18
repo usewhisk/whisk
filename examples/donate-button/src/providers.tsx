@@ -6,15 +6,13 @@ import { WhiskProvider, createWhiskConfig, evm, solana } from "@usewhisk/react";
  * is pinned to Arc Testnet in <DonateCard>; sources include both EVM testnets
  * and Solana Devnet — CCTP bridges Solana → EVM cross-ecosystem.
  *
- * For production you'd narrow the chain list to whichever networks your
- * treasury actually monitors, and switch `mode: "mainnet"` once Whisk lifts
- * the testnet-only gate.
+ * For production you'd list the mainnet chains your treasury monitors. The
+ * network of each transfer comes from its source chain.
  */
 export function Providers({ children }: { children: ReactNode }) {
   const config = useMemo(
     () =>
       createWhiskConfig({
-        mode: "testnet",
         // Donor covers the bridge fees so the treasury receives the full tier
         // amount (a $25 donation lands as $25, not $25 minus fees).
         feeBearer: "sender",

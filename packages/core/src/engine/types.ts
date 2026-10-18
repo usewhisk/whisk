@@ -37,20 +37,18 @@ export type QuoteParams = {
   /** Human-readable amount (e.g. `"1.50"`). */
   amount: string;
   adapter: WhiskAdapter;
+  /**
+   * The wallet that signs the mint when Circle does not forward it. The
+   * route plan says when one is needed; for an EVM to EVM mint the source
+   * wallet signs it.
+   */
+  destinationAdapter?: WhiskAdapter;
   /** Bridges always use USDC regardless (CCTP V2 is USDC-only). */
   token?: Token;
 };
 
 export type SendParams = QuoteParams & {
   quote: Quote;
-  /**
-   * Destination-chain adapter — required only for cross-ecosystem
-   * bridges that don't go through Circle's Forwarder (EVM → Solana is
-   * the only such route in v1). For EVM → EVM and Solana → EVM
-   * (Forwarder-relayed) the destination is handled without a second
-   * signature.
-   */
-  destinationAdapter?: WhiskAdapter;
   /**
    * Optional correlation metadata. Merged with `WhiskConfig.defaultMetadata`
    * (per-call keys override defaults). Echoed in `SendResult.metadata`.

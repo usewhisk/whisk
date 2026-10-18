@@ -28,8 +28,8 @@ import type { Quote } from "../types/quote.js";
 import type { Chain } from "../types/chain.js";
 import { ConfigError } from "../errors/errors.js";
 import { addressResolver } from "../resolvers/address.js";
-import { resolveMode } from "../chains/mode.js";
 import { decideRoute } from "../routing/decide.js";
+import { connectedEcosystems, planRoute } from "../routing/plan.js";
 import { mergeMetadata, validateMetadata } from "../metadata/validate.js";
 import type { WhiskMetadata } from "../metadata/types.js";
 import { isBridgeRoute, isSendRoute } from "../types/route.js";
@@ -84,10 +84,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     validateMetadata(config.defaultMetadata);
   }
 
-  const resolvedMode = resolveMode(config.mode, config.chains);
   const resolvedConfig: WhiskConfig = {
     ...config,
-    mode: resolvedMode,
     feeBearer: config.feeBearer ?? DEFAULT_FEE_BEARER,
     useForwarder: config.useForwarder ?? true,
   };
@@ -249,36 +247,14 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     }
 
     if (isBridgeRoute(route)) {
-      const source = getChain(route.sourceChain);
-      const destination = getChain(route.destinationChain);
-      const network = resolvedConfig.mode ?? source.network;
-
-      // Same-cluster Solana "bridge" is a logical impossibility — both
-      // clusters share CCTP domain 5, so `decideRoute` should've picked
-      // `send`. If we reach here with Solana → Solana, it's a misuse.
-      if (source.ecosystem === "solana" && destination.ecosystem === "solana") {
-        throw new ConfigError(
-          "Solana mainnet and Devnet share a CCTP domain — bridges between Solana clusters are not a thing.",
-        );
-      }
-      // Same logic applies to Stellar (both networks share domain 27).
-      if (
-        source.ecosystem === "stellar" &&
-        destination.ecosystem === "stellar"
-      ) {
-        throw new ConfigError(
-          "Stellar mainnet and Testnet share a CCTP domain — bridges between Stellar networks are not a thing.",
-        );
-      }
-      // Starknet — same story (both networks share domain 25).
-      if (
-        source.ecosystem === "starknet" &&
-        destination.ecosystem === "starknet"
-      ) {
-        throw new ConfigError(
-          "Starknet mainnet and Sepolia share a CCTP domain — bridges between Starknet networks are not a thing.",
-        );
-      }
+      const plan = planRoute({
+        source: route.sourceChain,
+        destination: route.destinationChain,
+        connected: connectedEcosystems(input.adapter, input.destinationAdapter),
+        useForwarder,
+      });
+      const { source, destination, network } = plan;
+      const forwarded = plan.mint.kind === "forwarder";
 
       const bridge = await buildBridgeQuote({
         network,
@@ -289,7 +265,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         recipient: input.recipient,
         amount: input.amount,
         feeBearer,
-        useForwarder,
+        useForwarder: forwarded,
         ...(resolvedConfig.feePolicy && {
           customFee: resolvedConfig.feePolicy,
         }),
@@ -314,7 +290,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             burnFee: bridge.burnFee,
             forwarderFee: bridge.forwarderFee,
             tier: bridge.tier,
-            useForwarder,
+            useForwarder: forwarded,
             sourceAdapter: evmAdapter,
             ...(customFee && { customFeeCalls: customFee.calls }),
           },
@@ -322,11 +298,15 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Solana → EVM (Forwarder relays the mint) ------------------------
+      // --- Solana → EVM (Forwarder relays the mint, or the EVM wallet mints) -
       if (source.ecosystem === "solana" && destination.ecosystem === "evm") {
         const solSource = source as SolanaChain;
         const evmDestination = destination as EvmChain;
         const solanaAdapter = expectSolanaAdapter(input.adapter, solSource);
+        const destAdapter =
+          !forwarded && input.destinationAdapter
+            ? expectEvmAdapter(input.destinationAdapter, evmDestination)
+            : undefined;
         return executeSolanaToEvm(
           {
             network,
@@ -339,8 +319,9 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             burnFee: bridge.burnFee,
             forwarderFee: bridge.forwarderFee,
             tier: bridge.tier,
-            useForwarder,
+            useForwarder: forwarded,
             sourceAdapter: solanaAdapter,
+            ...(destAdapter && { destinationAdapter: destAdapter }),
           },
           listeners,
         );

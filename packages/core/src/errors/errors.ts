@@ -12,6 +12,8 @@ export type WhiskErrorCode =
   | "WALLET_CAPABILITY"
   | "ONCHAIN_REVERT"
   | "CONFIG_ERROR"
+  | "NETWORK_MISMATCH"
+  | "ROUTE_UNAVAILABLE"
   | "UNKNOWN";
 
 /** Mirrored from App Kit's `BridgeStepErrorCategory` (App Kit 1.4.2+). */
@@ -220,6 +222,37 @@ export class ConfigError extends WhiskError {
       cause,
     });
     this.name = "ConfigError";
+  }
+}
+
+export class NetworkMismatchError extends WhiskError {
+  constructor(
+    public readonly source: string,
+    public readonly destination: string,
+  ) {
+    super({
+      code: "NETWORK_MISMATCH",
+      message: `${source} and ${destination} are on different networks. Pick a mainnet chain for both, or a testnet chain for both.`,
+      retryable: false,
+    });
+    this.name = "NetworkMismatchError";
+  }
+}
+
+export type RouteUnavailableReason =
+  | "same_chain"
+  | "standard_only_source"
+  | "source_adapter_required"
+  | "destination_adapter_required";
+
+export class RouteUnavailableError extends WhiskError {
+  constructor(
+    public readonly reason: RouteUnavailableReason,
+    message: string,
+    public readonly ecosystem?: string,
+  ) {
+    super({ code: "ROUTE_UNAVAILABLE", message, retryable: false });
+    this.name = "RouteUnavailableError";
   }
 }
 

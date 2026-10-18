@@ -54,6 +54,25 @@ Technical shape, per
   are summed in bigints.
 - A test fails the build if `parseFloat`, `Number(`, `toFixed(` or `Math.ceil`,
   `floor` or `round` appears in a `fees`, `engine` or `quote` source path.
+- A transfer's network comes from its source chain. `mode` is gone from
+  `createWhisk` and `createWhiskConfig`, along with `inferMode`, `resolveMode` and
+  `WhiskMode`, so a config may list mainnet and testnet chains together. A source and
+  destination on different networks throw `NetworkMismatchError` before Iris is
+  called, and the widget offers only destinations on the source chain's network.
+- `planRoute` decides each bridge before anything is signed: its network, whether
+  Circle forwards the mint or a connected wallet signs it, and which wallets that
+  needs. `quote` and `send` both go through it. A missing wallet throws
+  `RouteUnavailableError` with `reason: "destination_adapter_required"` and the
+  ecosystem to connect. `QuoteParams` takes `destinationAdapter`, so a quote can
+  check it too.
+- Circle forwards only to EVM chains flagged `forwardingDestination`, and only for
+  burns from EVM and Solana. Elsewhere the mint is signed by a wallet. Before, a
+  transfer to Morph, Injective, Pharos, Cronos, Plasma or X Layer was burned with
+  forwarding hook data that Circle ignores, and stalled until someone minted it.
+- Solana to EVM with forwarding off mints with the connected EVM wallet. Before, it
+  burned and then failed.
+- The default resolver picks Sepolia or mainnet ENS from the destination chain's
+  network.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 

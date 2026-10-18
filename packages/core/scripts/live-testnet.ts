@@ -1206,7 +1206,6 @@ async function sweepEdges(
     } else {
       const receiverEngine = createWhisk({
         chains: LIVE_CHAINS,
-        mode: "testnet",
         feeBearer: "receiver",
       });
       const q = await receiverEngine.quote({
@@ -1235,7 +1234,6 @@ async function sweepEdges(
     } else {
       const feeEngine = createWhisk({
         chains: LIVE_CHAINS,
-        mode: "testnet",
         feeBearer: "sender",
         feePolicy: { value: "1", recipient: account.address },
       });
@@ -1828,7 +1826,6 @@ async function main() {
 
   const engine = createWhisk({
     chains: LIVE_CHAINS,
-    mode: "testnet",
     feeBearer: "sender",
     useForwarder: true,
   });

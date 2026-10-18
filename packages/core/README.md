@@ -20,7 +20,6 @@ the CCTP V2 protocol layer.
 ```ts
 const engine = createWhisk({
   chains: ["Base_Sepolia", "Ethereum_Sepolia"],
-  mode: "testnet",
 });
 const recipient = await engine.resolve("alice.eth", "Ethereum_Sepolia");
 const quote = await engine.quote({ ..., recipient, amount: "10" });

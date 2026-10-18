@@ -4,7 +4,6 @@ import type {
   FeeBearer,
   Resolver,
   Token,
-  WhiskMode,
 } from "@usewhisk/core";
 
 export type WalletAdapterFactory =
@@ -48,8 +47,6 @@ export type WhiskClientConfig = {
   feeBearer?: FeeBearer;
   rpcUrls?: Partial<Record<Chain, string | string[]>>;
   useForwarder?: boolean;
-  /** Inferred from `chains` when omitted. */
-  mode?: WhiskMode;
   appLabel?: string;
 };
 

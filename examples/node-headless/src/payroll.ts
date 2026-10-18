@@ -32,7 +32,6 @@ const payees: Array<{ id: string; address: string; amount: string }> = [
 async function main() {
   const engine = createWhisk({
     chains: ["Base_Sepolia", "Ethereum_Sepolia"],
-    mode: "testnet",
   });
 
   // One adapter per source chain — in a real payroll batch you'd pick

@@ -17,6 +17,7 @@ import type { Quote } from "../types/quote.js";
 import type { QuoteParams } from "./types.js";
 import type { WhiskConfig } from "../types/config.js";
 import { decideRoute } from "../routing/decide.js";
+import { connectedEcosystems, planRoute } from "../routing/plan.js";
 import { InvalidAddressError } from "../errors/errors.js";
 import { buildCustomFeeEntries, sumFees } from "../fees/calculate.js";
 import { formatUsdcAmount, parseUsdcAmount } from "./amount.js";
@@ -30,7 +31,7 @@ import {
 const SEND_DURATION_MS = 15_000;
 
 export type BuildQuoteOptions = {
-  /** Resolved Whisk config (mode is already inferred). */
+  /** Resolved Whisk config. */
   config: WhiskConfig;
   /** Forwarder fee level to apply on bridge quotes. Defaults to `"med"`. */
   forwarderLevel?: keyof ForwarderFeeTier;
@@ -97,19 +98,23 @@ export async function buildQuote(
     return { quote };
   }
 
-  const source = getChain(params.sourceChain);
-  const network = options.config.mode ?? source.network;
+  const plan = planRoute({
+    source: params.sourceChain,
+    destination: params.destinationChain,
+    connected: connectedEcosystems(params.adapter, params.destinationAdapter),
+    useForwarder: options.config.useForwarder ?? true,
+  });
 
   const result = await buildBridgeQuote({
-    network,
-    source,
-    destination,
+    network: plan.network,
+    source: plan.source,
+    destination: plan.destination,
     sourceChain: params.sourceChain,
     destinationChain: params.destinationChain,
     recipient: params.recipient,
     amount: params.amount,
     feeBearer: options.config.feeBearer ?? DEFAULT_FEE_BEARER,
-    useForwarder: options.config.useForwarder ?? true,
+    useForwarder: plan.mint.kind === "forwarder",
     ...(options.forwarderLevel !== undefined && {
       forwarderLevel: options.forwarderLevel,
     }),

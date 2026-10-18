@@ -13,7 +13,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const config = useMemo(
     () =>
       createWhiskConfig({
-        mode: "testnet",
         // Customer covers the bridge fees so the merchant receives the exact
         // cart total. Otherwise fees would be deducted from the price.
         feeBearer: "sender",

@@ -18,6 +18,6 @@ export type {
 export { DEFAULT_FEE_BEARER } from "./fee.js";
 export type { StepName, StepState, Step } from "./step.js";
 export type { Quote } from "./quote.js";
-export type { WhiskConfig, WhiskMode } from "./config.js";
+export type { WhiskConfig } from "./config.js";
 export type { Resolver, ResolverContext } from "./resolver.js";
 export type { WhiskState, WhiskStateKind } from "./state.js";
