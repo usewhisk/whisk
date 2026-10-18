@@ -11,7 +11,9 @@ import {
   CCTP_FORWARD_HOOK_DATA,
   ANY_DESTINATION_CALLER,
 } from "../forwarder/index.js";
-import { FINALITY_FAST } from "../iris/index.js";
+import { FINALITY_FAST, FINALITY_STANDARD } from "../iris/index.js";
+import { decodeFunctionData } from "viem";
+import { tokenMessengerV2Abi } from "../abi/tokenMessengerV2.js";
 import type { BurnFeeTier } from "../iris/types.js";
 import {
   InvalidInputError,
@@ -26,7 +28,18 @@ const FAST_TIER: BurnFeeTier = {
   forwardFee: { low: 206_035n, med: 207_543n, high: 209_052n },
 };
 
+const STANDARD_TIER: BurnFeeTier = {
+  finalityThreshold: 2000,
+  minimumFee: 0n,
+  forwardFee: { low: 206_035n, med: 207_543n, high: 209_052n },
+};
+
 const RECIPIENT = "0x000000000000000000000000000000000000Beef";
+
+function burnArgs(data: `0x${string}` | undefined): readonly unknown[] {
+  if (!data) throw new Error("no burn call");
+  return decodeFunctionData({ abi: tokenMessengerV2Abi, data }).args ?? [];
+}
 
 describe("buildBurnIntent — happy path", () => {
   it("produces approve + burn calls by default", () => {
@@ -123,8 +136,8 @@ describe("buildBurnIntent — happy path", () => {
   });
 });
 
-describe("buildBurnIntent — Fast-only policy", () => {
-  it("always emits Fast Transfer (1000) on the burn", () => {
+describe("buildBurnIntent finality", () => {
+  it("burns a Fast tier with threshold 1000", () => {
     const intent = buildBurnIntent({
       source: Base,
       destination: Arbitrum,
@@ -133,22 +146,34 @@ describe("buildBurnIntent — Fast-only policy", () => {
       fee: { tier: FAST_TIER },
     });
     expect(intent.finalityThreshold).toBe(FINALITY_FAST);
+    expect(burnArgs(intent.calls[1]?.data)[6]).toBe(FINALITY_FAST);
   });
 
-  it("rejects a source chain that doesn't support Fast Transfer", () => {
-    const noFastChain = {
-      ...Avalanche,
-      capabilities: { ...Avalanche.capabilities, fastSource: false },
-    };
+  it("burns a Standard tier with threshold 2000 from a chain with no Fast", () => {
+    const intent = buildBurnIntent({
+      source: Avalanche,
+      destination: Arbitrum,
+      amount: 1_000_000n,
+      mintRecipient: RECIPIENT,
+      fee: { tier: STANDARD_TIER },
+    });
+    expect(intent.finalityThreshold).toBe(FINALITY_STANDARD);
+    const args = burnArgs(intent.calls[1]?.data);
+    expect(args[6]).toBe(FINALITY_STANDARD);
+    expect(args[5]).toBe(intent.maxFee);
+    expect(intent.burnFee).toBe(0n);
+  });
+
+  it("refuses a Fast tier on a chain with no Fast", () => {
     expect(() =>
       buildBurnIntent({
-        source: noFastChain,
+        source: Avalanche,
         destination: Arbitrum,
         amount: 1_000_000n,
         mintRecipient: RECIPIENT,
         fee: { tier: FAST_TIER },
       }),
-    ).toThrow(/Fast Transfer/);
+    ).toThrow(ProtocolError);
   });
 });
 

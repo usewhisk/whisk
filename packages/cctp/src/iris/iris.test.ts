@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IrisHttpError, IrisParseError } from "../errors.js";
+import { IrisHttpError, IrisParseError, ProtocolError } from "../errors.js";
 import {
   FINALITY_FAST,
+  FINALITY_STANDARD,
   IRIS_MAINNET_URL,
   IRIS_SANDBOX_URL,
   getBurnFees,
@@ -85,7 +86,7 @@ describe("getBurnFees", () => {
     expect(calledUrl).toContain(IRIS_MAINNET_URL);
   });
 
-  it("filters out non-Fast rows so Standard tiers never leak through", async () => {
+  it("keeps the Fast and Standard rows and picks one by speed", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
         {
@@ -101,9 +102,24 @@ describe("getBurnFees", () => {
       ]),
     );
     const tiers = await getBurnFees("testnet", 0, 3);
-    expect(tiers).toHaveLength(1);
-    expect(tiers[0]?.finalityThreshold).toBe(FINALITY_FAST);
-    expect(pickFeeTier(tiers).minimumFee).toBe(100n);
+    expect(tiers.map((t) => t.finalityThreshold)).toEqual([
+      FINALITY_FAST,
+      FINALITY_STANDARD,
+    ]);
+    expect(pickFeeTier(tiers, "fast").minimumFee).toBe(100n);
+    expect(pickFeeTier(tiers, "standard")).toEqual({
+      finalityThreshold: FINALITY_STANDARD,
+      minimumFee: 0n,
+      forwardFee: { low: 100n, med: 150n, high: 200n },
+    });
+  });
+
+  it("throws when Iris has no row for the requested speed", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([{ finalityThreshold: 2000, minimumFee: 0 }]),
+    );
+    const tiers = await getBurnFees("testnet", 26, 6);
+    expect(() => pickFeeTier(tiers, "fast")).toThrow(ProtocolError);
   });
 
   it("retries on 5xx then succeeds", async () => {

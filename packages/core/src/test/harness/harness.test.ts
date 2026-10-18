@@ -27,12 +27,12 @@ describe("fake iris", () => {
   it("serves the fast and standard fee rows unless a pair is overridden", async () => {
     const iris = createFakeIris();
     const tiers = await getBurnFees("mainnet", 6, 3, { fetch: iris.fetch });
-    expect(tiers.map((t) => t.finalityThreshold)).toEqual([1000]);
+    expect(tiers.map((t) => t.finalityThreshold)).toEqual([1000, 2000]);
 
     iris.setFees(6, 3, [{ finalityThreshold: 2000, minimumFee: 0 }]);
-    expect(await getBurnFees("mainnet", 6, 3, { fetch: iris.fetch })).toEqual(
-      [],
-    );
+    expect(await getBurnFees("mainnet", 6, 3, { fetch: iris.fetch })).toEqual([
+      { finalityThreshold: 2000, minimumFee: 0n },
+    ]);
   });
 
   it("answers 404 until a message is queued, then repeats the last reply", async () => {
