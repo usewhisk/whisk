@@ -107,6 +107,25 @@ Technical shape, per
   `getMinFeeAmount` (14 mainnets and their testnets, plus Sonic Testnet). A
   Standard quote from those chains reads it with `getStandardMinFee` and never
   charges less. `check:registry` checks the flag nightly.
+- On the 18 chains with Circle's `TokenMessengerWithFees`, a transfer whose sender
+  pays the fees pays them upfront from Circle's signed quote, and the recipient
+  gets exactly the amount sent. The quote's `feeMode` is `upfront`.
+  - The quote shows the most the fee can be: the Fast fee plus 10% and the
+    forwarding fee at the configured level.
+  - At send time the engine fetches Circle's signed quote, priced in USDC. If
+    the signed fee is above the shown fee, `send` throws `QuoteChangedError`.
+    An expired signed quote is fetched once more before `QuoteExpiredError`.
+  - The burn is `depositForBurnWithFees`, approved for the amount plus the
+    shown fee.
+  - Receiver-pays transfers, Stellar destinations, and Standard burns that owe
+    an on-chain minimum stay on `maxFee`.
+- `@usewhisk/cctp` adds:
+  - `getSignedBurnQuote`, `getFastBurnAllowance` and `getBlockNumber`;
+  - `buildBurnWithFeesIntent` and `tokenMessengerWithFeesAbi`;
+  - `tokenMessengerWithFees` on each `upfrontFeeSource` registry entry, which
+    `check:registry` reads back nightly.
+- A Fast route whose amount exceeds Circle's remaining Fast allowance is
+  planned as Standard, with the Standard ETA, at quote time and again at send.
 - The default resolver picks Sepolia or mainnet ENS from the destination chain's
   network.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

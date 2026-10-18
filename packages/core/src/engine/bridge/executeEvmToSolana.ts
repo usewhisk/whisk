@@ -24,8 +24,8 @@
  *   - The recipient's ATA is created idempotently in the same tx as
  *     receive_message; no separate signature needed.
  */
+import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
 import {
-  buildBurnIntent,
   buildSolanaReceiveIntent,
   parseTokenMessengerFeeRecipient,
   pollMessages,
@@ -67,6 +67,8 @@ export type ExecuteEvmToSolanaInput = {
   useForwarder?: false;
   customFeeCalls?: EvmCall[];
   sourceAdapter: EvmAdapter;
+  /** Set when the fees are paid upfront from Circle's signed quote. */
+  upfront?: UpfrontFee;
   /** REQUIRED — signs the Solana `receive_message`. */
   destinationAdapter: SolanaAdapter;
   pollIntervalMs?: number;
@@ -131,20 +133,19 @@ export async function executeEvmToSolana(
   // mintRecipient = recipient's USDC ATA on Solana (32-byte pubkey).
   let burnCalls: EvmCall[];
   try {
-    const intent = buildBurnIntent({
-      source: input.source,
-      destination: input.destination,
-      amount: input.burnAmount,
-      mintRecipient: recipientUsdcAta.toBase58(),
-      fee: { tier: input.tier, maxFee: input.maxFee },
-      // Hard-disable Forwarder — Solana has no Forwarder contract.
-      withForwarder: false,
-    });
-    burnCalls = intent.calls.map((c) => ({
-      to: c.to,
-      data: c.data,
-      value: c.value,
-    }));
+    burnCalls = evmBurnCalls(
+      {
+        source: input.source,
+        destination: input.destination,
+        amount: input.burnAmount,
+        mintRecipient: recipientUsdcAta.toBase58(),
+        fee: { tier: input.tier, maxFee: input.maxFee },
+        // Solana has no Forwarding Service, so the burn never carries its hook.
+        withForwarder: false,
+      },
+      input.upfront,
+      input.sourceAdapter.address,
+    );
   } catch (cause) {
     return fail(
       steps,

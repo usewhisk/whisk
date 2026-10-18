@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Base, Arbitrum, type BurnFeeTier } from "@usewhisk/cctp";
+import { Base, Arbitrum, Edge, type BurnFeeTier } from "@usewhisk/cctp";
 import { buildBridgeQuote } from "./quote.js";
 import { ConfigError } from "../../errors/errors.js";
 import { planRoute } from "../../routing/plan.js";
@@ -37,6 +37,31 @@ describe("buildBridgeQuote", () => {
   });
 
   it("sender mode: recipient nets the requested amount", async () => {
+    // EDGE has no TokenMessengerWithFees, so the burn carries the fees.
+    const result = await buildBridgeQuote({
+      network: "mainnet",
+      source: Edge,
+      destination: Arbitrum,
+      sourceChain: "Edge",
+      destinationChain: "Arbitrum",
+      recipient: { address: RECIPIENT, chain: "Arbitrum" },
+      amount: "10",
+      feeBearer: "sender",
+      tier: FAST_TIER,
+      plan: planRoute({
+        source: "Edge",
+        destination: "Arbitrum",
+        useForwarder: true,
+      }),
+    });
+    expect(result.quote.feeMode).toBe("maxFee");
+    expect(result.quote.amountOut).toBe("10");
+    expect(Number(result.quote.amountIn)).toBeGreaterThan(10);
+    expect(result.maxFee).toBeGreaterThan(0n);
+    expect(result.burnAmount).toBe(10_000_000n + result.maxFee);
+  });
+
+  it("sender mode on an upfront chain: the whole amount burns and mints", async () => {
     const result = await buildBridgeQuote({
       network: "mainnet",
       source: Base,
@@ -49,11 +74,10 @@ describe("buildBridgeQuote", () => {
       tier: FAST_TIER,
       plan: PLAN,
     });
-    expect(result.quote.route.kind).toBe("bridge");
+    expect(result.quote.feeMode).toBe("upfront");
+    expect(result.burnAmount).toBe(10_000_000n);
     expect(result.quote.amountOut).toBe("10");
-    expect(Number(result.quote.amountIn)).toBeGreaterThan(10);
-    expect(result.maxFee).toBeGreaterThan(0n);
-    expect(result.burnAmount).toBe(10_000_000n + result.maxFee);
+    expect(result.quote.subunits.amountIn).toBe(10_000_000n + result.maxFee);
   });
 
   it("receiver mode: sender pays exactly the requested amount", async () => {

@@ -63,6 +63,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:live": "tsx scripts/live-testnet.ts",
+    "test:upfront": "tsx scripts/upfront-testnet.ts",
     "lint": "tsc --noEmit"
   },
   "engines": {
@@ -76,12 +77,13 @@
     "@solana/web3.js": "^1.95.0",
     "@stellar/stellar-sdk": "^14.1.1",
     "@usewhisk/cctp": "workspace:*",
-    "starknet": "^7.0.0",
     "bs58": "^6.0.0",
+    "starknet": "^7.0.0",
     "viem": "^2.23.0"
   },
   "devDependencies": {
     "tsup": "^8.3.5",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.2",
     "vitest": "^4.1.11"
   }

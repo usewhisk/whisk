@@ -96,6 +96,7 @@ describe("createWhisk", () => {
     });
     expect(quote.route.kind).toBe("bridge");
     expect(iris.requests.map((r) => `${r.url.host}${r.url.pathname}`)).toEqual([
+      "iris-api-sandbox.circle.com/v2/fastBurn/USDC/allowance",
       "iris-api-sandbox.circle.com/v2/burn/USDC/fees/6/26",
     ]);
   });
@@ -165,12 +166,12 @@ describe("createWhisk", () => {
       expect(mintStep?.forwarded).toBe(true);
       expect(result.finalTxHash).toBe(FORWARDED_MESSAGE.forwardTxHash);
     }
-    expect(wallet.burns).toHaveLength(1);
-    expect(wallet.burns[0]?.destinationDomain).toBe(Arbitrum.cctpDomain);
+    expect(wallet.feeBurns).toHaveLength(1);
+    expect(wallet.feeBurns[0]?.destinationDomain).toBe(Arbitrum.cctpDomain);
     expect(
       iris.requests.map((r) => `${r.method} ${r.url.host}${r.url.pathname}`),
     ).toContain(
-      `GET iris-api.circle.com/v2/burn/USDC/fees/${Base.cctpDomain}/${Arbitrum.cctpDomain}`,
+      `POST iris-api.circle.com/v2/quote/burn/usdc/${Base.cctpDomain}/${Arbitrum.cctpDomain}`,
     );
   });
 
@@ -255,9 +256,9 @@ describe("route planning", () => {
       amount: "10",
       adapter: makeAdapter(),
     });
-    expect(iris.requests.map((r) => r.url.host)).toEqual([
-      "iris-api.circle.com",
-    ]);
+    expect(new Set(iris.requests.map((r) => r.url.host))).toEqual(
+      new Set(["iris-api.circle.com"]),
+    );
   });
 
   it("refuses a transfer between mainnet and testnet before calling Iris", async () => {
@@ -385,8 +386,11 @@ describe("route planning", () => {
     const result = await engine.send({ ...params, quote });
 
     expect(result.kind).toBe("success");
-    expect(wallet.burns).toHaveLength(1);
-    expect(wallet.burns[0]?.hookData).toBeUndefined();
+    // Without a FORWARD fee, TokenMessengerWithFees adds no forwarding hook.
+    expect(wallet.feeBurns).toHaveLength(1);
+    expect(iris.quoteRequests[0]?.body.requests).toEqual([
+      { type: "PRE_FINALITY" },
+    ]);
     expect(quote.fees.entries.map((e) => e.kind)).not.toContain("forwarder");
     expect(wallet.mints.map((m) => m.chainId)).toEqual([Morph.evmChainId]);
   });
@@ -419,9 +423,10 @@ describe("Standard-only sources", () => {
 
     const result = await engine.send({ ...params, quote });
     expect(result.kind).toBe("success");
-    expect(wallet.burns).toHaveLength(1);
-    expect(wallet.burns[0]?.minFinalityThreshold).toBe(2000);
-    expect(wallet.burns[0]?.destinationDomain).toBe(BaseSepolia.cctpDomain);
+    // Standard upfront: no PRE_FINALITY fee, so the contract burns at 2000.
+    expect(wallet.feeBurns).toHaveLength(1);
+    expect(iris.quoteRequests[0]?.body.requests).toEqual([{ type: "FORWARD" }]);
+    expect(wallet.feeBurns[0]?.destinationDomain).toBe(BaseSepolia.cctpDomain);
     expect(
       iris.requests.map((r) => `${r.url.host}${r.url.pathname}`),
     ).toContain(
@@ -489,7 +494,11 @@ describe("bound quotes", () => {
   afterEach(() => vi.useRealTimers());
 
   it("#87 burns with the maxFee and amount of the quote the payer saw", async () => {
-    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    // Receiver-pays keeps Base on the maxFee path, where #87 lived.
+    const engine = createWhisk({
+      chains: ["Base", "Arbitrum"],
+      feeBearer: "receiver",
+    });
     const wallet = makeWallet();
     const quote = await engine.quote(params(wallet.adapter));
 
@@ -521,7 +530,10 @@ describe("bound quotes", () => {
   });
 
   it("asks again when fees rise past the quote, without signing", async () => {
-    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    const engine = createWhisk({
+      chains: ["Base", "Arbitrum"],
+      feeBearer: "receiver",
+    });
     const wallet = makeWallet();
     const quote = await engine.quote(params(wallet.adapter));
 

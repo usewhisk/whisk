@@ -27,3 +27,10 @@ export type { GetMessagesOptions, PollMessageOptions } from "./messages.js";
 
 export { reattest } from "./reattest.js";
 export type { ReattestOptions } from "./reattest.js";
+export { getFastBurnAllowance, getSignedBurnQuote } from "./quote.js";
+export type {
+  SignedBurnQuote,
+  SignedBurnQuoteRequest,
+  SignedQuoteExpiry,
+  UpfrontFeeType,
+} from "./quote.js";

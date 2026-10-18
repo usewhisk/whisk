@@ -37,6 +37,9 @@ const DEFAULT_BASE_DELAY_MS = 300;
 export async function fetchIrisJson<T>(
   url: string,
   options: FetchJsonOptions = {},
+  request: { method: "POST"; body: unknown } | { method: "GET" } = {
+    method: "GET",
+  },
 ): Promise<T> {
   const {
     timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -58,8 +61,16 @@ export async function fetchIrisJson<T>(
 
     try {
       const res = await fetchImpl(url, {
-        method: "GET",
-        headers: { accept: "application/json" },
+        method: request.method,
+        headers: {
+          accept: "application/json",
+          ...(request.method === "POST" && {
+            "content-type": "application/json",
+          }),
+        },
+        ...(request.method === "POST" && {
+          body: JSON.stringify(request.body),
+        }),
         signal: ctrl.signal,
       });
 

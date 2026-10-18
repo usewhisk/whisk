@@ -17,6 +17,7 @@ import type { QuoteParams } from "./types.js";
 import type { WhiskConfig } from "../types/config.js";
 import { decideRoute } from "../routing/decide.js";
 import { connectedEcosystems, planRoute } from "../routing/plan.js";
+import { fitFastAllowance } from "../routing/allowance.js";
 import { InvalidAddressError } from "../errors/errors.js";
 import { buildCustomFeeEntries, sumFees } from "../fees/calculate.js";
 import { formatUsdcAmount, parseUsdcAmount } from "./amount.js";
@@ -120,12 +121,16 @@ export async function buildQuote(
     return { quote };
   }
 
-  const plan = planRoute({
-    source: params.sourceChain,
-    destination: params.destinationChain,
-    connected: connectedEcosystems(params.adapter, params.destinationAdapter),
-    useForwarder: options.config.useForwarder ?? true,
-  });
+  const plan = await fitFastAllowance(
+    planRoute({
+      source: params.sourceChain,
+      destination: params.destinationChain,
+      connected: connectedEcosystems(params.adapter, params.destinationAdapter),
+      useForwarder: options.config.useForwarder ?? true,
+    }),
+    parseUsdcAmount(params.amount),
+    options.config.fetch,
+  );
 
   const rpcUrls = rpcUrlsFor(options.config, params.sourceChain);
   const result = await buildBridgeQuote({

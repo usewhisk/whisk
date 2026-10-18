@@ -12,8 +12,8 @@
  *   3. Destination Starknet wallet signs `receive_message` on
  *      MessageTransmitterV2.
  */
+import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
 import {
-  buildBurnIntent,
   feltToBytes32Hex,
   buildStarknetReceiveIntent,
   pollMessages,
@@ -49,6 +49,8 @@ export type ExecuteEvmToStarknetInput = {
   tier: BurnFeeTier;
   customFeeCalls?: EvmCall[];
   sourceAdapter: EvmAdapter;
+  /** Set when the fees are paid upfront from Circle's signed quote. */
+  upfront?: UpfrontFee;
   /** REQUIRED — signs `receive_message` on Starknet. */
   destinationAdapter: StarknetAdapter;
   pollIntervalMs?: number;
@@ -88,19 +90,18 @@ export async function executeEvmToStarknet(
 
   let burnCalls: EvmCall[];
   try {
-    const intent = buildBurnIntent({
-      source: input.source,
-      destination: input.destination,
-      amount: input.burnAmount,
-      mintRecipient: mintRecipientBytes32,
-      fee: { tier: input.tier, maxFee: input.maxFee },
-      withForwarder: false, // no Iris forwarder for Starknet destinations
-    });
-    burnCalls = intent.calls.map((c) => ({
-      to: c.to,
-      data: c.data,
-      value: c.value,
-    }));
+    burnCalls = evmBurnCalls(
+      {
+        source: input.source,
+        destination: input.destination,
+        amount: input.burnAmount,
+        mintRecipient: mintRecipientBytes32,
+        fee: { tier: input.tier, maxFee: input.maxFee },
+        withForwarder: false, // no Iris forwarder for Starknet destinations
+      },
+      input.upfront,
+      input.sourceAdapter.address,
+    );
   } catch (cause) {
     return fail(
       steps,

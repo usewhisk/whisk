@@ -150,7 +150,8 @@ describe("engine.refund", () => {
     const firstBatch = wallet.batches[0] ?? [];
     expect(firstBatch).toHaveLength(2);
     expect(firstBatch[0]?.to).toBe(Base.usdc);
-    expect(firstBatch[1]?.to).toBe(Base.tokenMessenger);
+    // The merchant pays the fees upfront, so the payer gets the whole refund.
+    expect(firstBatch[1]?.to).toBe(Base.tokenMessengerWithFees);
   });
 
   it("rejects refunds with a missing originalTxHash", async () => {

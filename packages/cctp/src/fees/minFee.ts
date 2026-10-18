@@ -1,13 +1,10 @@
 import type { EvmChain } from "../chains/types.js";
-import { InvalidInputError, ProtocolError } from "../errors.js";
+import { InvalidInputError } from "../errors.js";
+import { callRpc, type RpcOptions } from "../rpc/jsonRpc.js";
 
 const GET_MIN_FEE_AMOUNT = "0x516990e3";
 
-export type GetStandardMinFeeOptions = {
-  /** Tried in order before the chain's default RPCs. */
-  rpcUrls?: readonly string[];
-  fetch?: typeof fetch;
-};
+export type GetStandardMinFeeOptions = RpcOptions;
 
 /**
  * `TokenMessengerV2.getMinFeeAmount(amount)`: the least `maxFee` a Standard
@@ -30,59 +27,20 @@ export async function getStandardMinFee(
       `amount must be non-negative, got ${amount}`,
     );
   }
-  const doFetch = options.fetch ?? globalThis.fetch;
-  const body = JSON.stringify({
-    jsonrpc: "2.0",
-    id: 1,
-    method: "eth_call",
-    params: [
+  return callRpc(
+    chain,
+    "eth_call",
+    [
       {
         to: chain.tokenMessenger,
         data: `${GET_MIN_FEE_AMOUNT}${amount.toString(16).padStart(64, "0")}`,
       },
       "latest",
     ],
-  });
-  const urls = [...(options.rpcUrls ?? []), ...chain.defaultRpcUrls];
-  const failures: string[] = [];
-  for (const url of urls) {
-    try {
-      const res = await doFetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body,
-      });
-      if (!res.ok) {
-        failures.push(`${url}: HTTP ${res.status}`);
-        continue;
-      }
-      return parseUint256(await res.json(), chain);
-    } catch (err) {
-      failures.push(
-        `${url}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
-  throw new ProtocolError(
-    "fee_unavailable",
-    `could not read getMinFeeAmount on ${chain.id}: ${failures.join("; ")}`,
+    (r) =>
+      typeof r === "string" && /^0x[0-9a-fA-F]{64}$/.test(r)
+        ? BigInt(r)
+        : undefined,
+    options,
   );
-}
-
-function parseUint256(payload: unknown, chain: EvmChain): bigint {
-  const result =
-    typeof payload === "object" && payload !== null && "result" in payload
-      ? payload.result
-      : undefined;
-  if (typeof result !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(result)) {
-    const error =
-      typeof payload === "object" && payload !== null && "error" in payload
-        ? JSON.stringify(payload.error)
-        : JSON.stringify(result);
-    throw new ProtocolError(
-      "fee_unavailable",
-      `getMinFeeAmount on ${chain.id} returned ${error}`,
-    );
-  }
-  return BigInt(result);
 }

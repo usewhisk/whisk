@@ -15,8 +15,12 @@
  */
 
 import {
+  getBlockNumber,
   getChain,
+  getSignedBurnQuote,
   type CctpChain,
+  type SignedQuoteExpiry,
+  type UpfrontFeeType,
   type EvmChain,
   type SolanaChain,
   type StarknetChain,
@@ -43,6 +47,8 @@ import type { WhiskMetadata } from "../metadata/types.js";
 import { isBridgeRoute, isSendRoute } from "../types/route.js";
 import { DEFAULT_FEE_BEARER } from "../types/fee.js";
 import { formatUsdcAmount } from "./amount.js";
+import { fitFastAllowance } from "../routing/allowance.js";
+import type { UpfrontFee } from "./bridge/upfront.js";
 import { buildQuote, rpcUrlsFor } from "./quote.js";
 import { computeBridgeFees, fetchFeeTier } from "./bridge/quote.js";
 import { executeBridge } from "./bridge/execute.js";
@@ -237,6 +243,19 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
     });
     const rpcUrls = rpcUrlsFor(resolvedConfig, plan.source.id as Chain);
+    const held = {
+      tier,
+      burnAmount: quote.subunits.burnAmount,
+      burnFee: quote.subunits.burnFee,
+      forwarderFee: quote.subunits.forwarderFee,
+      maxFee: quote.subunits.maxFee,
+    };
+    if (quote.feeMode === "upfront") {
+      return {
+        ...held,
+        upfront: await signUpfrontFee(quote, plan, adapters, rpcUrls),
+      };
+    }
     // What Circle charges now: the unbuffered protocol fee and the `med`
     // forwarding fee, Circle's recommended floor.
     const required = await computeBridgeFees(
@@ -255,13 +274,63 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     if (required.maxFee > quote.subunits.maxFee) {
       throw await changed(quote, adapters);
     }
-    return {
-      tier,
-      burnAmount: quote.subunits.burnAmount,
-      burnFee: quote.subunits.burnFee,
-      forwarderFee: quote.subunits.forwarderFee,
-      maxFee: quote.subunits.maxFee,
-    };
+    return { ...held, upfront: undefined };
+  }
+
+  /**
+   * Fetched at send time because Circle's quote lasts about two minutes. A
+   * signed fee above the shown one goes back to the payer; an expired quote
+   * is fetched once more before giving up.
+   */
+  async function signUpfrontFee(
+    quote: Quote,
+    plan: RoutePlan,
+    adapters: Adapters,
+    rpcUrls: readonly string[] | undefined,
+  ): Promise<UpfrontFee> {
+    const source = plan.source as EvmChain;
+    const requests: UpfrontFeeType[] = [];
+    if (plan.mint.kind === "forwarder") requests.push("FORWARD");
+    if (plan.speed === "fast") requests.push("PRE_FINALITY");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const signed = await getSignedBurnQuote(
+        plan.network,
+        source.cctpDomain,
+        plan.destination.cctpDomain,
+        {
+          amount: quote.subunits.burnAmount,
+          feeToken: source.usdc,
+          requests,
+        },
+        resolvedConfig.fetch ? { fetch: resolvedConfig.fetch } : {},
+      );
+      if (signed.feeTotalAmount > quote.subunits.maxFee) {
+        throw await changed(quote, adapters);
+      }
+      if (!(await hasExpired(signed.expiry, source, rpcUrls))) {
+        return {
+          signedQuote: signed.signedQuote,
+          fee: signed.feeTotalAmount,
+          approveAmount: quote.subunits.burnAmount + quote.subunits.maxFee,
+        };
+      }
+    }
+    throw new QuoteExpiredError(quote);
+  }
+
+  async function hasExpired(
+    expiry: SignedQuoteExpiry,
+    source: EvmChain,
+    rpcUrls: readonly string[] | undefined,
+  ): Promise<boolean> {
+    if (expiry.mode === "TIMESTAMP") {
+      return Date.now() >= expiry.expiresAt * 1000;
+    }
+    const block = await getBlockNumber(source, {
+      ...(rpcUrls && { rpcUrls }),
+      ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+    });
+    return block >= expiry.expiresAtBlock;
   }
 
   async function runRoute(
@@ -331,12 +400,19 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     }
 
     if (isBridgeRoute(route)) {
-      const plan = planRoute({
-        source: route.sourceChain,
-        destination: route.destinationChain,
-        connected: connectedEcosystems(input.adapter, input.destinationAdapter),
-        useForwarder,
-      });
+      const plan = await fitFastAllowance(
+        planRoute({
+          source: route.sourceChain,
+          destination: route.destinationChain,
+          connected: connectedEcosystems(
+            input.adapter,
+            input.destinationAdapter,
+          ),
+          useForwarder,
+        }),
+        input.quote.subunits.burnAmount,
+        resolvedConfig.fetch,
+      );
       const { source, destination, network } = plan;
       const forwarded = plan.mint.kind === "forwarder";
       const bridge = await bindBridgeQuote(input.quote, plan, input);
@@ -349,6 +425,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
         return executeBridge(
           {
+            ...(bridge.upfront && { upfront: bridge.upfront }),
             network,
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
@@ -413,6 +490,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
         return executeEvmToStarknet(
           {
+            ...(bridge.upfront && { upfront: bridge.upfront }),
             network,
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
@@ -785,6 +863,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
         return executeEvmToSolana(
           {
+            ...(bridge.upfront && { upfront: bridge.upfront }),
             network,
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,

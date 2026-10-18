@@ -27,8 +27,12 @@ export type Quote = {
   issuedAt: number;
   /** `send` refuses the quote after this, in milliseconds since the epoch. */
   expiresAt: number;
-  /** `maxFee`: Circle deducts its fee from the burn, capped by `maxFee`. */
-  feeMode: "maxFee";
+  /**
+   * `maxFee`: Circle deducts its fee from the burn, capped by `maxFee`.
+   * `upfront`: the payer pays Circle's signed fee beside the burn, at most
+   * `subunits.maxFee`, and the whole burn mints.
+   */
+  feeMode: "maxFee" | "upfront";
   route: Route;
   recipient: ResolvedRecipient;
   /** Total debited from the sender (display "You pay"). */

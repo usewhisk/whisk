@@ -30,6 +30,13 @@ export const TOKEN_MESSENGER_V2_EVM_TESTNET: Address =
 export const MESSAGE_TRANSMITTER_V2_EVM_TESTNET: Address =
   "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275";
 
+/** Takes Circle's signed upfront-fee quotes, on `upfrontFeeSource` chains only. */
+export const TOKEN_MESSENGER_WITH_FEES_EVM_MAINNET: Address =
+  "0x71f54F818671cD0D7ea140Da213e5C8b5C92a408";
+
+export const TOKEN_MESSENGER_WITH_FEES_EVM_TESTNET: Address =
+  "0x8745D906D67C346E5eb1aEEED38Eb87F34DF0C0A";
+
 /* ─── Solana ──────────────────────────────────────────────────────── */
 
 /** `TokenMessengerMinterV2` program ID (same on mainnet-beta + devnet). */

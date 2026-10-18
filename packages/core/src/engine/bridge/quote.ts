@@ -122,6 +122,28 @@ export async function computeBridgeFees(
   });
 }
 
+/**
+ * Upfront needs a source with `TokenMessengerWithFees`, a sender who pays
+ * the fees, and a fee to pay: a Fast transfer or one Circle forwards.
+ * `depositForBurnWithFees` takes no `maxFee`, so a Standard burn that owes an
+ * on-chain minimum stays on `maxFee`, and Stellar's custom hook data has no
+ * upfront form.
+ */
+function chooseFeeMode(
+  input: BuildBridgeQuoteInput,
+  useForwarder: boolean,
+  burnFee: bigint,
+): Quote["feeMode"] {
+  const { source, destination, plan } = input;
+  const eligible =
+    input.feeBearer === "sender" &&
+    source.ecosystem === "evm" &&
+    source.capabilities.upfrontFeeSource &&
+    destination.ecosystem !== "stellar" &&
+    (plan.speed === "fast" || (useForwarder && burnFee === 0n));
+  return eligible ? "upfront" : "maxFee";
+}
+
 export async function fetchFeeTier(
   input: Pick<
     BuildBridgeQuoteInput,
@@ -185,6 +207,7 @@ export async function buildBridgeQuote(
   // sender/receiver split. The burn fee depends on `burnAmount`, so we
   // recompute against the grossed-up total once we know it.
   const initial = await fees(amount);
+  const feeMode = chooseFeeMode(input, useForwarder, initial.burnFee);
 
   let burnAmount: bigint;
   let recipientAmount: bigint;
@@ -192,7 +215,15 @@ export async function buildBridgeQuote(
   let forwarderFee: bigint;
   let maxFee: bigint;
 
-  if (input.feeBearer === "sender") {
+  if (feeMode === "upfront") {
+    // Circle collects the fee beside the burn, so the whole amount mints.
+    // `maxFee` holds the shown fee, the most the signed quote may charge.
+    burnAmount = amount;
+    burnFee = initial.burnFee;
+    forwarderFee = initial.forwarderFee;
+    maxFee = initial.maxFee;
+    recipientAmount = amount;
+  } else if (input.feeBearer === "sender") {
     burnAmount = amount + initial.maxFee;
     const recomputed = await fees(burnAmount);
     burnFee = recomputed.burnFee;
@@ -260,11 +291,13 @@ export async function buildBridgeQuote(
   // Sender always carries the merchant fee — it's an integrator
   // monetization knob, not a protocol fee, so `feeBearer` is bypassed.
   const senderDebit =
-    (input.feeBearer === "sender" ? burnAmount : amount) + customFeeAmount;
+    feeMode === "upfront"
+      ? amount + maxFee + customFeeAmount
+      : (input.feeBearer === "sender" ? burnAmount : amount) + customFeeAmount;
 
   const quote: Quote = {
     ...stampQuote(),
-    feeMode: "maxFee",
+    feeMode,
     route: {
       kind: "bridge",
       sourceChain: input.sourceChain,
