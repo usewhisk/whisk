@@ -96,6 +96,7 @@ describe("createWhisk", () => {
     });
     expect(quote.route.kind).toBe("bridge");
     expect(iris.requests.map((r) => `${r.url.host}${r.url.pathname}`)).toEqual([
+      "iris-api-sandbox.circle.com/v2/fastBurn/USDC/allowance",
       "iris-api-sandbox.circle.com/v2/burn/USDC/fees/6/26",
     ]);
   });
@@ -165,12 +166,12 @@ describe("createWhisk", () => {
       expect(mintStep?.forwarded).toBe(true);
       expect(result.finalTxHash).toBe(FORWARDED_MESSAGE.forwardTxHash);
     }
-    expect(wallet.burns).toHaveLength(1);
-    expect(wallet.burns[0]?.destinationDomain).toBe(Arbitrum.cctpDomain);
+    expect(wallet.feeBurns).toHaveLength(1);
+    expect(wallet.feeBurns[0]?.destinationDomain).toBe(Arbitrum.cctpDomain);
     expect(
       iris.requests.map((r) => `${r.method} ${r.url.host}${r.url.pathname}`),
     ).toContain(
-      `GET iris-api.circle.com/v2/burn/USDC/fees/${Base.cctpDomain}/${Arbitrum.cctpDomain}`,
+      `POST iris-api.circle.com/v2/quote/burn/usdc/${Base.cctpDomain}/${Arbitrum.cctpDomain}`,
     );
   });
 
@@ -255,9 +256,9 @@ describe("route planning", () => {
       amount: "10",
       adapter: makeAdapter(),
     });
-    expect(iris.requests.map((r) => r.url.host)).toEqual([
-      "iris-api.circle.com",
-    ]);
+    expect(new Set(iris.requests.map((r) => r.url.host))).toEqual(
+      new Set(["iris-api.circle.com"]),
+    );
   });
 
   it("refuses a transfer between mainnet and testnet before calling Iris", async () => {
@@ -385,8 +386,11 @@ describe("route planning", () => {
     const result = await engine.send({ ...params, quote });
 
     expect(result.kind).toBe("success");
-    expect(wallet.burns).toHaveLength(1);
-    expect(wallet.burns[0]?.hookData).toBeUndefined();
+    // Without a FORWARD fee, TokenMessengerWithFees adds no forwarding hook.
+    expect(wallet.feeBurns).toHaveLength(1);
+    expect(iris.quoteRequests[0]?.body.requests).toEqual([
+      { type: "PRE_FINALITY" },
+    ]);
     expect(quote.fees.entries.map((e) => e.kind)).not.toContain("forwarder");
     expect(wallet.mints.map((m) => m.chainId)).toEqual([Morph.evmChainId]);
   });
@@ -419,9 +423,10 @@ describe("Standard-only sources", () => {
 
     const result = await engine.send({ ...params, quote });
     expect(result.kind).toBe("success");
-    expect(wallet.burns).toHaveLength(1);
-    expect(wallet.burns[0]?.minFinalityThreshold).toBe(2000);
-    expect(wallet.burns[0]?.destinationDomain).toBe(BaseSepolia.cctpDomain);
+    // Standard upfront: no PRE_FINALITY fee, so the contract burns at 2000.
+    expect(wallet.feeBurns).toHaveLength(1);
+    expect(iris.quoteRequests[0]?.body.requests).toEqual([{ type: "FORWARD" }]);
+    expect(wallet.feeBurns[0]?.destinationDomain).toBe(BaseSepolia.cctpDomain);
     expect(
       iris.requests.map((r) => `${r.url.host}${r.url.pathname}`),
     ).toContain(
@@ -489,7 +494,11 @@ describe("bound quotes", () => {
   afterEach(() => vi.useRealTimers());
 
   it("#87 burns with the maxFee and amount of the quote the payer saw", async () => {
-    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    // Receiver-pays keeps Base on the maxFee path, where #87 lived.
+    const engine = createWhisk({
+      chains: ["Base", "Arbitrum"],
+      feeBearer: "receiver",
+    });
     const wallet = makeWallet();
     const quote = await engine.quote(params(wallet.adapter));
 
@@ -521,7 +530,10 @@ describe("bound quotes", () => {
   });
 
   it("asks again when fees rise past the quote, without signing", async () => {
-    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    const engine = createWhisk({
+      chains: ["Base", "Arbitrum"],
+      feeBearer: "receiver",
+    });
     const wallet = makeWallet();
     const quote = await engine.quote(params(wallet.adapter));
 
@@ -598,5 +610,182 @@ describe("bound quotes", () => {
 
     await engine.send({ ...arcParams, quote });
     expect(wallet.burns[0]?.maxFee).toBe(parseUsdcAmount(quote.fees.total));
+  });
+});
+
+describe("signed quotes", () => {
+  const TMWF_MAINNET = "0x71f54F818671cD0D7ea140Da213e5C8b5C92a408";
+  const toArbitrum = (adapter: EvmAdapter) =>
+    ({
+      sourceChain: "Base",
+      destinationChain: "Arbitrum",
+      recipient: { address: RECIPIENT, chain: "Arbitrum" },
+      amount: "5",
+      adapter,
+    }) as const;
+
+  it("pays Circle's fee upfront so the recipient gets exactly the amount", async () => {
+    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    const wallet = makeWallet();
+    const quote = await engine.quote(toArbitrum(wallet.adapter));
+
+    // Shown: 650 at 1.3 bps plus 10%, and forwarding at `high`.
+    expect(quote.feeMode).toBe("upfront");
+    expect(quote.amountOut).toBe("5");
+    expect(quote.amountBurned).toBe("5");
+    expect(quote.subunits.maxFee).toBe(715n + 500_000n);
+    expect(quote.amountIn).toBe("5.500715");
+
+    const result = await engine.send({ adapter: wallet.adapter, quote });
+    expect(result.kind).toBe("success");
+    expect(iris.quoteRequests).toEqual([
+      {
+        sourceDomain: Base.cctpDomain,
+        destinationDomain: Arbitrum.cctpDomain,
+        body: {
+          amount: "5000000",
+          feeToken: Base.usdc,
+          requests: [{ type: "FORWARD" }, { type: "PRE_FINALITY" }],
+        },
+      },
+    ]);
+    expect(wallet.burns).toEqual([]);
+    expect(wallet.feeBurns).toHaveLength(1);
+    expect(wallet.feeBurns[0]).toMatchObject({
+      tokenMessengerWithFees: TMWF_MAINNET,
+      amount: 5_000_000n,
+      fee: 650n + 250_000n,
+      destinationDomain: Arbitrum.cctpDomain,
+      refundAddress: wallet.adapter.address,
+    });
+    expect(wallet.approvals.at(-1)).toMatchObject({
+      spender: TMWF_MAINNET,
+      amount: 5_000_000n + 715n + 500_000n,
+    });
+  });
+
+  it("asks again when Circle's signed fee is above the shown fee", async () => {
+    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    const wallet = makeWallet();
+    const quote = await engine.quote(toArbitrum(wallet.adapter));
+
+    iris.replyToQuote({ fee: 600_000n });
+    await expect(
+      engine.send({ adapter: wallet.adapter, quote }),
+    ).rejects.toMatchObject({ code: "QUOTE_CHANGED" });
+    expect(wallet.batches).toEqual([]);
+  });
+
+  it("fetches the signed quote once more when it has expired before submitting", async () => {
+    iris.setBlockNumber(200);
+    iris.replyToQuote({ expiresAtBlock: 150 }, {});
+    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    const wallet = makeWallet();
+    const quote = await engine.quote(toArbitrum(wallet.adapter));
+
+    const result = await engine.send({ adapter: wallet.adapter, quote });
+    expect(result.kind).toBe("success");
+    expect(iris.quoteRequests).toHaveLength(2);
+    expect(wallet.feeBurns).toHaveLength(1);
+  });
+
+  it("refuses when the second signed quote has expired too", async () => {
+    iris.setBlockNumber(200);
+    iris.replyToQuote({ expiresAtBlock: 150 });
+    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    const wallet = makeWallet();
+    const quote = await engine.quote(toArbitrum(wallet.adapter));
+
+    await expect(
+      engine.send({ adapter: wallet.adapter, quote }),
+    ).rejects.toMatchObject({ code: "QUOTE_EXPIRED" });
+    expect(iris.quoteRequests).toHaveLength(2);
+    expect(wallet.batches).toEqual([]);
+  });
+
+  it("keeps receiver-pays transfers on maxFee", async () => {
+    const engine = createWhisk({
+      chains: ["Base", "Arbitrum"],
+      feeBearer: "receiver",
+    });
+    const wallet = makeWallet();
+    const quote = await engine.quote(toArbitrum(wallet.adapter));
+    expect(quote.feeMode).toBe("maxFee");
+
+    await engine.send({ adapter: wallet.adapter, quote });
+    expect(iris.quoteRequests).toEqual([]);
+    expect(wallet.burns).toHaveLength(1);
+  });
+
+  it("keeps Stellar destinations on maxFee", async () => {
+    const engine = createWhisk({ chains: ["Base", "Stellar"] });
+    const stellar: StellarAdapter = {
+      kind: "stellar",
+      address: StellarKeypair.random().publicKey(),
+      async getNetwork() {
+        return "public";
+      },
+      async submitInvocation(batch) {
+        return { hashes: batch.map((_, i) => `${i}`.padStart(64, "a")) };
+      },
+      async confirmTransaction() {
+        return { status: "success" as const, ledger: 1 };
+      },
+      async getLatestLedger() {
+        return 1;
+      },
+    };
+    const quote = await engine.quote({
+      sourceChain: "Base",
+      destinationChain: "Stellar",
+      recipient: { address: stellar.address, chain: "Stellar" },
+      amount: "5",
+      adapter: makeAdapter(),
+      destinationAdapter: stellar,
+    });
+    expect(quote.feeMode).toBe("maxFee");
+  });
+
+  it("plans a Fast route as Standard when Circle's Fast allowance is below the amount", async () => {
+    iris.setFastAllowance(1_000_000n);
+    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    const wallet = makeWallet();
+    const quote = await engine.quote(toArbitrum(wallet.adapter));
+    expect(quote.plan?.speed).toBe("standard");
+
+    await engine.send({ adapter: wallet.adapter, quote });
+    expect(iris.quoteRequests[0]?.body.requests).toEqual([{ type: "FORWARD" }]);
+  });
+
+  it("pays only the forwarding fee upfront from a Standard source", async () => {
+    const engine = createWhisk({ chains: ["Arc_Testnet", "Base_Sepolia"] });
+    const wallet = createFakeEvmWallet({ chainId: ArcTestnet.evmChainId });
+    wallet.fund(ArcTestnet.evmChainId, ArcTestnet.usdc, 100_000_000n);
+    const quote = await engine.quote({
+      sourceChain: "Arc_Testnet",
+      destinationChain: "Base_Sepolia",
+      recipient: { address: RECIPIENT, chain: "Base_Sepolia" },
+      amount: "5",
+      adapter: wallet.adapter,
+    });
+    expect(quote.feeMode).toBe("upfront");
+    expect(quote.amountOut).toBe("5");
+
+    await engine.send({ adapter: wallet.adapter, quote });
+    expect(iris.quoteRequests[0]?.body.requests).toEqual([{ type: "FORWARD" }]);
+    expect(wallet.feeBurns[0]?.amount).toBe(5_000_000n);
+  });
+
+  it("stays on maxFee when a fee-switch chain charges a Standard minimum", async () => {
+    iris.setStandardMinFee(7n);
+    const engine = createWhisk({ chains: ["Arc_Testnet", "Base_Sepolia"] });
+    const quote = await engine.quote({
+      sourceChain: "Arc_Testnet",
+      destinationChain: "Base_Sepolia",
+      recipient: { address: RECIPIENT, chain: "Base_Sepolia" },
+      amount: "5",
+      adapter: createFakeEvmWallet({ chainId: ArcTestnet.evmChainId }).adapter,
+    });
+    expect(quote.feeMode).toBe("maxFee");
   });
 });

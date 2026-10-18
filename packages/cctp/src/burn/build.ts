@@ -15,7 +15,6 @@
  * need to call `receiveMessage` manually on the destination chain.
  */
 import { encodeFunctionData, type Address as ViemAddress } from "viem";
-import { PublicKey } from "@solana/web3.js";
 import type { Address, CctpChain } from "../chains/types.js";
 import {
   ANY_DESTINATION_CALLER,
@@ -23,7 +22,7 @@ import {
 } from "../forwarder/hookData.js";
 import { tokenMessengerV2Abi } from "../abi/tokenMessengerV2.js";
 import { usdcAbi } from "../abi/usdc.js";
-import { toBytes32, isAddress } from "../encoding/address.js";
+import { encodeMintRecipient } from "./recipient.js";
 import { FINALITY_FAST } from "../iris/types.js";
 import { computeMaxFee, type ComputeMaxFeeInput } from "../fees/math.js";
 import {
@@ -120,41 +119,10 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
       `amount exceeds CCTP per-burn cap of 10,000,000 USDC (got ${input.amount} subunits)`,
     );
   }
-  // mintRecipient validation depends on the destination ecosystem.
-  //   EVM     → 20-byte 0x-prefixed hex
-  //   Solana  → base58 32-byte pubkey
-  //   Stellar → 0x-prefixed 32-byte hex (caller pre-encodes the
-  //             CctpForwarder strkey via `contractStrkeyToBytes32Hex`)
-  if (input.destination.ecosystem === "solana") {
-    try {
-      new PublicKey(input.mintRecipient);
-    } catch {
-      throw new InvalidInputError(
-        "invalid_address",
-        `mintRecipient is not a valid Solana pubkey: ${input.mintRecipient}`,
-      );
-    }
-  } else if (input.destination.ecosystem === "stellar") {
-    if (!/^0x[a-fA-F0-9]{64}$/.test(input.mintRecipient)) {
-      throw new InvalidInputError(
-        "invalid_address",
-        `mintRecipient for Stellar must be 0x-prefixed 32-byte hex (the CctpForwarder strkey decoded); got: ${input.mintRecipient}`,
-      );
-    }
-  } else if (input.destination.ecosystem === "starknet") {
-    // Starknet felt zero-padded to 32 bytes.
-    if (!/^0x[a-fA-F0-9]{64}$/.test(input.mintRecipient)) {
-      throw new InvalidInputError(
-        "invalid_address",
-        `mintRecipient for Starknet must be 0x-prefixed 32-byte hex; got: ${input.mintRecipient}`,
-      );
-    }
-  } else if (!isAddress(input.mintRecipient)) {
-    throw new InvalidInputError(
-      "invalid_address",
-      `mintRecipient is not a valid EVM address: ${input.mintRecipient}`,
-    );
-  }
+  const mintRecipientBytes32 = encodeMintRecipient(
+    input.destination,
+    input.mintRecipient,
+  );
   const finalityThreshold = input.fee.tier.finalityThreshold;
   if (
     finalityThreshold === FINALITY_FAST &&
@@ -191,13 +159,6 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
   }
 
   // ---- encode --------------------------------------------------------------
-  const mintRecipientBytes32: `0x${string}` =
-    input.destination.ecosystem === "solana"
-      ? solanaPubkeyToBytes32Hex(input.mintRecipient)
-      : input.destination.ecosystem === "stellar" ||
-          input.destination.ecosystem === "starknet"
-        ? (input.mintRecipient as `0x${string}`)
-        : toBytes32(input.mintRecipient);
   const calls: EvmCall[] = [];
 
   if (!input.skipApprove) {
@@ -260,11 +221,4 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
     withForwarder,
     finalityThreshold,
   };
-}
-
-function solanaPubkeyToBytes32Hex(address: string): `0x${string}` {
-  const bytes = new PublicKey(address).toBytes();
-  let s = "0x";
-  for (const b of bytes) s += b.toString(16).padStart(2, "0");
-  return s as `0x${string}`;
 }

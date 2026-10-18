@@ -30,6 +30,7 @@ export * from "./chains/index.js";
 // ABIs
 export {
   tokenMessengerV2Abi,
+  tokenMessengerWithFeesAbi,
   messageTransmitterV2Abi,
   usdcAbi,
 } from "./abi/index.js";
@@ -43,6 +44,8 @@ export {
   FINALITY_STANDARD,
   fetchIrisJson,
   getBurnFees,
+  getFastBurnAllowance,
+  getSignedBurnQuote,
   pickFeeTier,
   pickForwarderFee,
   getMessages,
@@ -64,7 +67,15 @@ export type {
   IrisMessagesResponse,
   PollMessageOptions,
   ReattestOptions,
+  SignedBurnQuote,
+  SignedBurnQuoteRequest,
+  SignedQuoteExpiry,
+  UpfrontFeeType,
 } from "./iris/index.js";
+
+// JSON-RPC reads
+export { getBlockNumber } from "./rpc/index.js";
+export type { RpcOptions } from "./rpc/index.js";
 
 // Forwarder
 export {
@@ -101,10 +112,12 @@ export type {
 } from "./fees/index.js";
 
 // Burn intent builder
-export { buildBurnIntent } from "./burn/index.js";
+export { buildBurnIntent, buildBurnWithFeesIntent } from "./burn/index.js";
 export type {
   BuildBurnIntentInput,
+  BuildBurnWithFeesIntentInput,
   BurnIntent,
+  BurnWithFeesIntent,
   EvmCall,
 } from "./burn/index.js";
 

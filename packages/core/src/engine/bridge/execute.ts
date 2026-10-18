@@ -15,8 +15,8 @@
  * {@link SendResult} with `kind: "failure"` so the UI has the full step
  * timeline plus a recovery snapshot.
  */
+import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
 import {
-  buildBurnIntent,
   buildMintIntent,
   pollMessages,
   type BurnFeeTier,
@@ -61,6 +61,8 @@ export type ExecuteBridgeInput = {
   customFeeCalls?: EvmCall[];
   /** Source-chain wallet adapter (signs the burn + approve). */
   sourceAdapter: EvmAdapter;
+  /** Set when the fees are paid upfront from Circle's signed quote. */
+  upfront?: UpfrontFee;
   /**
    * Destination-chain wallet adapter — required only when `useForwarder`
    * is `false` or the Forwarder reports `FAILED`. Same wallet typically
@@ -113,19 +115,18 @@ export async function executeBridge(
   // ---- build burn intent --------------------------------------------------
   let burnCalls: EvmCall[];
   try {
-    const intent = buildBurnIntent({
-      source: input.source,
-      destination: input.destination,
-      amount: input.burnAmount,
-      mintRecipient: input.recipientAddress,
-      fee: { tier: input.tier, maxFee: input.maxFee },
-      withForwarder: useForwarder,
-    });
-    burnCalls = intent.calls.map((c) => ({
-      to: c.to,
-      data: c.data,
-      value: c.value,
-    }));
+    burnCalls = evmBurnCalls(
+      {
+        source: input.source,
+        destination: input.destination,
+        amount: input.burnAmount,
+        mintRecipient: input.recipientAddress,
+        fee: { tier: input.tier, maxFee: input.maxFee },
+        withForwarder: useForwarder,
+      },
+      input.upfront,
+      input.sourceAdapter.address,
+    );
   } catch (cause) {
     return fail(
       steps,

@@ -58,6 +58,8 @@ export interface EvmChain extends ChainBase {
   usdc: Address;
   tokenMessenger: Address;
   messageTransmitter: Address;
+  /** Present exactly when `capabilities.upfrontFeeSource` is true. */
+  tokenMessengerWithFees?: Address;
 }
 
 export interface SolanaChain extends ChainBase {

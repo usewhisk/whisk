@@ -31,6 +31,7 @@ export type CctpErrorCode =
   | "fee_unavailable"
   | "tier_not_found"
   | "no_route"
+  | "rpc_unavailable"
   // unsupported
   | "unsupported_chain"
   | "unsupported_ecosystem";

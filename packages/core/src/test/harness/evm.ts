@@ -1,6 +1,8 @@
 import {
+  decodeAbiParameters,
   decodeFunctionData,
   getAddress,
+  parseAbi,
   slice,
   toFunctionSelector,
   type Abi,
@@ -32,6 +34,20 @@ export type EvmBurn = {
   hookData?: Hex;
 };
 
+/** A `depositForBurnWithFees` that collected its quoted fee and burned. */
+export type EvmFeeBurn = {
+  chainId: number;
+  tokenMessengerWithFees: Hex;
+  amount: bigint;
+  fee: bigint;
+  destinationDomain: number;
+  mintRecipient: Hex;
+  burnToken: Hex;
+  destinationCaller: Hex;
+  signedQuote: Hex;
+  refundAddress: Hex;
+};
+
 export type EvmTransfer = {
   chainId: number;
   token: Hex;
@@ -57,6 +73,7 @@ export type FakeEvmWallet = {
   readonly switches: readonly number[];
   readonly batches: readonly EvmCall[][];
   readonly burns: readonly EvmBurn[];
+  readonly feeBurns: readonly EvmFeeBurn[];
   readonly transfers: readonly EvmTransfer[];
   readonly approvals: readonly EvmApproval[];
   readonly mints: readonly EvmMint[];
@@ -69,6 +86,11 @@ export type FakeEvmWallet = {
 const ABIS: readonly Abi[] = [
   usdcAbi,
   tokenMessengerV2Abi,
+  // Written from Circle's published ABI rather than imported, so the fake
+  // checks the calldata cctp builds instead of agreeing with it by definition.
+  parseAbi([
+    "function depositForBurnWithFees(uint256 amount, uint32 destinationDomain, bytes32 mintRecipient, address burnToken, bytes32 destinationCaller, (bytes signedQuote, address refundAddress) claim) payable",
+  ]),
   messageTransmitterV2Abi,
 ];
 
@@ -84,6 +106,7 @@ export function createFakeEvmWallet(opts: {
   const switches: number[] = [];
   const batches: EvmCall[][] = [];
   const burns: EvmBurn[] = [];
+  const feeBurns: EvmFeeBurn[] = [];
   const transfers: EvmTransfer[] = [];
   const approvals: EvmApproval[] = [];
   const mints: EvmMint[] = [];
@@ -171,6 +194,48 @@ export function createFakeEvmWallet(opts: {
         });
         return true;
       }
+      case "depositForBurnWithFees": {
+        const [
+          amount,
+          destinationDomain,
+          mintRecipient,
+          burnToken,
+          destinationCaller,
+          claim,
+        ] = args as [
+          bigint,
+          number,
+          Hex,
+          Hex,
+          Hex,
+          { signedQuote: Hex; refundAddress: Hex },
+        ];
+        // The fake iris quote carries its fee and amount after a version byte.
+        const [fee, quotedAmount] = decodeAbiParameters(
+          [{ type: "uint256" }, { type: "uint256" }],
+          `0x${claim.signedQuote.slice(4)}`,
+        );
+        if (quotedAmount !== amount) return false;
+        const allowanceKey = key(chainId, burnToken, address, call.to);
+        const allowance = allowances.get(allowanceKey) ?? 0n;
+        const from = balance(burnToken, address);
+        if (allowance < amount + fee || from < amount + fee) return false;
+        allowances.set(allowanceKey, allowance - amount - fee);
+        setBalance(burnToken, address, from - amount - fee);
+        feeBurns.push({
+          chainId,
+          tokenMessengerWithFees: call.to,
+          amount,
+          fee,
+          destinationDomain,
+          mintRecipient,
+          burnToken,
+          destinationCaller,
+          signedQuote: claim.signedQuote,
+          refundAddress: claim.refundAddress,
+        });
+        return true;
+      }
       case "receiveMessage": {
         const [message, attestation] = args as [Hex, Hex];
         mints.push({
@@ -221,6 +286,7 @@ export function createFakeEvmWallet(opts: {
     switches,
     batches,
     burns,
+    feeBurns,
     transfers,
     approvals,
     mints,

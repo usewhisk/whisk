@@ -23,6 +23,7 @@ const abi = parseAbi([
   "function decimals() view returns (uint8)",
   "function symbol() view returns (string)",
   "function getMinFeeAmount(uint256) view returns (uint256)",
+  "function tokenMessenger() view returns (address)",
 ]);
 
 // Only a TokenMessengerV2 with Circle's Standard fee switch has
@@ -118,6 +119,18 @@ async function check(chain: EvmChain): Promise<Result> {
       feeSwitch,
       chain.capabilities.standardFeeSwitch,
     );
+    if (chain.tokenMessengerWithFees) {
+      const wrapped = await client.readContract({
+        address: chain.tokenMessengerWithFees,
+        abi,
+        functionName: "tokenMessenger",
+      });
+      expect(
+        "TokenMessengerWithFees.tokenMessenger()",
+        getAddress(wrapped),
+        getAddress(chain.tokenMessenger),
+      );
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message.split("\n")[0] : err;
     problems.push(`unreachable or reverted: ${String(message)}`);

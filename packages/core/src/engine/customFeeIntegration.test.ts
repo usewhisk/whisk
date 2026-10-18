@@ -125,10 +125,10 @@ describe("customFee wiring", () => {
     // First sendCalls invocation: [merchantFee, treasuryFee, approve, burn]
     const firstBatch = wallet.batches[0] ?? [];
     expect(firstBatch).toHaveLength(4);
-    // The three USDC ops + the TokenMessenger burn.
+    // The three USDC ops + the burn, paying its fees upfront.
     expect(firstBatch[0]?.to).toBe(Base.usdc);
     expect(firstBatch[1]?.to).toBe(Base.usdc);
     expect(firstBatch[2]?.to).toBe(Base.usdc);
-    expect(firstBatch[3]?.to).toBe(Base.tokenMessenger);
+    expect(firstBatch[3]?.to).toBe(Base.tokenMessengerWithFees);
   });
 });
