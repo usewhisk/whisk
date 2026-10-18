@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Base, Arbitrum, type BurnFeeTier } from "@usewhisk/cctp";
 import { buildBridgeQuote } from "./quote.js";
 import { ConfigError } from "../../errors/errors.js";
+import { planRoute } from "../../routing/plan.js";
 
 const FAST_TIER: BurnFeeTier = {
   finalityThreshold: 1000,
@@ -10,6 +11,12 @@ const FAST_TIER: BurnFeeTier = {
 };
 
 const RECIPIENT = "0x0000000000000000000000000000000000000020";
+
+const PLAN = planRoute({
+  source: "Base",
+  destination: "Arbitrum",
+  useForwarder: true,
+});
 
 describe("buildBridgeQuote", () => {
   it("rejects identical source and destination", async () => {
@@ -24,6 +31,7 @@ describe("buildBridgeQuote", () => {
         amount: "1",
         feeBearer: "sender",
         tier: FAST_TIER,
+        plan: PLAN,
       }),
     ).rejects.toThrow(ConfigError);
   });
@@ -39,6 +47,7 @@ describe("buildBridgeQuote", () => {
       amount: "10",
       feeBearer: "sender",
       tier: FAST_TIER,
+      plan: PLAN,
     });
     expect(result.quote.route.kind).toBe("bridge");
     expect(result.quote.amountOut).toBe("10");
@@ -58,6 +67,7 @@ describe("buildBridgeQuote", () => {
       amount: "10",
       feeBearer: "receiver",
       tier: FAST_TIER,
+      plan: PLAN,
     });
     expect(result.quote.amountIn).toBe("10");
     expect(Number(result.quote.amountOut)).toBeLessThan(10);
@@ -76,6 +86,7 @@ describe("buildBridgeQuote", () => {
         amount: "0.0001",
         feeBearer: "receiver",
         tier: FAST_TIER,
+        plan: PLAN,
       }),
     ).rejects.toThrow(ConfigError);
   });
@@ -91,6 +102,7 @@ describe("buildBridgeQuote", () => {
       amount: "100",
       feeBearer: "sender",
       tier: FAST_TIER,
+      plan: PLAN,
     });
     expect(result.quote.fees.entries).toHaveLength(2);
     expect(result.quote.fees.entries.map((e) => e.kind).sort()).toEqual([
@@ -111,6 +123,7 @@ describe("buildBridgeQuote", () => {
       feeBearer: "sender",
       useForwarder: false,
       tier: FAST_TIER,
+      plan: PLAN,
     });
     expect(result.forwarderFee).toBe(0n);
     expect(result.quote.fees.entries.map((e) => e.kind)).toEqual(["protocol"]);
@@ -128,6 +141,7 @@ describe("buildBridgeQuote", () => {
       feeBearer: "sender",
       forwarderLevel: "med",
       tier: FAST_TIER,
+      plan: PLAN,
     });
     const high = await buildBridgeQuote({
       network: "mainnet",
@@ -140,6 +154,7 @@ describe("buildBridgeQuote", () => {
       feeBearer: "sender",
       forwarderLevel: "high",
       tier: FAST_TIER,
+      plan: PLAN,
     });
     expect(high.forwarderFee).toBeGreaterThan(med.forwarderFee);
   });

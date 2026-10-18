@@ -6,6 +6,7 @@
  * the adapter fills those in.
  */
 import type { Address, CctpChain } from "../chains/types.js";
+import type { FinalityThreshold } from "../iris/types.js";
 
 /**
  * One on-chain call: target contract + calldata + optional value.
@@ -41,5 +42,5 @@ export type BurnIntent = {
   /** Whether the burn call set `hookData` for Forwarder use. */
   withForwarder: boolean;
   /** Finality threshold packed into the burn call. */
-  finalityThreshold: number;
+  finalityThreshold: FinalityThreshold;
 };

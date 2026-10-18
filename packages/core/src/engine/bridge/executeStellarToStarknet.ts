@@ -90,6 +90,7 @@ export async function executeStellarToStarknet(
   let intent;
   try {
     intent = buildStellarBurnIntent({
+      minFinalityThreshold: input.tier.finalityThreshold,
       source: input.source,
       destinationDomain: input.destination.cctpDomain,
       amount: stellarAmount,

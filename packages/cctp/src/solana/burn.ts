@@ -41,6 +41,7 @@ import {
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import type { SolanaChain } from "../chains/types.js";
+import type { FinalityThreshold } from "../iris/types.js";
 import { InvalidInputError } from "../errors.js";
 import {
   deriveDenylistAccount,
@@ -96,6 +97,8 @@ export type BuildSolanaBurnIntentInput = {
    * unset for the plain burn.
    */
   hookData?: Uint8Array;
+  /** Take it from the fee tier. */
+  minFinalityThreshold: FinalityThreshold;
 };
 
 export type SolanaInstruction = {
@@ -220,7 +223,7 @@ export function buildSolanaBurnIntent(
   writePubkey(writer, input.mintRecipientBytes32);
   writePubkey(writer, destCaller);
   writeU64LE(writer, input.maxFee);
-  writeU32LE(writer, 1000); // min_finality_threshold = Fast
+  writeU32LE(writer, input.minFinalityThreshold);
   if (input.hookData !== undefined) {
     writeBytes(writer, input.hookData);
   }

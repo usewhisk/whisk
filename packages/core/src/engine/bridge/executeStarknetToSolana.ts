@@ -112,6 +112,7 @@ export async function executeStarknetToSolana(
       amount: input.burnAmount,
     });
     burnIntent = buildStarknetBurnIntent({
+      minFinalityThreshold: input.tier.finalityThreshold,
       source: input.source,
       destinationDomain: input.destination.cctpDomain,
       amount: input.burnAmount,

@@ -5,9 +5,8 @@
  * hands the resulting `BurnIntent.calls` array to its wallet adapter
  * one by one (or batched via EIP-5792 when the wallet supports it).
  *
- * Whisk only uses Fast Transfer — the burn always pins
- * `finalityThreshold = 1000`. Chains that don't support Fast as a
- * source are rejected up front (no silent fallback to Standard).
+ * The burn's finality threshold is the fee tier's: 1000 for Fast,
+ * 2000 for Standard. A Fast tier on a chain without Fast is refused.
  *
  * Forwarder is on by default — the burn call uses
  * `depositForBurnWithHook` with the canonical `cctp-forward` magic
@@ -150,10 +149,14 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
       `mintRecipient is not a valid EVM address: ${input.mintRecipient}`,
     );
   }
-  if (!input.source.capabilities.fastSource) {
+  const finalityThreshold = input.fee.tier.finalityThreshold;
+  if (
+    finalityThreshold === FINALITY_FAST &&
+    !input.source.capabilities.fastSource
+  ) {
     throw new ProtocolError(
       "no_route",
-      `Source chain "${input.source.id}" does not support Fast Transfer; Whisk does not bridge from this chain.`,
+      `Source chain "${input.source.id}" has no Fast Transfer. Use its Standard fee tier.`,
     );
   }
 
@@ -209,7 +212,7 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
     input.source.usdc as ViemAddress,
     destinationCaller,
     maxFee,
-    FINALITY_FAST,
+    finalityThreshold,
   ] as const;
 
   const effectiveHookData: `0x${string}` =
@@ -241,7 +244,7 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
     forwarderFee,
     mintRecipientBytes32,
     withForwarder,
-    finalityThreshold: FINALITY_FAST,
+    finalityThreshold,
   };
 }
 

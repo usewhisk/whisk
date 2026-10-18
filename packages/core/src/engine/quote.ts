@@ -115,6 +115,7 @@ export async function buildQuote(
     amount: params.amount,
     feeBearer: options.config.feeBearer ?? DEFAULT_FEE_BEARER,
     useForwarder: plan.mint.kind === "forwarder",
+    plan,
     ...(options.forwarderLevel !== undefined && {
       forwarderLevel: options.forwarderLevel,
     }),

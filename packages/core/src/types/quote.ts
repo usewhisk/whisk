@@ -2,6 +2,7 @@ import type { ResolvedRecipient } from "./recipient.js";
 import type { Route } from "./route.js";
 import type { FeeBreakdown } from "./fee.js";
 import type { Token } from "./token.js";
+import type { RoutePlan } from "../routing/plan.js";
 
 export type Quote = {
   route: Route;
@@ -19,4 +20,6 @@ export type Quote = {
   token: Token;
   fees: FeeBreakdown;
   estimatedDurationMs?: number;
+  /** Present on bridge quotes. */
+  plan?: RoutePlan;
 };

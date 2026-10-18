@@ -1,4 +1,11 @@
-import { getChain, type CctpChain, type Ecosystem } from "@usewhisk/cctp";
+import {
+  attestationSeconds,
+  getChain,
+  type CctpChain,
+  type Ecosystem,
+  type SecondsRange,
+  type TransferSpeed,
+} from "@usewhisk/cctp";
 import type { Chain, ChainNetwork } from "../types/chain.js";
 import {
   NetworkMismatchError,
@@ -13,9 +20,12 @@ export interface RoutePlan {
   source: CctpChain;
   destination: CctpChain;
   network: ChainNetwork;
-  speed: "fast";
+  /** Standard where the source has no Fast Transfer. */
+  speed: TransferSpeed;
   mint: RouteMint;
   requiredAdapters: readonly Ecosystem[];
+  /** Circle's attestation time for the source. The mint adds a few seconds. */
+  etaSeconds: SecondsRange;
 }
 
 export type PlanRouteInput = {
@@ -43,12 +53,9 @@ export function planRoute(input: PlanRouteInput): RoutePlan {
   if (source.network !== destination.network) {
     throw new NetworkMismatchError(source.label, destination.label);
   }
-  if (!source.capabilities.fastSource) {
-    throw new RouteUnavailableError(
-      "standard_only_source",
-      `Bridges from ${source.label} are not available yet.`,
-    );
-  }
+  const speed: TransferSpeed = source.capabilities.fastSource
+    ? "fast"
+    : "standard";
 
   const forwarded =
     input.useForwarder &&
@@ -86,9 +93,10 @@ export function planRoute(input: PlanRouteInput): RoutePlan {
     source,
     destination,
     network: source.network,
-    speed: "fast",
+    speed,
     mint,
     requiredAdapters,
+    etaSeconds: attestationSeconds(source, speed),
   };
 }
 

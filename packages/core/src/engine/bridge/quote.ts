@@ -34,6 +34,7 @@ import type { FeeBearer, FeeEntry, FeePolicy } from "../../types/fee.js";
 import type { Quote } from "../../types/quote.js";
 import type { ResolvedRecipient } from "../../types/recipient.js";
 import { buildCustomFeeEntries, sumFees } from "../../fees/calculate.js";
+import type { RoutePlan } from "../../routing/plan.js";
 import { formatUsdcAmount, parseUsdcAmount } from "../amount.js";
 
 export type BuildBridgeQuoteInput = {
@@ -61,10 +62,8 @@ export type BuildBridgeQuoteInput = {
    */
   customFee?: FeePolicy;
   fetch?: typeof fetch;
+  plan: RoutePlan;
 };
-
-/** Estimated end-to-end duration for a Fast Transfer bridge. */
-const FAST_BRIDGE_DURATION_MS = 30_000;
 
 export type BuildBridgeQuoteResult = {
   quote: Quote;
@@ -103,6 +102,7 @@ export async function buildBridgeQuote(
           ...(input.fetch && { fetch: input.fetch }),
         },
       ),
+      input.plan.speed,
     );
 
   // First pass computes fees against the raw `amount` to derive the
@@ -207,7 +207,8 @@ export async function buildBridgeQuote(
     amountBurned: formatUsdcAmount(burnAmount),
     token,
     fees: sumFees(entries, token),
-    estimatedDurationMs: FAST_BRIDGE_DURATION_MS,
+    estimatedDurationMs: input.plan.etaSeconds.max * 1000,
+    plan: input.plan,
   };
 
   return {
