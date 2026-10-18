@@ -183,3 +183,46 @@ describe("explorer URLs", () => {
     );
   });
 });
+
+describe("standard fee switch", () => {
+  // Read from each TokenMessengerV2 on 2026-10-18: these answer
+  // getMinFeeAmount, the rest revert. check:registry re-reads them nightly.
+  const SWITCHED = [
+    "Monad",
+    "Sei",
+    "XDC",
+    "HyperEVM",
+    "Ink",
+    "Plume",
+    "Arc",
+    "Edge",
+    "Injective",
+    "Morph",
+    "Pharos",
+    "Cronos",
+    "Plasma",
+    "X_Layer",
+    "Sonic_Testnet",
+    "Monad_Testnet",
+    "Sei_Testnet",
+    "XDC_Apothem",
+    "HyperEVM_Testnet",
+    "Ink_Testnet",
+    "Plume_Testnet",
+    "Arc_Testnet",
+    "Edge_Testnet",
+    "Injective_Testnet",
+    "Morph_Testnet",
+    "Pharos_Testnet",
+    "Cronos_Testnet",
+    "Plasma_Testnet",
+    "X_Layer_Testnet",
+  ];
+
+  it("is set exactly on the chains whose TokenMessengerV2 has getMinFeeAmount", () => {
+    const flagged = ALL.filter((c) => c.capabilities.standardFeeSwitch).map(
+      (c) => c.id,
+    );
+    expect([...flagged].sort()).toEqual([...SWITCHED].sort());
+  });
+});

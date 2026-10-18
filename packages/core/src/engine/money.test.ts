@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Arbitrum, Base } from "@usewhisk/cctp";
 import type { WhiskConfig } from "../types/config.js";
 import { createWhisk as createEngine } from "./createWhisk.js";
+import { formatUsdcAmount } from "./amount.js";
 import {
   createFakeEvmWallet,
   createFakeIris,
@@ -41,7 +42,7 @@ async function protocolFee(amount: string, minimumFee: number) {
     amount,
     adapter: adapter(),
   });
-  return quote.fees.entries.find((e) => e.kind === "protocol")?.amount;
+  return formatUsdcAmount(quote.subunits.burnFee);
 }
 
 describe("money maths", () => {

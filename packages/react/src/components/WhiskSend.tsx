@@ -14,6 +14,8 @@ import {
   getChain,
   isBridgeRoute,
   isSendRoute,
+  QuoteChangedError,
+  QuoteExpiredError,
   type Chain,
   type ChainKind,
   type Quote,
@@ -23,6 +25,7 @@ import {
   type WhiskAdapter,
 } from "@usewhisk/core";
 import { Card } from "./ui/Card.js";
+import { Banner } from "./ui/Banner.js";
 import { Button } from "./ui/Button.js";
 import { ChainPicker } from "./ui/ChainPicker.js";
 import { ConnectModal } from "./ui/ConnectModal.js";
@@ -176,8 +179,14 @@ export function WhiskSend({
 
   const [resolved, setResolved] = useState<ResolvedRecipient | null>(null);
   const [recipientError, setRecipientError] = useState<string | null>(null);
-  const [quote, setQuote] = useState<Quote | null>(null);
+  // A quote only counts for the inputs it was built from, so a refresh that
+  // lands after an edit can never be sent for the new amount.
+  const [quoted, setQuoted] = useState<{ key: string; quote: Quote } | null>(
+    null,
+  );
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [feeRise, setFeeRise] = useState<Quote | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SendSuccess | SendFailure | null>(null);
 
@@ -266,10 +275,21 @@ export function WhiskSend({
     };
   }, [recipient, destinationForTab, engine]);
 
+  const quoteKey = [
+    sourceChain,
+    destinationForTab,
+    resolved?.address ?? "",
+    amount,
+  ].join("|");
+  const quote = quoted?.key === quoteKey ? quoted.quote : null;
+
+  useEffect(() => {
+    setFeeRise(null);
+  }, [quoteKey]);
+
   // Quote the transfer whenever inputs change and we have a resolved
   // recipient. Same-chain quotes are free; bridge quotes hit Iris.
   useEffect(() => {
-    setQuote(null);
     setQuoteError(null);
     if (!resolved || !amount.trim() || !adapter) return;
     let cancelled = false;
@@ -283,7 +303,7 @@ export function WhiskSend({
           adapter,
           ...(destinationAdapter && { destinationAdapter }),
         });
-        if (!cancelled) setQuote(q);
+        if (!cancelled) setQuoted({ key: quoteKey, quote: q });
       } catch (err) {
         if (!cancelled) {
           setQuoteError(
@@ -301,9 +321,23 @@ export function WhiskSend({
     destinationAdapter,
     destinationForTab,
     engine,
+    quoteKey,
+    refreshTick,
     resolved,
     sourceChain,
   ]);
+
+  // Quotes expire after a minute; fetch a new one shortly before so the
+  // payer never presses send on a lapsed quote.
+  useEffect(() => {
+    if (!quote || submitting) return;
+    const lead = 5_000;
+    const id = setTimeout(
+      () => setRefreshTick((t) => t + 1),
+      Math.max(0, quote.expiresAt - Date.now() - lead),
+    );
+    return () => clearTimeout(id);
+  }, [quote, submitting]);
 
   // Reset the result panel when the user edits any input after a
   // success / failure — they're starting a new transfer.
@@ -315,12 +349,9 @@ export function WhiskSend({
     if (!adapter || !resolved || !quote) return;
     setSubmitting(true);
     setResult(null);
+    setFeeRise(null);
     try {
       const r = await engine.send({
-        sourceChain,
-        destinationChain: destinationForTab,
-        recipient: resolved,
-        amount,
         adapter,
         ...(destinationAdapter && { destinationAdapter }),
         quote,
@@ -328,6 +359,15 @@ export function WhiskSend({
       setResult(r);
       if (r.kind === "success") onSuccess?.(r);
       else onFailure?.(r);
+    } catch (err) {
+      if (err instanceof QuoteChangedError) {
+        setQuoted({ key: quoteKey, quote: err.quote });
+        setFeeRise(err.previous);
+      } else if (err instanceof QuoteExpiredError) {
+        setRefreshTick((t) => t + 1);
+      } else {
+        throw err;
+      }
     } finally {
       setSubmitting(false);
     }
@@ -464,6 +504,15 @@ export function WhiskSend({
 
       {result ? <ResultPanel result={result} /> : null}
 
+      {feeRise && quote ? (
+        <Banner variant="warning">
+          Fees went up since your quote. You pay {feeRise.amountIn} →{" "}
+          {quote.amountIn} {quote.token}, and the recipient gets{" "}
+          {feeRise.amountOut} → {quote.amountOut} {quote.token}. Press the
+          button again to confirm.
+        </Banner>
+      ) : null}
+
       <Button
         variant="primary"
         onClick={
@@ -475,9 +524,11 @@ export function WhiskSend({
           ? "Connect wallet"
           : submitting
             ? "Sending…"
-            : tab === "bridge"
-              ? "Bridge USDC"
-              : "Send USDC"}
+            : feeRise
+              ? "Confirm new fees"
+              : tab === "bridge"
+                ? "Bridge USDC"
+                : "Send USDC"}
       </Button>
 
       <ConnectModal open={showConnect} onOpenChange={setShowConnect} />

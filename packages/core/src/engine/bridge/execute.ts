@@ -22,7 +22,6 @@ import {
   type BurnFeeTier,
   type EvmChain,
   type Network,
-  type ForwarderFeeTier,
   type IrisMessage,
 } from "@usewhisk/cctp";
 import { toWhiskError, WhiskError } from "../../errors/errors.js";
@@ -51,7 +50,6 @@ export type ExecuteBridgeInput = {
   forwarderFee: bigint;
   /** Fee tier — preserved for re-encoding on retry. */
   tier: BurnFeeTier;
-  forwarderLevel?: keyof ForwarderFeeTier;
   /** Default `true`. When `false`, the user must mint manually. */
   useForwarder?: boolean;
   /**
@@ -120,12 +118,7 @@ export async function executeBridge(
       destination: input.destination,
       amount: input.burnAmount,
       mintRecipient: input.recipientAddress,
-      fee: {
-        tier: input.tier,
-        ...(input.forwarderLevel !== undefined && {
-          forwarderLevel: input.forwarderLevel,
-        }),
-      },
+      fee: { tier: input.tier, maxFee: input.maxFee },
       withForwarder: useForwarder,
     });
     burnCalls = intent.calls.map((c) => ({

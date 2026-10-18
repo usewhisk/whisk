@@ -76,7 +76,13 @@ export type BuildBurnIntentInput = {
   fee: Pick<
     ComputeMaxFeeInput,
     "tier" | "forwarderLevel" | "forwarderBufferBps"
-  >;
+  > & {
+    /**
+     * Burn with exactly this cap instead of one computed from the tier. Pass
+     * the `maxFee` the payer confirmed.
+     */
+    maxFee?: bigint;
+  };
 };
 
 /** Hard cap from CCTP — single burn cannot exceed $10M USDC. */
@@ -164,7 +170,7 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
   const destinationCaller = input.destinationCaller ?? ANY_DESTINATION_CALLER;
 
   // ---- fee math ------------------------------------------------------------
-  const { burnFee, forwarderFee, maxFee } = computeMaxFee({
+  const computed = computeMaxFee({
     amount: input.amount,
     tier: input.fee.tier,
     ...(input.fee.forwarderLevel !== undefined && {
@@ -175,6 +181,14 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
     }),
     includeForwarder: withForwarder,
   });
+  const { burnFee, forwarderFee } = computed;
+  const maxFee = input.fee.maxFee ?? computed.maxFee;
+  if (maxFee < 0n || maxFee >= input.amount) {
+    throw new InvalidInputError(
+      "invalid_amount",
+      `maxFee must be at least 0 and below amount (TokenMessengerV2 reverts otherwise), got ${maxFee}`,
+    );
+  }
 
   // ---- encode --------------------------------------------------------------
   const mintRecipientBytes32: `0x${string}` =

@@ -196,3 +196,47 @@ describe("computeMaxFee — error cases", () => {
     ).toThrow(/whole number/);
   });
 });
+
+describe("computeMaxFee protocol fee buffer and floor", () => {
+  const tier: BurnFeeTier = {
+    finalityThreshold: 1000,
+    minimumFee: 130n,
+    forwardFee: { low: 206_035n, med: 207_543n, high: 209_052n },
+  };
+
+  it("buffers the protocol fee but not the forwarder fee", () => {
+    const result = computeMaxFee({
+      amount: 5_000_000n,
+      tier,
+      forwarderLevel: "high",
+      burnFeeBufferBps: 1000,
+    });
+    expect(result.burnFee).toBe(650n);
+    expect(result.forwarderFee).toBe(209_052n);
+    expect(result.maxFee).toBe(715n + 209_052n);
+  });
+
+  it("rounds the buffered protocol fee up", () => {
+    const result = computeMaxFee({
+      amount: 3_000_001n,
+      tier,
+      includeForwarder: false,
+      burnFeeBufferBps: 1000,
+    });
+    // 391 * 1.1 is 430.1.
+    expect(result.burnFee).toBe(391n);
+    expect(result.maxFee).toBe(431n);
+  });
+
+  it("raises the protocol fee to an on-chain minimum", () => {
+    const standard: BurnFeeTier = { finalityThreshold: 2000, minimumFee: 0n };
+    const result = computeMaxFee({
+      amount: 5_000_000n,
+      tier: standard,
+      includeForwarder: false,
+      minBurnFee: 1_000n,
+    });
+    expect(result.burnFee).toBe(1_000n);
+    expect(result.maxFee).toBe(1_000n);
+  });
+});

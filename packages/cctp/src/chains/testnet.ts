@@ -22,6 +22,7 @@ export const EthereumSepolia = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -43,6 +44,7 @@ export const AvalancheFuji = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -64,6 +66,7 @@ export const OptimismSepolia = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -85,6 +88,7 @@ export const ArbitrumSepolia = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -106,6 +110,7 @@ export const BaseSepolia = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -127,6 +132,7 @@ export const PolygonAmoyTestnet = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -148,6 +154,7 @@ export const UnichainSepolia = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -169,6 +176,7 @@ export const LineaSepolia = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -190,6 +198,7 @@ export const CodexTestnet = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -211,6 +220,7 @@ export const SonicTestnet = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -232,6 +242,7 @@ export const WorldChainSepolia = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -256,6 +267,7 @@ export const MonadTestnet = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -277,6 +289,7 @@ export const SeiTestnet = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -301,6 +314,7 @@ export const XDCApothem = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -322,6 +336,7 @@ export const HyperEVMTestnet = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -346,6 +361,7 @@ export const InkTestnet = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -367,6 +383,7 @@ export const PlumeTestnet = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -388,6 +405,7 @@ export const ArcTestnet = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -409,6 +427,7 @@ export const EdgeTestnet = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -433,6 +452,7 @@ export const InjectiveTestnet = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -454,6 +474,7 @@ export const MorphTestnet = {
     fastSource: true,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -475,6 +496,7 @@ export const PharosTestnet = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -496,6 +518,7 @@ export const CronosTestnet = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -517,6 +540,7 @@ export const PlasmaTestnet = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -541,6 +565,7 @@ export const XLayerTestnet = {
     fastSource: true,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 

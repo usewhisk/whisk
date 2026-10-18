@@ -30,6 +30,7 @@ export const Starknet = {
     fastSource: true,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: false,
   },
 } as const satisfies StarknetChain;
 
@@ -52,5 +53,6 @@ export const StarknetSepolia = {
     fastSource: true,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: false,
   },
 } as const satisfies StarknetChain;

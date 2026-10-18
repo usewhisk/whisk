@@ -13,6 +13,8 @@ export {
   ConfigError,
   NetworkMismatchError,
   RouteUnavailableError,
+  QuoteChangedError,
+  QuoteExpiredError,
   toWhiskError,
   cleanErrorMessage,
 } from "./errors.js";

@@ -59,10 +59,6 @@ describe("webhook + receipt + metadata pipeline", () => {
       adapter,
     });
     const result = await engine.send({
-      sourceChain: "Base",
-      destinationChain: "Base",
-      recipient: { address: RECIPIENT, chain: "Base" },
-      amount: "10",
       adapter,
       quote,
       metadata: { orderId: "ord_42" },
@@ -112,15 +108,15 @@ describe("webhook + receipt + metadata pipeline", () => {
 
   it("rejects a tampered envelope body", async () => {
     const engine = createWhisk({ chains: ["Base"] });
-    const result = await engine.send({
+    const adapter = makeAdapter();
+    const quote = await engine.quote({
       sourceChain: "Base",
       destinationChain: "Base",
       recipient: { address: RECIPIENT, chain: "Base" },
       amount: "1",
-      adapter: makeAdapter(),
-      // @ts-expect-error — quote is unused on the executor path
-      quote: {},
+      adapter,
     });
+    const result = await engine.send({ adapter, quote });
     const signed = await signWebhook(result, SECRET);
     const tampered = signed.body.replace(
       '"kind":"success"',

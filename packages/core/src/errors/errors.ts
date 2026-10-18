@@ -1,4 +1,5 @@
 import type { StepName } from "../types/step.js";
+import type { Quote } from "../types/quote.js";
 
 export type WhiskErrorCode =
   | "NO_ADAPTER"
@@ -14,6 +15,8 @@ export type WhiskErrorCode =
   | "CONFIG_ERROR"
   | "NETWORK_MISMATCH"
   | "ROUTE_UNAVAILABLE"
+  | "QUOTE_EXPIRED"
+  | "QUOTE_CHANGED"
   | "UNKNOWN";
 
 /** Mirrored from App Kit's `BridgeStepErrorCategory` (App Kit 1.4.2+). */
@@ -252,6 +255,36 @@ export class RouteUnavailableError extends WhiskError {
   ) {
     super({ code: "ROUTE_UNAVAILABLE", message, retryable: false });
     this.name = "RouteUnavailableError";
+  }
+}
+
+/** The quote is past `expiresAt`. Nothing was signed; quote again. */
+export class QuoteExpiredError extends WhiskError {
+  constructor(public readonly quote: Quote) {
+    super({
+      code: "QUOTE_EXPIRED",
+      message: "This quote has expired. Get a new quote and confirm it.",
+      retryable: true,
+    });
+    this.name = "QuoteExpiredError";
+  }
+}
+
+/**
+ * Fees or the route moved past what the payer confirmed. Nothing was signed.
+ * `quote` is the fresh quote to show for confirmation.
+ */
+export class QuoteChangedError extends WhiskError {
+  constructor(
+    public readonly previous: Quote,
+    public readonly quote: Quote,
+  ) {
+    super({
+      code: "QUOTE_CHANGED",
+      message: "Fees went up since your quote. Confirm the new quote to send.",
+      retryable: true,
+    });
+    this.name = "QuoteChangedError";
   }
 }
 

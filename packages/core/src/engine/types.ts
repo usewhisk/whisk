@@ -47,8 +47,15 @@ export type QuoteParams = {
   token?: Token;
 };
 
-export type SendParams = QuoteParams & {
+/**
+ * The chains, recipient and amount all come from `quote`, the one the payer
+ * confirmed. `send` refuses it once expired, or when fees rose past it.
+ */
+export type SendParams = {
   quote: Quote;
+  adapter: WhiskAdapter;
+  /** See {@link QuoteParams.destinationAdapter}. */
+  destinationAdapter?: WhiskAdapter;
   /**
    * Optional correlation metadata. Merged with `WhiskConfig.defaultMetadata`
    * (per-call keys override defaults). Echoed in `SendResult.metadata`.

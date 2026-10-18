@@ -28,6 +28,7 @@ export const Solana = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: false,
+    standardFeeSwitch: false,
   },
 } as const satisfies SolanaChain;
 
@@ -50,5 +51,6 @@ export const SolanaDevnet = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: false,
+    standardFeeSwitch: false,
   },
 } as const satisfies SolanaChain;
