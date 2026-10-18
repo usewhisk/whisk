@@ -44,8 +44,15 @@ export type WhiskConfig = {
   useForwarder?: boolean;
 
   /**
-   * Used for every Iris request. Defaults to the global `fetch`. Pass one
-   * to route Iris through a proxy, or to stub Circle in tests.
+   * Circle's forwarding fee level. Defaults to `high`, or `med` into
+   * Ethereum, where `high` costs about 0.30 USDC more.
+   */
+  forwarderFeeLevel?: "med" | "high";
+
+  /**
+   * Used for every Iris request and for the `getMinFeeAmount` read on
+   * Standard burns. Defaults to the global `fetch`. Pass one to route Circle
+   * through a proxy, or to stub it in tests.
    */
   fetch?: typeof fetch;
 

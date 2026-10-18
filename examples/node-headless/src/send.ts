@@ -43,10 +43,6 @@ async function main() {
   console.log("Sending…");
   const result = await engine.send(
     {
-      recipient,
-      amount: AMOUNT,
-      sourceChain: "Base_Sepolia",
-      destinationChain: "Ethereum_Sepolia",
       adapter,
       quote,
     },

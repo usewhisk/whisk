@@ -177,6 +177,32 @@ describe("buildBurnIntent finality", () => {
   });
 });
 
+describe("buildBurnIntent confirmed maxFee", () => {
+  it("burns with the maxFee it is given instead of one from the tier", () => {
+    const intent = buildBurnIntent({
+      source: Base,
+      destination: Arbitrum,
+      amount: 5_000_000n,
+      mintRecipient: RECIPIENT,
+      fee: { tier: FAST_TIER, maxFee: 123_456n },
+    });
+    expect(intent.maxFee).toBe(123_456n);
+    expect(burnArgs(intent.calls[1]?.data)[5]).toBe(123_456n);
+  });
+
+  it("refuses a maxFee that is not below the amount", () => {
+    expect(() =>
+      buildBurnIntent({
+        source: Base,
+        destination: Arbitrum,
+        amount: 5_000_000n,
+        mintRecipient: RECIPIENT,
+        fee: { tier: FAST_TIER, maxFee: 5_000_000n },
+      }),
+    ).toThrow(InvalidInputError);
+  });
+});
+
 describe("buildBurnIntent — validation", () => {
   it("rejects same source and destination domain", () => {
     expect(() =>

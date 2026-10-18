@@ -34,7 +34,6 @@ import {
   type BurnFeeTier,
   type EvmChain,
   type Network,
-  type ForwarderFeeTier,
   type IrisMessage,
   type SolanaChain,
   type SolanaInstruction,
@@ -64,7 +63,6 @@ export type ExecuteEvmToSolanaInput = {
   burnFee: bigint;
   forwarderFee: bigint;
   tier: BurnFeeTier;
-  forwarderLevel?: keyof ForwarderFeeTier;
   /** Always false in this direction — no Solana-side Forwarder. */
   useForwarder?: false;
   customFeeCalls?: EvmCall[];
@@ -138,12 +136,7 @@ export async function executeEvmToSolana(
       destination: input.destination,
       amount: input.burnAmount,
       mintRecipient: recipientUsdcAta.toBase58(),
-      fee: {
-        tier: input.tier,
-        ...(input.forwarderLevel !== undefined && {
-          forwarderLevel: input.forwarderLevel,
-        }),
-      },
+      fee: { tier: input.tier, maxFee: input.maxFee },
       // Hard-disable Forwarder — Solana has no Forwarder contract.
       withForwarder: false,
     });

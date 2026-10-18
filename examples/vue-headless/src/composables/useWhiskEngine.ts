@@ -259,10 +259,6 @@ export function useWhiskEngine(): UseWhiskEngineResult {
       );
       const result = await engine.send(
         {
-          recipient,
-          amount: input.amount,
-          sourceChain: input.sourceChain,
-          destinationChain: input.destinationChain,
           adapter: adapter.value,
           quote: q,
         },

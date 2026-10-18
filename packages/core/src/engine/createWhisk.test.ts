@@ -38,6 +38,7 @@ const FORWARDED_MESSAGE: IrisMessage = {
 };
 
 const RECIPIENT = "0x0000000000000000000000000000000000000020";
+const SOLANA_RECIPIENT = "11111111111111111111111111111112";
 
 let iris: FakeIris;
 beforeEach(() => {
@@ -133,10 +134,6 @@ describe("createWhisk", () => {
       adapter,
     });
     const result = await engine.send({
-      sourceChain: "Base",
-      destinationChain: "Base",
-      recipient: { address: RECIPIENT, chain: "Base" },
-      amount: "1.5",
       adapter,
       quote,
     });
@@ -158,10 +155,6 @@ describe("createWhisk", () => {
       adapter,
     });
     const result = await engine.send({
-      sourceChain: "Base",
-      destinationChain: "Arbitrum",
-      recipient: { address: RECIPIENT, chain: "Arbitrum" },
-      amount: "5",
       adapter,
       quote,
     });
@@ -183,32 +176,31 @@ describe("createWhisk", () => {
 
   it("rejects an EVM adapter when the chain is Solana with a clear ConfigError", async () => {
     const engine = createWhisk({ chains: ["Solana"] });
-    await expect(
-      engine.send({
-        sourceChain: "Solana",
-        destinationChain: "Solana",
-        recipient: { address: RECIPIENT, chain: "Solana" },
-        amount: "1",
-        adapter: makeAdapter(),
-        // @ts-expect-error — placeholder; quote isn't used on the failure path
-        quote: {},
-      }),
-    ).rejects.toThrow(/Connect a Solana wallet|kind/i);
+    const adapter = makeAdapter();
+    const quote = await engine.quote({
+      sourceChain: "Solana",
+      destinationChain: "Solana",
+      recipient: { address: SOLANA_RECIPIENT, chain: "Solana" },
+      amount: "1",
+      adapter,
+    });
+    await expect(engine.send({ adapter, quote })).rejects.toThrow(
+      /Connect a Solana wallet|kind/i,
+    );
   });
 
   it("requires a destinationAdapter for EVM → Solana bridges", async () => {
     const engine = createWhisk({ chains: ["Base", "Solana"] });
-    await expect(
-      engine.send({
-        sourceChain: "Base",
-        destinationChain: "Solana",
-        recipient: { address: RECIPIENT, chain: "Solana" },
-        amount: "1",
-        adapter: makeAdapter(),
-        // @ts-expect-error — quote not used on the failure path
-        quote: {},
-      }),
-    ).rejects.toMatchObject({
+    const adapter = makeAdapter();
+    const quote = await engine.quote({
+      sourceChain: "Base",
+      destinationChain: "Solana",
+      recipient: { address: SOLANA_RECIPIENT, chain: "Solana" },
+      amount: "5",
+      adapter,
+      destinationAdapter: makeSolanaAdapter().adapter,
+    });
+    await expect(engine.send({ adapter, quote })).rejects.toMatchObject({
       code: "ROUTE_UNAVAILABLE",
       reason: "destination_adapter_required",
       ecosystem: "solana",
@@ -288,16 +280,16 @@ describe("route planning", () => {
       useForwarder: false,
     });
     const solana = makeSolanaAdapter();
+    const quote = await engine.quote({
+      sourceChain: "Solana",
+      destinationChain: "Base",
+      recipient: { address: RECIPIENT, chain: "Base" },
+      amount: "5",
+      adapter: solana.adapter,
+      destinationAdapter: makeAdapter(),
+    });
     await expect(
-      engine.send({
-        sourceChain: "Solana",
-        destinationChain: "Base",
-        recipient: { address: RECIPIENT, chain: "Base" },
-        amount: "1",
-        adapter: solana.adapter,
-        // @ts-expect-error the quote is never read when planning fails
-        quote: {},
-      }),
+      engine.send({ adapter: solana.adapter, quote }),
     ).rejects.toMatchObject({
       code: "ROUTE_UNAVAILABLE",
       reason: "destination_adapter_required",

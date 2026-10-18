@@ -30,6 +30,11 @@ export interface ChainCapabilities {
   forwardingDestination: boolean;
   /** Iris quotes an upfront fee for burns from this chain. */
   upfrontFeeSource: boolean;
+  /**
+   * TokenMessengerV2 has `getMinFeeAmount`, which can make a Standard burn
+   * cost more than Iris says. On the other chains the call reverts.
+   */
+  standardFeeSwitch: boolean;
 }
 
 interface ChainBase {

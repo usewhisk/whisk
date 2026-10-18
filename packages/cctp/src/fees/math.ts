@@ -105,9 +105,17 @@ export type ComputeMaxFeeInput = {
   forwarderBufferBps?: number;
   /** Whether to include the forwarder fee. Defaults to `true`. */
   includeForwarder?: boolean;
+  /**
+   * Whole basis points added to the protocol fee in `maxFee` only. Circle
+   * takes the fee it executes, so the buffer is a ceiling, not a charge.
+   */
+  burnFeeBufferBps?: number;
+  /** The on-chain minimum from `getMinFeeAmount`, in USDC subunits. */
+  minBurnFee?: bigint;
 };
 
 export type ComputeMaxFeeResult = {
+  /** The protocol fee Iris quotes, before any buffer. */
   burnFee: bigint;
   forwarderFee: bigint;
   /** Total cap to pass as `maxFee` on `depositForBurnWithHook`. */
@@ -117,7 +125,7 @@ export type ComputeMaxFeeResult = {
 /**
  * Compute `maxFee` for a CCTP V2 bridge.
  *
- *   maxFee = burnFee + forwarderFee (+ buffer)
+ *   maxFee = burnFee (+ buffer) + forwarderFee (+ buffer)
  *
  * The result is a cap; the actual deducted fee can be less.
  */
@@ -128,9 +136,12 @@ export function computeMaxFee(input: ComputeMaxFeeInput): ComputeMaxFeeResult {
     forwarderLevel = "med",
     forwarderBufferBps = 0,
     includeForwarder = true,
+    burnFeeBufferBps = 0,
+    minBurnFee = 0n,
   } = input;
 
-  const burnFee = computeBurnFee(amount, tier.minimumFee);
+  const irisFee = computeBurnFee(amount, tier.minimumFee);
+  const burnFee = irisFee > minBurnFee ? irisFee : minBurnFee;
   const forwarderFee = includeForwarder
     ? applyBufferBps(
         selectForwarderFee(tier, forwarderLevel),
@@ -141,7 +152,7 @@ export function computeMaxFee(input: ComputeMaxFeeInput): ComputeMaxFeeResult {
   return {
     burnFee,
     forwarderFee,
-    maxFee: burnFee + forwarderFee,
+    maxFee: applyBufferBps(burnFee, burnFeeBufferBps) + forwarderFee,
   };
 }
 

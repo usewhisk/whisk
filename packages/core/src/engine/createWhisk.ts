@@ -26,17 +26,25 @@ import type { WhiskConfig } from "../types/config.js";
 import type { ResolvedRecipient } from "../types/recipient.js";
 import type { Quote } from "../types/quote.js";
 import type { Chain } from "../types/chain.js";
-import { ConfigError } from "../errors/errors.js";
+import {
+  ConfigError,
+  QuoteChangedError,
+  QuoteExpiredError,
+} from "../errors/errors.js";
 import { addressResolver } from "../resolvers/address.js";
 import { decideRoute } from "../routing/decide.js";
-import { connectedEcosystems, planRoute } from "../routing/plan.js";
+import {
+  connectedEcosystems,
+  planRoute,
+  type RoutePlan,
+} from "../routing/plan.js";
 import { mergeMetadata, validateMetadata } from "../metadata/validate.js";
 import type { WhiskMetadata } from "../metadata/types.js";
 import { isBridgeRoute, isSendRoute } from "../types/route.js";
 import { DEFAULT_FEE_BEARER } from "../types/fee.js";
-import { parseUsdcAmount } from "./amount.js";
-import { buildQuote } from "./quote.js";
-import { buildBridgeQuote } from "./bridge/quote.js";
+import { formatUsdcAmount } from "./amount.js";
+import { buildQuote, rpcUrlsFor } from "./quote.js";
+import { computeBridgeFees, fetchFeeTier } from "./bridge/quote.js";
 import { executeBridge } from "./bridge/execute.js";
 import { executeSolanaToEvm } from "./bridge/executeSolanaToEvm.js";
 import { executeEvmToSolana } from "./bridge/executeEvmToSolana.js";
@@ -90,7 +98,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     useForwarder: config.useForwarder ?? true,
   };
   const resolver = resolvedConfig.resolver ?? addressResolver;
-  const feeBearer = resolvedConfig.feeBearer ?? DEFAULT_FEE_BEARER;
   const useForwarder = resolvedConfig.useForwarder ?? true;
 
   const engine: WhiskEngine = {
@@ -122,12 +129,12 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         resolvedConfig.defaultMetadata,
         params.metadata,
       );
+      if (Date.now() > params.quote.expiresAt) {
+        throw new QuoteExpiredError(params.quote);
+      }
       const result = await runRoute(
         {
-          sourceChain: params.sourceChain,
-          destinationChain: params.destinationChain,
-          recipient: params.recipient,
-          amount: params.amount,
+          quote: params.quote,
           adapter: params.adapter,
           ...(params.destinationAdapter && {
             destinationAdapter: params.destinationAdapter,
@@ -159,35 +166,112 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         address: plan.originalSenderAddress,
         chain: plan.refundDestinationChain,
       };
-      const result = await runRoute(
+      const adapters = {
+        adapter: params.merchantAdapter,
+        ...(params.destinationAdapter && {
+          destinationAdapter: params.destinationAdapter,
+        }),
+      };
+      const { quote } = await buildQuote(
         {
           sourceChain: plan.originalDestinationChain,
           destinationChain: plan.refundDestinationChain,
           recipient,
           amount: plan.amount,
-          adapter: params.merchantAdapter,
-          ...(params.destinationAdapter && {
-            destinationAdapter: params.destinationAdapter,
-          }),
+          ...adapters,
         },
-        listeners,
+        { config: resolvedConfig },
       );
+      const result = await runRoute({ quote, ...adapters }, listeners);
       return attachMetadata(result, refundMetadata);
     },
   };
 
+  type Adapters = { adapter: WhiskAdapter; destinationAdapter?: WhiskAdapter };
+
+  function quoteParams(quote: Quote, adapters: Adapters): QuoteParams {
+    const route = quote.route;
+    return {
+      sourceChain: route.kind === "bridge" ? route.sourceChain : route.chain,
+      destinationChain:
+        route.kind === "bridge" ? route.destinationChain : route.chain,
+      recipient: quote.recipient,
+      amount: formatUsdcAmount(quote.subunits.requested),
+      token: quote.token,
+      ...adapters,
+    };
+  }
+
+  async function changed(
+    quote: Quote,
+    adapters: Adapters,
+  ): Promise<QuoteChangedError> {
+    const fresh = await buildQuote(quoteParams(quote, adapters), {
+      config: resolvedConfig,
+    });
+    return new QuoteChangedError(quote, fresh.quote);
+  }
+
+  /**
+   * Holds `send` to the confirmed quote. Fresh Iris fees must still fit under
+   * `quote.maxFee`; the burn then uses the quote's amounts, never fresh ones.
+   */
+  async function bindBridgeQuote(
+    quote: Quote,
+    plan: RoutePlan,
+    adapters: Adapters,
+  ) {
+    const forwarded = plan.mint.kind === "forwarder";
+    if (
+      quote.plan?.speed !== plan.speed ||
+      quote.plan.mint.kind !== plan.mint.kind
+    ) {
+      throw await changed(quote, adapters);
+    }
+    const tier = await fetchFeeTier({
+      network: plan.network,
+      source: plan.source,
+      destination: plan.destination,
+      plan,
+      useForwarder: forwarded,
+      ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+    });
+    const rpcUrls = rpcUrlsFor(resolvedConfig, plan.source.id as Chain);
+    // What Circle charges now: the unbuffered protocol fee and the `med`
+    // forwarding fee, Circle's recommended floor.
+    const required = await computeBridgeFees(
+      {
+        source: plan.source,
+        plan,
+        tier,
+        forwarderLevel: "med",
+        useForwarder: forwarded,
+        ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+        ...(rpcUrls && { rpcUrls }),
+      },
+      quote.subunits.burnAmount,
+      { buffered: false },
+    );
+    if (required.maxFee > quote.subunits.maxFee) {
+      throw await changed(quote, adapters);
+    }
+    return {
+      tier,
+      burnAmount: quote.subunits.burnAmount,
+      burnFee: quote.subunits.burnFee,
+      forwarderFee: quote.subunits.forwarderFee,
+      maxFee: quote.subunits.maxFee,
+    };
+  }
+
   async function runRoute(
-    input: {
-      sourceChain: Chain;
-      destinationChain: Chain;
-      recipient: ResolvedRecipient;
-      amount: string;
-      adapter: WhiskAdapter;
-      destinationAdapter?: WhiskAdapter;
-    },
+    input: Adapters & { quote: Quote },
     listeners?: SendListeners,
   ): Promise<SendResult> {
-    const route = decideRoute(input.sourceChain, input.destinationChain);
+    const { sourceChain, destinationChain } = quoteParams(input.quote, input);
+    const recipient = input.quote.recipient;
+    const amount = input.quote.subunits.requested;
+    const route = decideRoute(sourceChain, destinationChain);
 
     if (isSendRoute(route)) {
       const cctpChain = getChain(route.chain);
@@ -197,8 +281,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeSameChainSolanaSend(
           {
             chain: cctpChain,
-            recipientAddress: input.recipient.address,
-            amount: parseUsdcAmount(input.amount),
+            recipientAddress: recipient.address,
+            amount,
             adapter,
           },
           listeners,
@@ -210,8 +294,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeSameChainStellarSend(
           {
             chain: cctpChain,
-            recipientAddress: input.recipient.address,
-            amount: parseUsdcAmount(input.amount),
+            recipientAddress: recipient.address,
+            amount,
             adapter,
           },
           listeners,
@@ -223,8 +307,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         return executeSameChainStarknetSend(
           {
             chain: cctpChain,
-            recipientAddress: input.recipient.address,
-            amount: parseUsdcAmount(input.amount),
+            recipientAddress: recipient.address,
+            amount,
             adapter,
           },
           listeners,
@@ -237,8 +321,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       return executeSameChainSend(
         {
           chain: evmSendChain,
-          recipientAddress: input.recipient.address,
-          amount: parseUsdcAmount(input.amount),
+          recipientAddress: recipient.address,
+          amount,
           adapter,
           ...(customFee && { customFeeCalls: customFee.calls }),
         },
@@ -255,23 +339,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       });
       const { source, destination, network } = plan;
       const forwarded = plan.mint.kind === "forwarder";
-
-      const bridge = await buildBridgeQuote({
-        network,
-        source,
-        destination,
-        sourceChain: route.sourceChain,
-        destinationChain: route.destinationChain,
-        recipient: input.recipient,
-        amount: input.amount,
-        feeBearer,
-        useForwarder: forwarded,
-        plan,
-        ...(resolvedConfig.feePolicy && {
-          customFee: resolvedConfig.feePolicy,
-        }),
-        ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
-      });
+      const bridge = await bindBridgeQuote(input.quote, plan, input);
 
       // --- EVM → EVM (the original path) -----------------------------------
       if (source.ecosystem === "evm" && destination.ecosystem === "evm") {
@@ -285,7 +353,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
             destination: evmDestination,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -314,7 +382,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: solSource,
             destination: evmDestination,
-            recipientAddress: input.recipient.address as `0x${string}`,
+            recipientAddress: recipient.address as `0x${string}`,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -349,7 +417,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
             destination: starknetDest,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -386,7 +454,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: starknetSource,
             destination: evmDestination,
-            recipientAddress: input.recipient.address as `0x${string}`,
+            recipientAddress: recipient.address as `0x${string}`,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -420,7 +488,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
             destination: stellarDest,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -459,7 +527,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: stellarSource,
             destination: evmDestination,
-            recipientAddress: input.recipient.address as `0x${string}`,
+            recipientAddress: recipient.address as `0x${string}`,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -495,7 +563,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: solSource,
             destination: starknetDest,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -534,7 +602,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: starknetSource,
             destination: solDestination,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -573,7 +641,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: stellarSource,
             destination: starknetDest,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -612,7 +680,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: starknetSource,
             destination: stellarDest,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -648,7 +716,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: solSource,
             destination: stellarDest,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -687,7 +755,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: stellarSource,
             destination: solDestination,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,
@@ -721,7 +789,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
             source: evmSource,
             destination: solDestination,
-            recipientAddress: input.recipient.address,
+            recipientAddress: recipient.address,
             burnAmount: bridge.burnAmount,
             maxFee: bridge.maxFee,
             burnFee: bridge.burnFee,

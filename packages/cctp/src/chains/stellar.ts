@@ -52,6 +52,7 @@ export const Stellar = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: false,
   },
 } as const satisfies StellarChain;
 
@@ -76,5 +77,6 @@ export const StellarTestnet = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: false,
   },
 } as const satisfies StellarChain;

@@ -60,10 +60,6 @@ async function main() {
         adapter,
       });
       const r = await engine.send({
-        recipient,
-        amount: payee.amount,
-        sourceChain: "Base_Sepolia",
-        destinationChain: "Ethereum_Sepolia",
         adapter,
         quote,
         metadata: { payeeId: payee.id },

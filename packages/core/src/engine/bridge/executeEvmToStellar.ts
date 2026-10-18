@@ -28,7 +28,6 @@ import {
   type BurnFeeTier,
   type EvmChain,
   type Network,
-  type ForwarderFeeTier,
   type IrisMessage,
   type StellarChain,
 } from "@usewhisk/cctp";
@@ -55,7 +54,6 @@ export type ExecuteEvmToStellarInput = {
   burnFee: bigint;
   forwarderFee: bigint;
   tier: BurnFeeTier;
-  forwarderLevel?: keyof ForwarderFeeTier;
   customFeeCalls?: EvmCall[];
   sourceAdapter: EvmAdapter;
   /** REQUIRED — signs `mint_and_forward` on Stellar. */
@@ -125,12 +123,7 @@ export async function executeEvmToStellar(
       amount: input.burnAmount,
       mintRecipient: forwarderHex,
       destinationCaller: forwarderHex,
-      fee: {
-        tier: input.tier,
-        ...(input.forwarderLevel !== undefined && {
-          forwarderLevel: input.forwarderLevel,
-        }),
-      },
+      fee: { tier: input.tier, maxFee: input.maxFee },
       // withForwarder=false avoids adding an Iris-side forwarder fee
       // (Stellar isn't on Iris's Forwarding Service). customHookData
       // still routes the call through depositForBurnWithHook so the

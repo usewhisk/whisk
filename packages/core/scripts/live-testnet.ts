@@ -862,10 +862,6 @@ async function sweepSameChain(
         adapter,
       });
       const result = await engine.send({
-        sourceChain: row.whiskChain,
-        destinationChain: row.whiskChain,
-        recipient: { address: recipientAddress, chain: row.whiskChain },
-        amount: SEND_AMOUNT,
         adapter,
         quote,
       });
@@ -951,10 +947,6 @@ async function sweepBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: src.whiskChain,
-        destinationChain: dst.whiskChain,
-        recipient: { address: account.address, chain: dst.whiskChain },
-        amount: BRIDGE_AMOUNT,
         adapter,
         quote,
       });
@@ -1092,10 +1084,6 @@ async function sweepRefund(
   process.stdout.write(`  Base Sepolia loopback  `);
   try {
     const send = await engine.send({
-      sourceChain: chain.whiskChain,
-      destinationChain: chain.whiskChain,
-      recipient: { address: account.address, chain: chain.whiskChain },
-      amount: "0.05",
       adapter,
       // @ts-expect-error — engine doesn't read the quote on same-chain
       quote: {},
@@ -1178,10 +1166,6 @@ async function sweepEdges(
     // Same-chain quote with "0" doesn't error in quote — it errors on
     // submit where parseUsdcAmount rejects "<= 0".
     const result = await engine.send({
-      sourceChain: base.whiskChain,
-      destinationChain: base.whiskChain,
-      recipient: { address: account.address, chain: base.whiskChain },
-      amount: "0",
       adapter,
       // @ts-expect-error — quote not read on same-chain path
       quote: {},
@@ -1306,10 +1290,6 @@ async function sweepCrossEcosystemBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: sol.whiskChain,
-        destinationChain: base.whiskChain,
-        recipient: { address: account.address, chain: base.whiskChain },
-        amount: XBRIDGE_AMOUNT,
         adapter: solAdapter,
         quote,
       });
@@ -1359,8 +1339,6 @@ async function sweepCrossEcosystemBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: base.whiskChain,
-        destinationChain: sol.whiskChain,
         recipient: {
           address: solanaKeypair.publicKey.toBase58(),
           chain: sol.whiskChain,
@@ -1447,10 +1425,6 @@ async function sweepStellarBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: stellar.whiskChain,
-        destinationChain: base.whiskChain,
-        recipient: { address: account.address, chain: base.whiskChain },
-        amount: STELLAR_BRIDGE_AMOUNT,
         adapter: stellarAdapter,
         destinationAdapter: evmAdapter,
         quote,
@@ -1506,8 +1480,6 @@ async function sweepStellarBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: base.whiskChain!,
-        destinationChain: stellar.whiskChain,
         recipient: {
           address: stellarKeypair.publicKey(),
           chain: stellar.whiskChain,
@@ -1567,8 +1539,6 @@ async function sweepStellarBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: sol.whiskChain,
-        destinationChain: stellar.whiskChain,
         recipient: {
           address: stellarKeypair.publicKey(),
           chain: stellar.whiskChain,
@@ -1627,8 +1597,6 @@ async function sweepStellarBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: stellar.whiskChain,
-        destinationChain: sol.whiskChain,
         recipient: {
           address: solanaKeypair!.publicKey.toBase58(),
           chain: sol.whiskChain,
@@ -1700,10 +1668,6 @@ async function sweepStarknetBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: starknet.whiskChain,
-        destinationChain: base.whiskChain,
-        recipient: { address: account.address, chain: base.whiskChain },
-        amount: STARKNET_BRIDGE_AMOUNT,
         adapter: stkAdapter,
         destinationAdapter: evmAdapter,
         quote,
@@ -1751,8 +1715,6 @@ async function sweepStarknetBridge(
         `quote(in=${quote.amountIn},out=${quote.amountOut})  `,
       );
       const result = await engine.send({
-        sourceChain: base.whiskChain,
-        destinationChain: starknet.whiskChain,
         recipient: {
           address: starknetAccount.address,
           chain: starknet.whiskChain,

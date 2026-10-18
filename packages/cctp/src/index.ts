@@ -89,11 +89,16 @@ export {
 export {
   computeBurnFee,
   computeMaxFee,
+  getStandardMinFee,
   parseFeeBps,
   parseForwarderFee,
   selectForwarderFee,
 } from "./fees/index.js";
-export type { ComputeMaxFeeInput, ComputeMaxFeeResult } from "./fees/index.js";
+export type {
+  ComputeMaxFeeInput,
+  ComputeMaxFeeResult,
+  GetStandardMinFeeOptions,
+} from "./fees/index.js";
 
 // Burn intent builder
 export { buildBurnIntent } from "./burn/index.js";

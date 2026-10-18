@@ -20,7 +20,6 @@ import {
   type BurnFeeTier,
   type EvmChain,
   type Network,
-  type ForwarderFeeTier,
   type IrisMessage,
   type StarknetChain,
   type StarknetFelt,
@@ -48,7 +47,6 @@ export type ExecuteEvmToStarknetInput = {
   burnFee: bigint;
   forwarderFee: bigint;
   tier: BurnFeeTier;
-  forwarderLevel?: keyof ForwarderFeeTier;
   customFeeCalls?: EvmCall[];
   sourceAdapter: EvmAdapter;
   /** REQUIRED — signs `receive_message` on Starknet. */
@@ -95,12 +93,7 @@ export async function executeEvmToStarknet(
       destination: input.destination,
       amount: input.burnAmount,
       mintRecipient: mintRecipientBytes32,
-      fee: {
-        tier: input.tier,
-        ...(input.forwarderLevel !== undefined && {
-          forwarderLevel: input.forwarderLevel,
-        }),
-      },
+      fee: { tier: input.tier, maxFee: input.maxFee },
       withForwarder: false, // no Iris forwarder for Starknet destinations
     });
     burnCalls = intent.calls.map((c) => ({

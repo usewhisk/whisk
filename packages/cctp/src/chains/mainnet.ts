@@ -25,6 +25,7 @@ export const Ethereum = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -46,6 +47,7 @@ export const Avalanche = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -67,6 +69,7 @@ export const Optimism = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -88,6 +91,7 @@ export const Arbitrum = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -109,6 +113,7 @@ export const Base = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -133,6 +138,7 @@ export const Polygon = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -154,6 +160,7 @@ export const Unichain = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -175,6 +182,7 @@ export const Linea = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -196,6 +204,7 @@ export const Codex = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -217,6 +226,7 @@ export const Sonic = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -238,6 +248,7 @@ export const WorldChain = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: false,
   },
 } as const satisfies EvmChain;
 
@@ -259,6 +270,7 @@ export const Monad = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -280,6 +292,7 @@ export const Sei = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -301,6 +314,7 @@ export const XDC = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -322,6 +336,7 @@ export const HyperEVM = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -346,6 +361,7 @@ export const Ink = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -367,6 +383,7 @@ export const Plume = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -388,6 +405,7 @@ export const Arc = {
     fastSource: false,
     forwardingDestination: true,
     upfrontFeeSource: true,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -409,6 +427,7 @@ export const Edge = {
     fastSource: true,
     forwardingDestination: true,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -433,6 +452,7 @@ export const Injective = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -454,6 +474,7 @@ export const Morph = {
     fastSource: true,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -475,6 +496,7 @@ export const Pharos = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -496,6 +518,7 @@ export const Cronos = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -517,6 +540,7 @@ export const Plasma = {
     fastSource: false,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 
@@ -538,6 +562,7 @@ export const XLayer = {
     fastSource: true,
     forwardingDestination: false,
     upfrontFeeSource: false,
+    standardFeeSwitch: true,
   },
 } as const satisfies EvmChain;
 

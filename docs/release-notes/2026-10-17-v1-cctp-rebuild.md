@@ -81,6 +81,32 @@ Technical shape, per
   the speed. Every burn builder takes its finality threshold from the fee tier:
   `minFinalityThreshold` is required on the Solana, Stellar and Starknet builders,
   and the EVM builder refuses a Fast tier on a chain without Fast.
+- A quote is what the payer signs
+  ([ADR-2026-10-18-bound-quotes-and-fees](../adr/ADR-2026-10-18-bound-quotes-and-fees.md)).
+  - `Quote` has an `id`, `issuedAt`, `expiresAt` (60 seconds), `feeMode` and
+    bigint `subunits`.
+  - `send({ quote, adapter, destinationAdapter?, metadata? })` reads the chains,
+    recipient and amount from the quote, and burns with exactly
+    `quote.subunits.maxFee` and `burnAmount`. Before, `send` fetched fees again
+    and could sign a different `maxFee` from the one shown (#87).
+  - An expired quote throws `QuoteExpiredError` (`QUOTE_EXPIRED`). If fresh Iris
+    fees no longer fit under the quote's `maxFee`, `send` throws
+    `QuoteChangedError` (`QUOTE_CHANGED`) carrying the fresh quote. Both happen
+    before anything is signed.
+  - `WhiskSend` fetches a new quote before the old one expires. When fees rise,
+    it shows the old and new totals and asks the payer to confirm again.
+  - `buildBurnIntent` takes `fee.maxFee` and burns with it as given.
+- Fast burns carry a 10% buffer on the protocol fee in `maxFee`. Circle takes
+  only the fee it executes, and the quote's protocol line shows the most it can
+  be. Before, a small fee rise could quietly turn a Fast transfer into a Standard
+  one.
+- Circle's forwarding fee defaults to the `high` level, or `med` into Ethereum,
+  where `high` costs about 0.30 USDC more. `createWhisk({ forwarderFeeLevel })`
+  overrides it.
+- Registry entries carry `standardFeeSwitch`, true where TokenMessengerV2 has
+  `getMinFeeAmount` (14 mainnets and their testnets, plus Sonic Testnet). A
+  Standard quote from those chains reads it with `getStandardMinFee` and never
+  charges less. `check:registry` checks the flag nightly.
 - The default resolver picks Sepolia or mainnet ENS from the destination chain's
   network.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

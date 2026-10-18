@@ -69,15 +69,14 @@ describe("customFee wiring", () => {
       feePolicy: { value: "1", recipient: MERCHANT },
     });
     const { adapter, wallet } = makeAdapter();
-    await engine.send({
+    const quote = await engine.quote({
       sourceChain: "Base",
       destinationChain: "Base",
       recipient: { address: RECIPIENT, chain: "Base" },
       amount: "10",
       adapter,
-      // @ts-expect-error — quote not required by the executor for Send
-      quote: {},
     });
+    await engine.send({ adapter, quote });
     expect(wallet.batches).toHaveLength(1);
     const calls = wallet.batches[0] ?? [];
     // [merchant fee, treasury fee, main transfer]
@@ -115,15 +114,14 @@ describe("customFee wiring", () => {
       feePolicy: { value: "1", recipient: MERCHANT },
     });
     const { adapter, wallet } = makeAdapter();
-    await engine.send({
+    const quote = await engine.quote({
       sourceChain: "Base",
       destinationChain: "Arbitrum",
       recipient: { address: RECIPIENT, chain: "Arbitrum" },
       amount: "5",
       adapter,
-      // @ts-expect-error — bridge executor rebuilds the quote internally
-      quote: {},
     });
+    await engine.send({ adapter, quote });
     // First sendCalls invocation: [merchantFee, treasuryFee, approve, burn]
     const firstBatch = wallet.batches[0] ?? [];
     expect(firstBatch).toHaveLength(4);
