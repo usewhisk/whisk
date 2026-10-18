@@ -4,7 +4,8 @@ import {
   Base,
   getBurnFees,
   getMessages,
-  IrisHttpError,
+  IrisRateLimitedError,
+  createIrisLimiter,
   pollMessages,
   tokenMessengerV2Abi,
   usdcAbi,
@@ -50,12 +51,18 @@ describe("fake iris", () => {
   it("returns scripted HTTP errors such as a 429", async () => {
     const iris = createFakeIris();
     iris.replyToMessages({ status: 429 });
+    // Its own limiter, so the stand-down does not reach the other tests.
     await expect(
       getMessages(
         { sourceDomain: 6, transactionHash: "0xabc" },
-        { network: "testnet", fetch: iris.fetch, maxRetries: 0 },
+        {
+          network: "testnet",
+          fetch: iris.fetch,
+          maxRetries: 0,
+          limiter: createIrisLimiter(),
+        },
       ),
-    ).rejects.toBeInstanceOf(IrisHttpError);
+    ).rejects.toBeInstanceOf(IrisRateLimitedError);
   });
 
   it("records the method and host of every request", async () => {

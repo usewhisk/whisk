@@ -18,6 +18,7 @@
  * Circle does NOT operate a Stellar relayer, so the destinationAdapter
  * is REQUIRED — there's no "auto-forwarder" fallback.
  */
+import { attestationPolling } from "./polling.js";
 import {
   buildBurnIntent,
   buildStellarForwarderHookData,
@@ -302,12 +303,7 @@ export async function executeEvmToStellar(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -327,18 +323,6 @@ export async function executeEvmToStellar(
       "Timed out waiting for the attestation.",
       snapshot,
       "polling_timeout",
-    );
-  }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(
-        `Iris reported attestation failure: ${message.delayReason ?? "no reason given"}.`,
-      ),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
     );
   }
   if (

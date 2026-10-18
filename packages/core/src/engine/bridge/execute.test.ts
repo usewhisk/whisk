@@ -163,15 +163,23 @@ describe("executeBridge — failures", () => {
     }
   });
 
-  it("returns a failed_offchain failure when Iris reports attestation failure", async () => {
-    iris.replyToMessages({
-      message: { ...MANUAL_MESSAGE, status: "failed", delayReason: "expired" },
+  it("treats a delay reason as a slow attestation, not a failure", async () => {
+    // Iris has no failed status: a short fee or allowance only slows it down.
+    iris.replyToMessages(
+      {
+        message: {
+          ...MANUAL_MESSAGE,
+          status: "pending_confirmations",
+          delayReason: "insufficient_fee",
+        },
+      },
+      { message: MANUAL_MESSAGE },
+    );
+    const result = await executeBridge({
+      ...baseInput(),
+      useForwarder: false,
     });
-    const result = await executeBridge(baseInput());
-    expect(result.kind).toBe("failure");
-    if (result.kind === "failure") {
-      expect(result.error.category).toBe("failed_offchain");
-    }
+    expect(result.kind).toBe("success");
   });
 
   it("returns a polling_timeout failure when the forwarder doesn't finalize", async () => {

@@ -126,6 +126,32 @@ Technical shape, per
     `check:registry` reads back nightly.
 - A Fast route whose amount exceeds Circle's remaining Fast allowance is
   planned as Standard, with the Standard ETA, at quote time and again at send.
+- `reattest(nonce)` sends `POST /v2/reattest/{nonce}` and returns Circle's
+  acknowledgement, `{ nonce }`. Before, it sent `GET`, which Iris does not
+  serve (#66).
+- Every Iris request goes through one rate limiter per process, at 30 requests
+  a second per host, under Circle's 35.
+  - A 429 makes that host stand down for five minutes, as Circle blocks the IP
+    for that long. Calls in the meantime throw `IrisRateLimitedError` with
+    `retryAt` instead of asking again.
+  - `pollMessages` waits a stand-down out without counting it against its
+    timeout, and reports it through `onRateLimited`.
+  - `createIrisLimiter` makes a separate limiter, passed as `limiter`.
+- Attestation polling is sized to the route's expected time:
+  - every 2 seconds when Circle's time is a minute or less, every 10 seconds up
+    to 30 minutes, every 30 seconds beyond that;
+  - for twice the expected time plus five minutes.
+
+  Before, every route polled every 3 seconds and gave up at 15 minutes, which
+  is shorter than a Standard transfer from Ethereum, Linea or Starknet.
+  `pollBudget(eta)` returns the numbers.
+- A relayed mint counts as done once Iris reports it `CONFIRMED` or `COMPLETE`
+  with its `forwardTxHash` (`isForwardDone`). Before, `send` waited for
+  `COMPLETE` alone.
+- Iris's message types match what it sends. `status` is `complete` or
+  `pending_confirmations`, as Iris never reports a failed attestation, and
+  `delayReason` is one of `insufficient_fee`, `amount_above_max` or
+  `insufficient_allowance_available`: reasons a message is slow, not failures.
 - The default resolver picks Sepolia or mainnet ENS from the destination chain's
   network.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

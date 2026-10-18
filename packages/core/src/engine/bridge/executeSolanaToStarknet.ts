@@ -5,6 +5,7 @@
  * Starknet felt is zero-extended into the 32-byte mintRecipient field.
  * Destination Starknet wallet signs `receive_message`.
  */
+import { attestationPolling } from "./polling.js";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import {
@@ -206,12 +207,7 @@ export async function executeSolanaToStarknet(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -231,16 +227,6 @@ export async function executeSolanaToStarknet(
       "Timed out waiting for the attestation.",
       snapshot,
       "polling_timeout",
-    );
-  }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(`Iris failed: ${message.delayReason ?? "no reason"}`),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
     );
   }
   if (

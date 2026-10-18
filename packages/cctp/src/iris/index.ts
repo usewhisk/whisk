@@ -15,6 +15,7 @@ export type {
   ForwardState,
   GetMessagesQuery,
   IrisAttestationStatus,
+  IrisDelayReason,
   IrisMessage,
   IrisMessagesResponse,
 } from "./types.js";
@@ -22,7 +23,14 @@ export type {
 export { getBurnFees, pickFeeTier, pickForwarderFee } from "./fees.js";
 export type { GetBurnFeesOptions } from "./fees.js";
 
-export { getMessages, pollMessages } from "./messages.js";
+export {
+  getMessages,
+  isForwardDone,
+  pollBudget,
+  pollMessages,
+} from "./messages.js";
+export { createIrisLimiter, defaultIrisLimiter } from "./limiter.js";
+export type { IrisLimiter, IrisLimiterOptions } from "./limiter.js";
 export type { GetMessagesOptions, PollMessageOptions } from "./messages.js";
 
 export { reattest } from "./reattest.js";

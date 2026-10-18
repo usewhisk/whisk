@@ -24,6 +24,7 @@
  *   - The recipient's ATA is created idempotently in the same tx as
  *     receive_message; no separate signature needed.
  */
+import { attestationPolling } from "./polling.js";
 import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
 import {
   buildSolanaReceiveIntent,
@@ -316,12 +317,7 @@ export async function executeEvmToSolana(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -341,18 +337,6 @@ export async function executeEvmToSolana(
       "Timed out waiting for the attestation.",
       snapshot,
       "polling_timeout",
-    );
-  }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(
-        `Iris reported attestation failure: ${message.delayReason ?? "no reason given"}.`,
-      ),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
     );
   }
   if (

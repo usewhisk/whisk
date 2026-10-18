@@ -10,6 +10,7 @@
  *   3. The destination Stellar wallet signs `mint_and_forward` on
  *      `CctpForwarder`. Atomic mint + forward to the user.
  */
+import { attestationPolling } from "./polling.js";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import {
@@ -229,12 +230,7 @@ export async function executeSolanaToStellar(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -254,18 +250,6 @@ export async function executeSolanaToStellar(
       "Timed out waiting for the attestation.",
       snapshot,
       "polling_timeout",
-    );
-  }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(
-        `Iris reported attestation failure: ${message.delayReason ?? "no reason given"}.`,
-      ),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
     );
   }
   if (

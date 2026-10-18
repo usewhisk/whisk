@@ -5,6 +5,7 @@
  * recipient's USDC ATA on Solana, packed as u256). Iris attests. Destination
  * Solana wallet signs `receive_message` directly to the recipient ATA.
  */
+import { attestationPolling } from "./polling.js";
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import {
@@ -215,12 +216,7 @@ export async function executeStarknetToSolana(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -240,16 +236,6 @@ export async function executeStarknetToSolana(
       "Timed out waiting for the attestation.",
       snapshot,
       "polling_timeout",
-    );
-  }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(`Iris failed: ${message.delayReason ?? "no reason"}`),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
     );
   }
   if (

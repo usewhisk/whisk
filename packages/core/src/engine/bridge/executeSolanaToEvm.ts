@@ -15,12 +15,14 @@
  * If the forwarder reports `FAILED`, the flow returns a typed failure
  * with the recovery snapshot.
  */
+import { attestationPolling } from "./polling.js";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import {
   buildMintIntent,
   buildSolanaBurnIntent,
   CCTP_FORWARD_HOOK_DATA,
+  isForwardDone,
   pollMessages,
   type BurnFeeTier,
   type EvmChain,
@@ -230,12 +232,7 @@ export async function executeSolanaToEvm(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -258,18 +255,6 @@ export async function executeSolanaToEvm(
       "polling_timeout",
     );
   }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(
-        `Iris reported attestation failure: ${message.delayReason ?? "no reason given"}.`,
-      ),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
-    );
-  }
   snapshot.message = message.message;
   snapshot.attestation = message.attestation;
   steps[2] = { name: "fetchAttestation", state: "success" };
@@ -287,8 +272,7 @@ export async function executeSolanaToEvm(
   }
 
   // ---- forwarder mint on EVM destination ---------------------------------
-  const forwardComplete =
-    message.forwardState === "COMPLETE" && message.forwardTxHash;
+  const forwardComplete = useForwarder && isForwardDone(message);
   const forwardFailed = message.forwardState === "FAILED";
 
   if (forwardComplete) {

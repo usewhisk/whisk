@@ -26,6 +26,7 @@ export type CctpErrorCode =
   | "iris_network"
   | "iris_parse"
   | "iris_aborted"
+  | "iris_rate_limited"
   // protocol
   | "amount_too_large"
   | "fee_unavailable"
@@ -78,6 +79,25 @@ export class IrisHttpError extends IrisError {
     this.status = status;
     this.url = url;
     this.bodySnippet = bodySnippet;
+  }
+}
+
+/**
+ * Iris answered 429, which blocks every request from this IP for five
+ * minutes. `retryAt` is when this process will ask again, in ms since the
+ * epoch.
+ */
+export class IrisRateLimitedError extends IrisError {
+  readonly retryAt: number;
+  readonly host: string;
+  constructor(host: string, retryAt: number) {
+    super(
+      "iris_rate_limited",
+      `Iris rate limit reached on ${host}; requests resume at ${new Date(retryAt).toISOString()}`,
+    );
+    this.name = "IrisRateLimitedError";
+    this.host = host;
+    this.retryAt = retryAt;
   }
 }
 

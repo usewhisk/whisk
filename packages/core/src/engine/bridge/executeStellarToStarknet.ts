@@ -5,6 +5,7 @@
  * no on-chain Forwarder-style contract that picks up Stellar messages).
  * Destination Starknet wallet signs `receive_message`.
  */
+import { attestationPolling } from "./polling.js";
 import {
   buildStarknetReceiveIntent,
   buildStellarApproveInvocation,
@@ -215,12 +216,7 @@ export async function executeStellarToStarknet(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -240,16 +236,6 @@ export async function executeStellarToStarknet(
       "Timed out waiting for the attestation.",
       snapshot,
       "polling_timeout",
-    );
-  }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(`Iris failed: ${message.delayReason ?? "no reason"}`),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
     );
   }
   if (

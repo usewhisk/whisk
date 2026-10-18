@@ -15,9 +15,11 @@
  * {@link SendResult} with `kind: "failure"` so the UI has the full step
  * timeline plus a recovery snapshot.
  */
+import { attestationPolling } from "./polling.js";
 import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
 import {
   buildMintIntent,
+  isForwardDone,
   pollMessages,
   type BurnFeeTier,
   type EvmChain,
@@ -306,12 +308,7 @@ export async function executeBridge(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -333,28 +330,13 @@ export async function executeBridge(
       "polling_timeout",
     );
   }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(
-        `Iris reported attestation failure: ${message.delayReason ?? "no reason given"}.`,
-      ),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
-    );
-  }
   snapshot.message = message.message;
   snapshot.attestation = message.attestation;
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
   // ---- mint ---------------------------------------------------------------
-  const forwarderHandled =
-    useForwarder &&
-    message.forwardState === "COMPLETE" &&
-    message.forwardTxHash;
+  const forwarderHandled = useForwarder && isForwardDone(message);
   const forwarderFailed = useForwarder && message.forwardState === "FAILED";
 
   if (forwarderHandled) {

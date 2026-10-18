@@ -3,39 +3,42 @@
  *
  * POST /v2/reattest/{nonce}
  *
- * Used when a message's attestation has expired and needs to be
- * re-signed by Circle (e.g. before the destination chain processed the
- * mint). Returns the new attestation.
+ * Asks Circle to sign an expired or pre-finality message again. Circle only
+ * acknowledges the request; the new attestation is then read from
+ * `/v2/messages` by nonce.
  */
 import type { Network } from "../chains/types.js";
 import { irisBaseUrl } from "./urls.js";
 import { fetchIrisJson, type FetchJsonOptions } from "./fetch.js";
-import { IrisHttpError } from "../errors.js";
-import type { IrisMessage } from "./types.js";
+import { IrisHttpError, IrisParseError } from "../errors.js";
 
 export type ReattestOptions = FetchJsonOptions & {
   network: Network;
 };
 
-/**
- * Triggers re-attestation for a message. The response shape is the
- * same as `getMessages` (Iris returns the re-attested message).
- */
+/** Returns Circle's acknowledgement, or `null` when Iris has no such nonce. */
 export async function reattest(
   nonce: string,
   options: ReattestOptions,
-): Promise<IrisMessage | null> {
+): Promise<{ nonce: string } | null> {
   const { network, ...fetchOpts } = options;
   const url = `${irisBaseUrl(network)}/v2/reattest/${nonce}`;
+  let json: unknown;
   try {
-    const json = await fetchIrisJson<{ messages?: IrisMessage[] }>(url, {
-      ...fetchOpts,
+    json = await fetchIrisJson<unknown>(url, fetchOpts, {
+      method: "POST",
+      body: {},
     });
-    return json.messages?.[0] ?? null;
   } catch (err) {
-    if (err instanceof IrisHttpError && err.status === 404) {
-      return null;
-    }
+    if (err instanceof IrisHttpError && err.status === 404) return null;
     throw err;
   }
+  const acknowledged =
+    typeof json === "object" && json !== null && "nonce" in json
+      ? json.nonce
+      : undefined;
+  if (typeof acknowledged !== "string") {
+    throw new IrisParseError("Iris reattest reply has no nonce");
+  }
+  return { nonce: acknowledged };
 }
