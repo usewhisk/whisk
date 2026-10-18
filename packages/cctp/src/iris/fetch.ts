@@ -15,7 +15,9 @@ import {
   IrisHttpError,
   IrisNetworkError,
   IrisParseError,
+  IrisRateLimitedError,
 } from "../errors.js";
+import { defaultIrisLimiter, type IrisLimiter } from "./limiter.js";
 
 export type FetchJsonOptions = {
   /** Per-request timeout in ms. Default 5000. */
@@ -28,6 +30,8 @@ export type FetchJsonOptions = {
   signal?: AbortSignal;
   /** Defaults to the global `fetch`. */
   fetch?: typeof fetch;
+  /** Defaults to one limiter shared by every Iris call in the process. */
+  limiter?: IrisLimiter;
 };
 
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -47,12 +51,15 @@ export async function fetchIrisJson<T>(
     baseDelayMs = DEFAULT_BASE_DELAY_MS,
     signal,
     fetch: fetchImpl = fetch,
+    limiter = defaultIrisLimiter,
   } = options;
+  const host = new URL(url).host;
 
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (signal?.aborted) throw new IrisAbortedError("Aborted by caller");
+    await limiter.acquire(host);
 
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -84,16 +91,22 @@ export async function fetchIrisJson<T>(
         return json as T;
       }
 
+      // A retry inside the block would extend it, so stop asking at once.
+      if (res.status === 429) {
+        throw new IrisRateLimitedError(host, limiter.standDown(host));
+      }
+
       // 4xx (excluding 429) → don't retry; surface immediately.
       if (res.status >= 400 && res.status < 500 && res.status !== 429) {
         throw new IrisHttpError(res.status, url, await safeText(res));
       }
 
-      // 5xx / 429 → record + retry.
+      // 5xx → record + retry.
       lastError = new IrisHttpError(res.status, url, await safeText(res));
     } catch (err) {
       // Parse errors and 4xx HTTP errors bypass the retry loop.
       if (err instanceof IrisParseError) throw err;
+      if (err instanceof IrisRateLimitedError) throw err;
       if (err instanceof IrisHttpError) {
         if (err.status < 500 && err.status !== 429) throw err;
       }

@@ -36,10 +36,14 @@ export type BurnFeeTier = {
 /**
  * Iris attestation lifecycle status.
  */
-export type IrisAttestationStatus =
-  | "pending_confirmations"
-  | "complete"
-  | "failed";
+/** Iris never reports a failed attestation; a slow one stays pending. */
+export type IrisAttestationStatus = "pending_confirmations" | "complete";
+
+/** Why a message is slower than asked. None of these is a failure. */
+export type IrisDelayReason =
+  | "insufficient_fee"
+  | "amount_above_max"
+  | "insufficient_allowance_available";
 
 /**
  * Circle Orbit forwarder lifecycle status. Present only when the burn
@@ -68,8 +72,7 @@ export type IrisMessage = {
   forwardState?: ForwardState | null;
   /** Destination tx hash when forwardState is CONFIRMED or COMPLETE. */
   forwardTxHash?: string | null;
-  /** Optional human-readable delay reason. */
-  delayReason?: string | null;
+  delayReason?: IrisDelayReason | null;
   /** Decoded message and message body, if Iris can decode them. */
   decodedMessage?: {
     sourceDomain: string;

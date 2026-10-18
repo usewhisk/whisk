@@ -8,6 +8,7 @@
  * Destination Stellar wallet signs `mint_and_forward(message, attestation)`
  * on the CctpForwarder.
  */
+import { attestationPolling } from "./polling.js";
 import {
   buildStarknetApproveCall,
   buildStarknetBurnIntent,
@@ -204,12 +205,7 @@ export async function executeStarknetToStellar(
       {
         network: input.network,
         ...(input.fetch && { fetch: input.fetch }),
-        ...(input.pollIntervalMs !== undefined && {
-          intervalMs: input.pollIntervalMs,
-        }),
-        ...(input.pollTimeoutMs !== undefined && {
-          timeoutMs: input.pollTimeoutMs,
-        }),
+        ...attestationPolling(input),
       },
     );
   } catch (cause) {
@@ -229,16 +225,6 @@ export async function executeStarknetToStellar(
       "Timed out waiting for the attestation.",
       snapshot,
       "polling_timeout",
-    );
-  }
-  if (message.status === "failed") {
-    return fail(
-      steps,
-      "fetchAttestation",
-      new Error(`Iris failed: ${message.delayReason ?? "no reason"}`),
-      "Iris reported attestation failure.",
-      snapshot,
-      "failed_offchain",
     );
   }
   if (
