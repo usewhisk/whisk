@@ -3,9 +3,10 @@
  * Send and a forwarder-driven Bridge.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Base, Arbitrum } from "@usewhisk/cctp";
+import { Keypair } from "@solana/web3.js";
+import { Base, Arbitrum, Morph } from "@usewhisk/cctp";
 import type { IrisMessage } from "@usewhisk/cctp";
-import type { EvmAdapter } from "./adapter.js";
+import type { EvmAdapter, SolanaAdapter } from "./adapter.js";
 import type { WhiskConfig } from "../types/config.js";
 import { ConfigError } from "../errors/errors.js";
 import { createWhisk as createEngine } from "./createWhisk.js";
@@ -196,7 +197,11 @@ describe("createWhisk", () => {
         // @ts-expect-error — quote not used on the failure path
         quote: {},
       }),
-    ).rejects.toThrow(/destinationAdapter/i);
+    ).rejects.toMatchObject({
+      code: "ROUTE_UNAVAILABLE",
+      reason: "destination_adapter_required",
+      ecosystem: "solana",
+    });
   });
 
   it("uses Arbitrum's USDC contract for same-chain Send on Arbitrum", async () => {
@@ -210,5 +215,176 @@ describe("createWhisk", () => {
       adapter,
     });
     expect(quote.route.kind).toBe("send");
+  });
+});
+
+function makeSolanaAdapter() {
+  const sent: unknown[] = [];
+  const adapter: SolanaAdapter = {
+    kind: "solana",
+    address: Keypair.generate().publicKey.toBase58(),
+    async getCluster() {
+      return "mainnet-beta";
+    },
+    async sendTransaction(instructions) {
+      sent.push(instructions);
+      return { signature: "5".repeat(88) };
+    },
+    async confirmTransaction() {
+      return { status: "success" as const, slot: 0n };
+    },
+    async getAccountInfo() {
+      return null;
+    },
+  };
+  return { adapter, sent };
+}
+
+describe("route planning", () => {
+  it("#62 takes the network from the source chain when the config lists both", async () => {
+    const engine = createWhisk({
+      chains: ["Base", "Arbitrum", "Arc_Testnet"],
+    });
+    await engine.quote({
+      sourceChain: "Base",
+      destinationChain: "Arbitrum",
+      recipient: { address: RECIPIENT, chain: "Arbitrum" },
+      amount: "10",
+      adapter: makeAdapter(),
+    });
+    expect(iris.requests.map((r) => r.url.host)).toEqual([
+      "iris-api.circle.com",
+    ]);
+  });
+
+  it("refuses a transfer between mainnet and testnet before calling Iris", async () => {
+    const engine = createWhisk({ chains: ["Base", "Arc_Testnet"] });
+    await expect(
+      engine.quote({
+        sourceChain: "Base",
+        destinationChain: "Arc_Testnet",
+        recipient: { address: RECIPIENT, chain: "Arc_Testnet" },
+        amount: "10",
+        adapter: makeAdapter(),
+      }),
+    ).rejects.toMatchObject({ code: "NETWORK_MISMATCH" });
+    expect(iris.requests).toEqual([]);
+  });
+
+  it("#63 refuses Solana to EVM without forwarding before the burn when no EVM wallet is connected", async () => {
+    const engine = createWhisk({
+      chains: ["Solana", "Base"],
+      useForwarder: false,
+    });
+    const solana = makeSolanaAdapter();
+    await expect(
+      engine.send({
+        sourceChain: "Solana",
+        destinationChain: "Base",
+        recipient: { address: RECIPIENT, chain: "Base" },
+        amount: "1",
+        adapter: solana.adapter,
+        // @ts-expect-error the quote is never read when planning fails
+        quote: {},
+      }),
+    ).rejects.toMatchObject({
+      code: "ROUTE_UNAVAILABLE",
+      reason: "destination_adapter_required",
+      ecosystem: "evm",
+    });
+    expect(solana.sent).toHaveLength(0);
+  });
+
+  it("#63 mints Solana to EVM with the EVM wallet when forwarding is off", async () => {
+    iris.replyToMessages({
+      message: {
+        message: FORWARDED_MESSAGE.message,
+        attestation: FORWARDED_MESSAGE.attestation,
+        eventNonce: "1",
+        status: "complete",
+        cctpVersion: 2,
+      },
+    });
+    const engine = createWhisk({
+      chains: ["Solana", "Base"],
+      useForwarder: false,
+    });
+    const solana = makeSolanaAdapter();
+    const evm = makeWallet(Arbitrum.evmChainId);
+    const params = {
+      sourceChain: "Solana",
+      destinationChain: "Base",
+      recipient: { address: RECIPIENT, chain: "Base" },
+      amount: "1",
+      adapter: solana.adapter,
+      destinationAdapter: evm.adapter,
+    } as const;
+    const quote = await engine.quote(params);
+    const result = await engine.send({ ...params, quote });
+
+    expect(result.kind).toBe("success");
+    expect(solana.sent).toHaveLength(1);
+    expect(evm.mints).toEqual([
+      {
+        chainId: Base.evmChainId,
+        messageTransmitter: Base.messageTransmitter,
+        message: FORWARDED_MESSAGE.message,
+        attestation: FORWARDED_MESSAGE.attestation,
+      },
+    ]);
+    if (result.kind === "success") {
+      const mint = result.steps.find((s) => s.name === "mint");
+      expect(mint).toMatchObject({ state: "success", forwarded: false });
+    }
+  });
+
+  it("asks for the destination wallet at quote time", async () => {
+    const engine = createWhisk({ chains: ["Base", "Solana"] });
+    await expect(
+      engine.quote({
+        sourceChain: "Base",
+        destinationChain: "Solana",
+        recipient: {
+          address: Keypair.generate().publicKey.toBase58(),
+          chain: "Solana",
+        },
+        amount: "1",
+        adapter: makeAdapter(),
+      }),
+    ).rejects.toMatchObject({
+      code: "ROUTE_UNAVAILABLE",
+      reason: "destination_adapter_required",
+      ecosystem: "solana",
+    });
+    expect(iris.requests).toEqual([]);
+  });
+
+  it("mints with the payer's wallet when Circle does not forward to the destination", async () => {
+    iris.replyToMessages({
+      message: {
+        message: FORWARDED_MESSAGE.message,
+        attestation: FORWARDED_MESSAGE.attestation,
+        eventNonce: "1",
+        status: "complete",
+        cctpVersion: 2,
+      },
+    });
+    const engine = createWhisk({ chains: ["Base", "Morph"] });
+    const wallet = makeWallet();
+    const params = {
+      sourceChain: "Base",
+      destinationChain: "Morph",
+      recipient: { address: RECIPIENT, chain: "Morph" },
+      amount: "5",
+      adapter: wallet.adapter,
+    } as const;
+    const quote = await engine.quote(params);
+    const result = await engine.send({ ...params, quote });
+
+    expect(result.kind).toBe("success");
+    expect(wallet.burns).toHaveLength(1);
+    expect(wallet.burns[0]?.hookData).toBeUndefined();
+    expect(quote.fees.entries.map((e) => e.kind)).not.toContain("forwarder");
+    expect(wallet.mints.map((m) => m.chainId)).toEqual([Morph.evmChainId]);
   });
 });
