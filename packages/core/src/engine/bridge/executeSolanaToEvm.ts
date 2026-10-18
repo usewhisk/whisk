@@ -9,17 +9,16 @@
  *   3. Submit via the `SolanaAdapter`, partial-signed by the ephemeral
  *      keypair and signed by the connected wallet.
  *   4. Poll Iris for the attestation + forwarder state.
- *   5. Forwarder relays the EVM-side mint — no destination adapter
- *      needed. Return success with the forwarder tx hash.
+ *   5. Forwarder relays the EVM-side mint, or with forwarding off the
+ *      destination EVM wallet signs `receiveMessage`.
  *
  * If the forwarder reports `FAILED`, the flow returns a typed failure
- * with the recovery snapshot. Cross-ecosystem manual mint via Whisk
- * isn't supported in v1 — the snapshot lets the merchant resume out of
- * band.
+ * with the recovery snapshot.
  */
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import {
+  buildMintIntent,
   buildSolanaBurnIntent,
   CCTP_FORWARD_HOOK_DATA,
   pollMessages,
@@ -32,6 +31,8 @@ import {
 import { toWhiskError, WhiskError } from "../../errors/errors.js";
 import type { Step, StepName } from "../../types/step.js";
 import type {
+  EvmAdapter,
+  EvmCall,
   SendFailure,
   SendListeners,
   SendResult,
@@ -53,6 +54,8 @@ export type ExecuteSolanaToEvmInput = {
   forwarderLevel?: keyof ForwarderFeeTier;
   useForwarder?: boolean;
   sourceAdapter: SolanaAdapter;
+  /** Signs `receiveMessage` on the destination when forwarding is off. */
+  destinationAdapter?: EvmAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
   fetch?: typeof fetch;
@@ -80,6 +83,17 @@ export async function executeSolanaToEvm(
     maxFee: input.maxFee.toString(),
     recipientAddress: input.recipientAddress,
   };
+
+  const mintAdapter = useForwarder ? undefined : input.destinationAdapter;
+  if (!useForwarder && !mintAdapter) {
+    return fail(
+      steps,
+      "burn",
+      new Error("An EVM wallet is needed to mint on the destination."),
+      "An EVM wallet is needed to mint on the destination.",
+      snapshot,
+    );
+  }
 
   // ---- build burn intent --------------------------------------------------
   const messageSentEventData = Keypair.generate();
@@ -260,19 +274,18 @@ export async function executeSolanaToEvm(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // ---- forwarder mint on EVM destination ---------------------------------
-  if (!useForwarder) {
-    return fail(
+  if (mintAdapter) {
+    return mintWithAdapter(
+      mintAdapter,
+      input.destination,
+      message,
       steps,
-      "mint",
-      new Error(
-        "Manual mint on EVM destination from a Solana source is not implemented in this build.",
-      ),
-      "Cross-ecosystem manual mint not implemented.",
       snapshot,
+      listeners,
     );
   }
 
+  // ---- forwarder mint on EVM destination ---------------------------------
   const forwardComplete =
     message.forwardState === "COMPLETE" && message.forwardTxHash;
   const forwardFailed = message.forwardState === "FAILED";
@@ -316,6 +329,101 @@ export async function executeSolanaToEvm(
     snapshot,
     "polling_timeout",
   );
+}
+
+async function mintWithAdapter(
+  adapter: EvmAdapter,
+  destination: EvmChain,
+  message: IrisMessage,
+  steps: Step[],
+  snapshot: BridgeRecoverySnapshot,
+  listeners?: SendListeners,
+): Promise<SendResult> {
+  let mintCall: EvmCall;
+  try {
+    mintCall = buildMintIntent({
+      destination,
+      message: message.message,
+      attestation: message.attestation,
+    }).call;
+  } catch (cause) {
+    return fail(
+      steps,
+      "mint",
+      cause,
+      "Failed to build mint calldata.",
+      snapshot,
+    );
+  }
+
+  try {
+    if ((await adapter.getChainId()) !== destination.evmChainId) {
+      await adapter.switchChain(destination.evmChainId);
+    }
+  } catch (cause) {
+    return fail(
+      steps,
+      "mint",
+      cause,
+      "Failed to switch to destination chain.",
+      snapshot,
+    );
+  }
+
+  let mintHash: `0x${string}`;
+  try {
+    const { hashes } = await adapter.sendCalls([mintCall]);
+    const last = hashes[hashes.length - 1];
+    if (!last) {
+      return fail(
+        steps,
+        "mint",
+        new Error("Destination adapter returned no transaction hash."),
+        "Destination adapter returned no transaction hash.",
+        snapshot,
+      );
+    }
+    mintHash = last;
+  } catch (cause) {
+    return fail(steps, "mint", cause, "Failed to submit mint.", snapshot);
+  }
+
+  steps[3] = {
+    name: "mint",
+    state: "pending",
+    txHash: mintHash,
+    forwarded: false,
+  };
+  listeners?.onStep?.(steps[3]);
+  try {
+    const receipt = await adapter.waitForReceipt(mintHash);
+    if (receipt.status === "reverted") {
+      return fail(
+        steps,
+        "mint",
+        new Error(`Mint reverted on-chain (${mintHash}).`),
+        "Mint reverted on-chain.",
+        snapshot,
+        "reverted_onchain",
+      );
+    }
+  } catch (cause) {
+    return fail(
+      steps,
+      "mint",
+      cause,
+      "Failed waiting for mint receipt.",
+      snapshot,
+    );
+  }
+  steps[3] = {
+    name: "mint",
+    state: "success",
+    txHash: mintHash,
+    forwarded: false,
+  };
+  listeners?.onStep?.(steps[3]);
+  return { kind: "success", finalTxHash: mintHash, steps };
 }
 
 function hexToBytes(hex: `0x${string}`): Uint8Array {

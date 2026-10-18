@@ -20,7 +20,7 @@ import type { Step } from "../types/step.js";
 import type { WhiskErrorCategory, WhiskErrorCode } from "../errors/errors.js";
 import { WhiskError } from "../errors/errors.js";
 import type { StepName } from "../types/step.js";
-import type { WhiskMode } from "../types/config.js";
+import type { ChainNetwork } from "../types/chain.js";
 import type { WhiskMetadata } from "../metadata/types.js";
 
 export type WalletKind = "evm" | "solana";
@@ -41,7 +41,7 @@ type SerializedError = {
 
 export type InflightSnapshot = {
   version: typeof SNAPSHOT_VERSION;
-  mode: WhiskMode;
+  mode: ChainNetwork;
   walletKind: WalletKind;
   walletAddress: string;
   sourceChain: string;
@@ -61,7 +61,7 @@ export type InflightSnapshot = {
 };
 
 function storageKey(
-  mode: WhiskMode,
+  mode: ChainNetwork,
   walletKind: WalletKind,
   address: string,
   sourceChain: string,
@@ -153,7 +153,7 @@ export function saveInflight(
  * is from an older schema version.
  */
 export function loadInflight(
-  mode: WhiskMode,
+  mode: ChainNetwork,
   walletKind: WalletKind,
   address: string,
   sourceChain: string,
@@ -204,7 +204,7 @@ export function loadInflight(
  * Browser-only. No-op on SSR / Node / Worker.
  */
 export function clearInflight(
-  mode: WhiskMode,
+  mode: ChainNetwork,
   walletKind: WalletKind,
   address: string,
   sourceChain: string,

@@ -34,7 +34,6 @@ async function main() {
 
   const engine = createWhisk({
     chains: [ORIGINAL_DESTINATION, REFUND_DESTINATION],
-    mode: "testnet",
   });
 
   console.log(

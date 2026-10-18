@@ -78,7 +78,6 @@ const VIEM_CHAINS: Record<number, ViemChain> = {
 
 const engine: WhiskEngine = createWhisk({
   chains: ["Base_Sepolia", "Ethereum_Sepolia"],
-  mode: "testnet",
 });
 
 /**

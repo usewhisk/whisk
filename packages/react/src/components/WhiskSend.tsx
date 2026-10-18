@@ -220,12 +220,13 @@ export function WhiskSend({
     starknetAdapter,
   ]);
 
-  // Surface every chain in `config.chains` as a destination candidate —
-  // cross-ecosystem bridges are first-class now.
-  const destinationCandidates = useMemo(
-    () => config.chains.filter((c) => c !== sourceChain),
-    [config.chains, sourceChain],
-  );
+  // A transfer never crosses between mainnet and testnet.
+  const destinationCandidates = useMemo(() => {
+    const network = getChain(sourceChain).network;
+    return config.chains.filter(
+      (c) => c !== sourceChain && getChain(c).network === network,
+    );
+  }, [config.chains, sourceChain]);
 
   // If the user flips source between ecosystems, the destination may
   // no longer be valid. Snap to the first valid candidate.
@@ -280,6 +281,7 @@ export function WhiskSend({
           recipient: resolved,
           amount,
           adapter,
+          ...(destinationAdapter && { destinationAdapter }),
         });
         if (!cancelled) setQuote(q);
       } catch (err) {
@@ -293,7 +295,15 @@ export function WhiskSend({
     return () => {
       cancelled = true;
     };
-  }, [adapter, amount, destinationForTab, engine, resolved, sourceChain]);
+  }, [
+    adapter,
+    amount,
+    destinationAdapter,
+    destinationForTab,
+    engine,
+    resolved,
+    sourceChain,
+  ]);
 
   // Reset the result panel when the user edits any input after a
   // success / failure — they're starting a new transfer.

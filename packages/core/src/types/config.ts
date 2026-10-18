@@ -1,10 +1,8 @@
-import type { Chain, ChainNetwork } from "./chain.js";
+import type { Chain } from "./chain.js";
 import type { Token } from "./token.js";
 import type { FeePolicy, FeeBearer } from "./fee.js";
 import type { Resolver } from "./resolver.js";
 import type { WhiskMetadata } from "../metadata/types.js";
-
-export type WhiskMode = ChainNetwork;
 
 export type WhiskConfig = {
   chains: Chain[];
@@ -50,9 +48,6 @@ export type WhiskConfig = {
    * to route Iris through a proxy, or to stub Circle in tests.
    */
   fetch?: typeof fetch;
-
-  /** Inferred from `chains` when omitted. Mixed networks default to `"testnet"` with a warning. */
-  mode?: WhiskMode;
 
   appLabel?: string;
 };

@@ -43,7 +43,6 @@ export type {
   StellarNetwork,
   WalletAdapterFactory,
   WhiskClientConfig,
-  WhiskMode,
 } from "./config/index.js";
 
 /* --------------------------------------------------------------------- *
@@ -206,9 +205,11 @@ export {
   InsufficientBalanceError,
   InvalidAddressError,
   NetworkError,
+  NetworkMismatchError,
   NoAdapterError,
   OnchainRevertError,
   ResolverError,
+  RouteUnavailableError,
   toWhiskError,
   UserRejectedError,
   WalletCapabilityError,
@@ -216,6 +217,7 @@ export {
   WrongChainError,
 } from "@usewhisk/core";
 export type {
+  RouteUnavailableReason,
   WhiskErrorCategory,
   WhiskErrorCode,
   WhiskErrorOptions,
@@ -238,6 +240,8 @@ export type {
   Resolver,
   ResolvedRecipient,
   Route,
+  RouteMint,
+  RoutePlan,
   Step,
   StepName,
   StepState,
@@ -251,6 +255,7 @@ export {
   DEFAULT_TOKEN,
   isBridgeRoute,
   isSendRoute,
+  planRoute,
 } from "@usewhisk/core";
 
 /* --------------------------------------------------------------------- *
@@ -284,9 +289,7 @@ export {
   explorerAddressUrl,
   explorerTxUrl,
   getChain,
-  inferMode,
   isChainId,
-  resolveMode,
   tryChainByEvmChainId,
 } from "@usewhisk/core";
 export type { AddressFormat, CctpChain } from "@usewhisk/core";

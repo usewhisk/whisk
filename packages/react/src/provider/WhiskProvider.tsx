@@ -64,13 +64,11 @@ export function WhiskProvider({
         defaultSourceChain: config.defaultSourceChain,
         defaultDestinationChain: config.defaultDestinationChain,
         token: config.token,
-        resolver:
-          config.resolver ?? createDefaultResolver({ mode: config.mode }),
+        resolver: config.resolver ?? createDefaultResolver(),
         feePolicy: config.feePolicy,
         feeBearer: config.feeBearer,
         rpcUrls: config.rpcUrls,
         useForwarder: config.useForwarder,
-        mode: config.mode,
         appLabel: config.appLabel,
       }),
     // Engine config is intentionally frozen for the provider's lifetime.

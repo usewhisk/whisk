@@ -11,6 +11,8 @@ export {
   WalletCapabilityError,
   OnchainRevertError,
   ConfigError,
+  NetworkMismatchError,
+  RouteUnavailableError,
   toWhiskError,
   cleanErrorMessage,
 } from "./errors.js";
@@ -18,4 +20,5 @@ export type {
   WhiskErrorCode,
   WhiskErrorCategory,
   WhiskErrorOptions,
+  RouteUnavailableReason,
 } from "./errors.js";
