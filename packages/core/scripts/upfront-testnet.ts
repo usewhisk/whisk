@@ -20,14 +20,15 @@ const AMOUNT = "1";
 const AMOUNT_SUBUNITS = 1_000_000n;
 const MINT_TIMEOUT_MS = 5 * 60_000;
 
-const key = process.env.WHISK_LIVE_PK;
-if (!key) {
-  console.error("Set WHISK_LIVE_PK to a funded testnet key.");
+const raw = process.env.WHISK_LIVE_PK ?? "";
+const key = raw.startsWith("0x") ? raw : `0x${raw}`;
+if (!/^0x[0-9a-fA-F]{64}$/.test(key)) {
+  console.error(
+    "Set WHISK_LIVE_PK to a funded testnet private key: 64 hex characters, with or without 0x.",
+  );
   process.exit(1);
 }
-const account = privateKeyToAccount(
-  (key.startsWith("0x") ? key : `0x${key}`) as Hex,
-);
+const account = privateKeyToAccount(key as Hex);
 
 function evm(id: Chain): EvmChain {
   const chain = getChain(id);
@@ -67,14 +68,19 @@ function adapter(chain: EvmChain): EvmAdapter {
     },
     async sendCalls(calls) {
       const hashes: Hex[] = [];
-      // One at a time: the burn needs the approve mined first.
+      // One at a time: the burn needs the approve mined first. Base Sepolia's
+      // public RPC is load-balanced, and a node one block behind estimates
+      // the burn against the old allowance, so wait for two confirmations.
       for (const call of calls) {
         const hash = await walletClient.sendTransaction({
           to: call.to,
           data: call.data,
           value: call.value,
         });
-        await publicClient.waitForTransactionReceipt({ hash });
+        await publicClient.waitForTransactionReceipt({
+          hash,
+          confirmations: 2,
+        });
         hashes.push(hash);
       }
       return { hashes };
@@ -121,7 +127,15 @@ async function run(sourceId: Chain, destinationId: Chain): Promise<boolean> {
   }
 
   const before = await usdcBalance(destination);
-  const result = await engine.send({ adapter: wallet, quote });
+  const started = Date.now();
+  const seconds = () => ((Date.now() - started) / 1000).toFixed(1);
+  const result = await engine.send(
+    { adapter: wallet, quote },
+    {
+      onStep: (step) =>
+        console.log(`  ${seconds()}s ${step.name} ${step.state}`),
+    },
+  );
   if (result.kind !== "success") {
     console.log(`FAIL ${tag}: ${result.error.message}`);
     return false;
@@ -136,7 +150,7 @@ async function run(sourceId: Chain, destinationId: Chain): Promise<boolean> {
   }
   const ok = received === AMOUNT_SUBUNITS;
   console.log(
-    `${ok ? "OK  " : "FAIL"} ${tag}: received ${received} subunits, burn ${result.finalTxHash ?? "?"}`,
+    `${ok ? "OK  " : "FAIL"} ${tag}: received ${received} subunits after ${seconds()}s, mint ${result.finalTxHash ?? "?"}`,
   );
   return ok;
 }
