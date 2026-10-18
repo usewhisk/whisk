@@ -1,6 +1,6 @@
 # ADR for Dummies: Bound quotes and fees
 
-- **Status:** Proposed, awaiting maintainer approval
+- **Status:** Accepted 2026-10-18
 - **Date:** 2026-10-18
 
 ## The Idea
@@ -30,15 +30,25 @@ The recipient then gets exactly the amount sent, not the amount minus a fee.
 
 ## Important Limitation
 
-- Circle's separately paid fee is not refunded, even if the transfer ends up cheaper
-  to deliver.
-- On chains without that option, Whisk adds a small safety margin to the fee limit.
-  Circle only takes what it really charges. In the default setup, where the payer
-  covers the fees, anything Circle does not take goes to the recipient, not back to
-  the payer.
-- Circle's paid delivery service has three price levels. Whisk picks the higher one,
-  which is safer, except for transfers into Ethereum. There the higher level costs
-  about 30 cents more, so Whisk picks the middle one. A developer can change this.
+- **Circle's separately paid fee is a fixed price, like a ticket.**
+  - It is set before the payer signs and is never more than they were shown.
+  - It is not refunded afterwards.
+  - If the transfer fails to start, no fee is taken.
+- **Five fast chains without that option get a 10% safety margin.** These are
+  Solana, Starknet, EDGE, Morph and X Layer.
+  - Whisk adds the margin to Circle's fast-transfer fee, and Circle only takes what
+    it really charges.
+  - In the default setup the payer covers the margin. Anything Circle does not take
+    goes to the recipient, not back to the payer.
+  - The most it can be is about 12 cents on a 1,000 USDC transfer, from Starknet.
+    On most of these chains it is a cent or two.
+- **Circle's paid delivery service has three price levels.**
+  - Whisk picks the higher one, which is safer, except for transfers into Ethereum.
+    There the higher level costs about 30 cents more, so Whisk picks the middle one.
+    A developer can change this.
+  - This only matters on chains without the separately paid fee. A level that turns
+    out too low delays the delivery but never loses the money, and the payer can
+    finish it from their own wallet.
 
 ## What Changes
 

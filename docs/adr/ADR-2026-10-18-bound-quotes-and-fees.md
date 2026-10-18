@@ -1,6 +1,6 @@
 # ADR: Bound quotes and fees
 
-- **Status:** Proposed, awaiting maintainer approval
+- **Status:** Accepted 2026-10-18
 - **Date:** 2026-10-18
 - **Scope:** `packages/cctp`, `packages/core` and `packages/react` on
   `feat/v1-cctp-rebuild`. Phase 1 Step 6 (#87). Amends
@@ -65,6 +65,10 @@ live calls to Iris.
     USDC.
 - **No refunds.** The fee can be paid in USDC or the native gas token, and upfront
   fees are not refunded. `refundAddress` is reserved.
+  - The fee is a fixed price agreed before signing. It is no higher than the `maxFee`
+    path, which also spends its whole forwarding fee.
+  - The fee is collected in the same transaction as the burn, so a reverted burn
+    (an expired or mismatched quote) takes no fee.
 - **Where it runs.** `TokenMessengerWithFees` is at
   `0x71f54F818671cD0D7ea140Da213e5C8b5C92a408` on 18 mainnet chains and
   `0x8745D906D67C346E5eb1aEEED38Eb87F34DF0C0A` on 17 testnets (not Monad testnet).
@@ -74,8 +78,14 @@ live calls to Iris.
 ### `getMinFeeAmount`
 
 - Only a `TokenMessengerV2` with Circle's Standard fee switch has `getMinFeeAmount`.
-  Today that is Sei.
-- On every other chain the call reverts. Today every chain's Standard fee is 0.
+  - Circle's fee page names only Sei.
+  - Reading every registry chain on 2026-10-18 found the function on 14 mainnets
+    and 15 testnets: Monad, Sei, XDC, HyperEVM, Ink, Plume, Arc, EDGE, Injective,
+    Morph, Pharos, Cronos, Plasma and X Layer, with their testnets, plus Sonic
+    Testnet.
+  - On the other 11 mainnets and 10 testnets the call reverts. This matches
+    Circle's list of contracts without the switch.
+- Every chain that has the function returns 0 today.
 
 ## Decision
 
@@ -105,24 +115,40 @@ live calls to Iris.
 
 ### 2. `maxFee` with a buffer, on every source
 
-1. On Fast routes, `maxFee = ceil(burnFee * 1.2) + forwarderFee`. Circle takes only
-   `feeExecuted`. The 20% stops a small fee rise from silently turning a Fast
-   transfer into a Standard one.
-2. `amountOut` is the minimum the recipient gets. With `feeBearer: "sender"`, any
-   buffer Circle does not take reaches the recipient, so the payer loses nothing. The
-   widget labels it "at least".
+1. On Fast routes, `maxFee = ceil(burnFee * 1.1) + forwarderFee`. Circle takes only
+   `feeExecuted`.
+   - The 10% stops a small fee rise from silently turning a Fast transfer into a
+     Standard one.
+   - `send` re-reads Iris seconds before signing (Decision 1.4), so the buffer only
+     has to cover the time between the burn and the attestation.
+   - A buffer that proves too small slows the transfer to Standard, which is free.
+     It never loses USDC. Bridge Kit uses the same 10%.
+2. `amountOut` is the minimum the recipient gets, and the widget labels it "at
+   least". With `feeBearer: "sender"`, the payer funds the buffer, and any part Circle
+   does not take reaches the recipient.
+   - This applies only to Fast sources with no upfront path: Solana, Starknet, EDGE,
+     Morph and X Layer.
+   - The largest case is Starknet at 12 bps, which costs about 0.12 USDC per 1,000
+     USDC. On the 18 upfront chains there is no buffer (Decision 3).
 3. The forwarding fee level defaults to `high`, except into Ethereum, where it is
    `med`:
    - Into every other destination `high` costs under a cent more and protects the
      mint against a gas rise.
    - Into Ethereum it costs about 0.30 USDC more, all of it spent as gas.
+   - The level applies only on the `maxFee` path, so only for forwarded transfers
+     from Solana and the seven EVM sources without upfront fees. On upfront chains,
+     Circle prices the forwarding fee and carries the gas risk.
+   - A forwarding fee that proves too low delays the mint (`delayReason`
+     `insufficient_fee`) but does not lose the USDC. Anyone can still mint the
+     attested message, since `destinationCaller` is zero. Step 7's recovery offers
+     the payer that mint with a connected destination wallet.
 
    `createWhisk({ forwarderFeeLevel: "med" | "high" })` overrides both. The
    forwarding fee keeps its own line in the quote.
 4. On Standard routes from a chain flagged `standardFeeSwitch`, the protocol fee is
    the larger of Iris's Standard fee and `getMinFeeAmount(burnAmount)`, read on chain
    at quote time.
-   - The flag is new in the registry, set on Sei only.
+   - The flag is new in the registry, set on the chains listed in Context.
    - `check:registry` checks it nightly. On every EVM chain, the flag must be true
      exactly when the call succeeds.
 
@@ -223,9 +249,10 @@ sequenceDiagram
     on forwarding.
   - A short Fast fee no longer becomes a silent 15-minute wait.
 - **Accepted trade-offs:**
-  - On the `maxFee` path the payer funds a buffer that, when Circle does not take
-    it, goes to the recipient rather than back to the payer.
-  - Upfront fees are not refunded.
+  - On the five Fast sources without upfront fees, the payer funds a 10% buffer on
+    the Fast fee. Any part Circle does not take goes to the recipient, not back to
+    the payer. At most that is about 0.12 USDC per 1,000 USDC, from Starknet.
+  - Upfront fees are not refunded. They are a fixed price agreed before signing.
 
 ## Alternatives considered
 
@@ -240,6 +267,11 @@ sequenceDiagram
   payer reading the form would see it lapse.
 - **Pay the upfront fee in the native gas token.** Lost: Whisk keeps money in USDC
   subunits and has no price feed.
+- **A 20% Fast buffer.** Lost: once `send` re-reads Iris just before signing, the
+  extra 10% buys little. A short buffer costs only speed, never USDC.
+- **Keep the buffer out of the burn amount, so the payer never overpays.** Lost: when
+  Circle does take the buffer, the recipient gets less than the amount the payer
+  meant to send. For a merchant, that is a short invoice.
 - **`high` into Ethereum as well.** Lost: about 0.30 USDC extra per transfer, all of
   it spent as gas.
 - **Call `getMinFeeAmount` everywhere and treat a revert as zero.** Lost: it hides
@@ -251,10 +283,11 @@ sequenceDiagram
 - **Red tests first.** `send(quote)` must burn with exactly `quote.maxFee` and
   `quote.burnAmount` (#87). An expired quote throws before any call. A fee rise past
   the buffer throws `QuoteChangedError` with zero burns.
-- **Fast buffer.** A Base to Arbitrum Fast quote has
-  `maxFee = ceil(burnFee * 1.2) + forwardFee.high`. Base to Ethereum uses `med`.
-- **Sei.** A Sei Standard quote reads `getMinFeeAmount`. Every other chain does not,
-  and `check:registry` fails if the flag is wrong.
+- **Fast buffer.** A Solana to Base Fast quote has
+  `maxFee = ceil(burnFee * 1.1) + forwardFee.high`. Solana to Ethereum uses `med`.
+- **Fee switch.** A Standard quote from a flagged chain, such as Arc Testnet, reads
+  `getMinFeeAmount`. Unflagged chains do not, and `check:registry` fails if a flag
+  is wrong.
 - **Upfront path (6b).**
   - A harness Base to Arc send calls `depositForBurnWithFees` with the signed quote,
     and approves `TokenMessengerWithFees` for `amount + shown fee`.

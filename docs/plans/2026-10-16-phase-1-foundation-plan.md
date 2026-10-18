@@ -248,9 +248,15 @@ Each step is one PR into `feat/v1-cctp-rebuild`, with red commits before green, 
    `planRoute`, `NetworkMismatchError`, `RouteUnavailableError`, Standard-only
    sources with ETAs, and the Solana to EVM adapter mint. Verify: the red tests are
    green; a Polygon Amoy source plans as Standard.
-6. **Bound quotes (#87).** Quote ids, expiry, `QuoteExpiredError` and
-   `QuoteChangedError`. Verify: the red test is green, and a fee rise surfaces the
-   re-confirm path.
+6. **Bound quotes and fees (#87),** per
+   [ADR-2026-10-18-bound-quotes-and-fees](../adr/ADR-2026-10-18-bound-quotes-and-fees.md).
+   - **6a:** quote ids, expiry, `QuoteExpiredError` and `QuoteChangedError`, the 10%
+     Fast buffer, the forwarding fee level, and `getMinFeeAmount` behind
+     `standardFeeSwitch`. Verify: the red test is green, and a fee rise surfaces the
+     re-confirm path.
+   - **6b:** Circle's signed quotes and `depositForBurnWithFees` on `upfrontFeeSource`
+     chains, plus the Fast allowance check. Verify: a testnet transfer from Base
+     Sepolia and from Arc Testnet settles with the exact amount.
 7. **Recovery (#86, #66).** `InflightStore`, persist before the burn, `resume`,
    `inflight()`, POST re-attest, the Iris rate limiter with 429 backoff. Verify: the
    red tests are green; a harness run killed after `burned` resumes to `minted`.
