@@ -789,3 +789,26 @@ describe("signed quotes", () => {
     expect(quote.feeMode).toBe("maxFee");
   });
 });
+
+describe("attestation polling", () => {
+  it("reports a relayed mint done once Iris shows it confirmed with its tx hash", async () => {
+    iris.replyToMessages({
+      message: { ...FORWARDED_MESSAGE, forwardState: "CONFIRMED" },
+    });
+    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    const wallet = makeWallet();
+    const quote = await engine.quote({
+      sourceChain: "Base",
+      destinationChain: "Arbitrum",
+      recipient: { address: RECIPIENT, chain: "Arbitrum" },
+      amount: "5",
+      adapter: wallet.adapter,
+    });
+
+    const result = await engine.send({ adapter: wallet.adapter, quote });
+    expect(result.kind).toBe("success");
+    if (result.kind === "success") {
+      expect(result.finalTxHash).toBe(FORWARDED_MESSAGE.forwardTxHash);
+    }
+  });
+});
