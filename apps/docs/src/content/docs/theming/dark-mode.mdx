@@ -5,11 +5,11 @@ description: How Whisk picks a theme and how to pin one.
 
 Whisk supports three modes: automatic, pinned light, pinned dark.
 
-## Automatic (the default)
+## Automatic
 
-When `theme="system"` is set on `<WhiskProvider>` (which is the
-default), Whisk renders no `data-whisk-theme` attribute. The widget
-follows the OS through a `prefers-color-scheme` media query.
+When `theme="auto"` is set on `<WhiskProvider>`, Whisk renders no
+`data-whisk-theme` attribute. The widget follows the OS through a
+`prefers-color-scheme` media query. Without a `theme`, the widget is light.
 
 ```tsx
 <WhiskProvider config={config}>
@@ -42,7 +42,7 @@ query.
 
 Most apps already have a theme system; next-themes, Tailwind's
 `.dark` class, a Radix theme. Whisk's stylesheet recognises both
-contracts, so you can pass `theme="system"` to Whisk and let your
+contracts, so you can pass `theme="auto"` to Whisk and let your
 app drive the class on a parent element:
 
 ```css
@@ -57,7 +57,7 @@ A typical Tailwind dark-mode setup works without ceremony:
 ```tsx
 <html className={resolvedTheme === "dark" ? "dark" : ""}>
   <body>
-    <WhiskProvider config={config} theme="system">
+    <WhiskProvider config={config} theme="auto">
       <WhiskSend />
     </WhiskProvider>
   </body>

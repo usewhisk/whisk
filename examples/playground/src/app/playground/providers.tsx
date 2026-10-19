@@ -56,7 +56,7 @@ export function PlaygroundProviders({
   feeBearer,
   children,
 }: {
-  theme: "system" | "light" | "dark";
+  theme: "auto" | "light" | "dark";
   feeBearer: FeeBearer;
   children: React.ReactNode;
 }) {

@@ -144,8 +144,8 @@ to `<WhiskProvider>` only when you want to override the detection.
 
 ## Pinning the theme
 
-The default mode is `"system"`. Whisk follows the OS via
-`prefers-color-scheme`. To pin it instead, pass `theme`:
+The default is `"light"`. Pass `"auto"` to follow the OS via
+`prefers-color-scheme`, or another preset to pin it:
 
 ```tsx
 <WhiskProvider config={config} theme="dark">

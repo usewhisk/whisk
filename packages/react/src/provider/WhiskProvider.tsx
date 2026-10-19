@@ -36,9 +36,10 @@ export type WhiskProviderProps = {
   /**
    * Theme to apply to the widget.
    *
-   * - `"system"` (default) defers to `prefers-color-scheme`. SSR-safe.
-   * - `"light"` or `"dark"` apply the matching preset.
+   * - `"light"` (default) or `"dark"` apply the matching preset.
+   * - `"auto"` follows `prefers-color-scheme`, in CSS alone. SSR-safe.
    * - `"wine"`, `"indigo"`, `"emerald"`, `"monochrome"` apply named palettes.
+   * - `{ preset, tokens }` replaces some tokens of a preset or of `"auto"`.
    * - A {@link WhiskTheme} object gives full control over every variable.
    */
   theme?: WhiskThemeInput;
@@ -61,7 +62,7 @@ export type WhiskProviderProps = {
  */
 export function WhiskProvider({
   config,
-  theme = "system",
+  theme = "light",
   queryClient: externalQueryClient,
   children,
 }: WhiskProviderProps) {

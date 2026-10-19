@@ -22,14 +22,25 @@ export type WhiskThemeName =
   | "monochrome";
 
 /**
- * What `<WhiskProvider theme={...}>` accepts.
- *
- * - `"system"` — defer to the user's `prefers-color-scheme` setting (no
- *   inline overrides). The styles.css defaults apply.
- * - A {@link WhiskThemeName} preset.
- * - A custom {@link WhiskTheme} object for full control.
+ * - A preset name, such as `"light"` (the default) or `"dark"`.
+ * - `"auto"`: follow the visitor's `prefers-color-scheme`, in CSS alone, so
+ *   it is safe to render on the server.
+ * - A full {@link WhiskTheme}.
+ * - `{ preset, tokens }`: a preset, or `"auto"`, with some tokens replaced.
  */
-export type WhiskThemeInput = WhiskThemeName | WhiskTheme | "system";
+export type WhiskThemeInput =
+  | WhiskThemeName
+  | "auto"
+  | WhiskTheme
+  | WhiskThemeOverrides;
+
+/** Any tokens of a {@link WhiskTheme}; the colour scheme comes from the preset. */
+export type WhiskThemeTokens = Partial<Omit<WhiskTheme, "colorMode">>;
+
+export type WhiskThemeOverrides = {
+  preset: WhiskThemeName | "auto";
+  tokens: WhiskThemeTokens;
+};
 
 /**
  * A fully-specified theme. Drives the `--whisk-*` CSS variables on the root

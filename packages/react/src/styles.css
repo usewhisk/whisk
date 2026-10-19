@@ -82,7 +82,7 @@
    ============================================================
    Two independent paths apply dark theming:
 
-   1. Automatic (theme="system", default): a `prefers-color-scheme`
+   1. Automatic (theme="auto"): a `prefers-color-scheme`
       media query applies dark vars when the OS is dark AND the dev
       hasn't pinned the widget to light. No JS, no hydration risk,
       no flash — the browser handles theming entirely from CSS.

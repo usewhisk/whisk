@@ -8,8 +8,8 @@ describe("resolveTheme", () => {
     expect(resolveTheme(undefined)).toBeNull();
   });
 
-  it("returns null for 'system' (defer to CSS prefers-color-scheme)", () => {
-    expect(resolveTheme("system")).toBeNull();
+  it("returns null for 'auto' (defer to CSS prefers-color-scheme)", () => {
+    expect(resolveTheme("auto")).toBeNull();
   });
 
   it("resolves the 'light' preset", () => {
