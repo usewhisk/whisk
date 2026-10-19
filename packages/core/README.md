@@ -47,10 +47,9 @@ the engine, fees, chains, errors, resolvers, metadata, refund,
 webhook, settlement-status (`deriveReceiptView`), Iris polling, and
 manual mint helpers all work anywhere `fetch` exists.
 
-The one exception is the `localStorage`-backed mid-flight recovery
-snapshot helpers (`saveInflight` / `loadInflight` / `clearInflight` /
-`listInflightSnapshots`). They read and write `window.localStorage`,
-so on the server they return `null` / `false` without throwing.
+In-flight transfers live in the `inflightStore` you pass to
+`createWhisk`. The default keeps them in memory; `createStorageInflightStore`
+takes any Web Storage object, such as `localStorage` in a browser.
 
 The webhook primitives (`signWebhook` / `verifyWebhook`) need
 `globalThis.crypto.subtle`, which is available on every supported

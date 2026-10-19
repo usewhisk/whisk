@@ -22,6 +22,7 @@ import type { WhiskThemeInput } from "../theme/index.js";
 import { WhiskContext, type WhiskContextValue } from "./context.js";
 import { StellarWalletProvider } from "./stellarContext.js";
 import { StarknetWalletProvider } from "./starknetContext.js";
+import { createBrowserInflightStore } from "../lib/inflightStore.js";
 
 export type WhiskProviderProps = {
   config: WhiskClientConfig;
@@ -70,6 +71,7 @@ export function WhiskProvider({
         rpcUrls: config.rpcUrls,
         useForwarder: config.useForwarder,
         appLabel: config.appLabel,
+        inflightStore: config.inflightStore ?? createBrowserInflightStore(),
       }),
     // Engine config is intentionally frozen for the provider's lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps

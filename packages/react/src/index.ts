@@ -11,6 +11,7 @@
  * --------------------------------------------------------------------- */
 
 export { WhiskProvider } from "./provider/WhiskProvider.js";
+export { createBrowserInflightStore } from "./lib/inflightStore.js";
 export type { WhiskProviderProps } from "./provider/WhiskProvider.js";
 
 /* --------------------------------------------------------------------- *
@@ -158,7 +159,8 @@ export type {
   QuoteParams,
   RefundParams,
   RefundResult,
-  RetryParams,
+  ResumeFromTxParams,
+  ResumeOptions,
   SendCallsResult,
   SendFailure,
   SendListeners,
@@ -297,8 +299,6 @@ export type { AddressFormat, CctpChain } from "@usewhisk/core";
 /* --------------------------------------------------------------------- *
  *  Recovery — Iris polling, MessageTransmitter helpers, receipt view.
  *  Useful for advanced consumers building their own receipt surface.
- *  Skip `saveInflight` / `loadInflight` from the public surface — they
- *  touch `localStorage` and are mainly engine plumbing.
  * --------------------------------------------------------------------- */
 
 export {

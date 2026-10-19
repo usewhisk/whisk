@@ -152,6 +152,41 @@ Technical shape, per
   `pending_confirmations`, as Iris never reports a failed attestation, and
   `delayReason` is one of `insufficient_fee`, `amount_above_max` or
   `insufficient_allowance_available`: reasons a message is slow, not failures.
+- Every bridge is kept in an `InflightStore` from before the wallet signs until
+  the mint (#86).
+  - `createWhisk({ inflightStore })` takes the store. Core's default is
+    memory, `createStorageInflightStore(storage)` keeps records under
+    `whisk:inflight:<id>` in any Web Storage object, and `WhiskProvider` uses
+    `localStorage` by default (`createBrowserInflightStore`).
+  - A record is written as `signing` before the wallet is asked, `burned` with
+    the burn hash the moment the wallet returns it, then `attested` and
+    `minted`. A transfer that never burned leaves no record. Burned records
+    never expire.
+  - `SendListeners.onBurnSubmitted(txHash)` reports the burn hash before any
+    receipt wait. Before, an EVM source reported it only after the approve
+    receipt, so a tab closed in between lost a burned transfer.
+- `engine.inflight()` lists the records. `engine.resume(record, {
+  destinationAdapter })` finishes one without signing the burn again.
+  - It checks the burn did not revert, waits for the attestation, and checks
+    that the attestation's destination matches.
+  - For a forwarded transfer it waits for Circle's relayer, and mints itself
+    only if the relayer failed.
+  - Before minting it reads `usedNonces` on the destination, so a transfer
+    that was already received is marked minted without a second mint.
+  - An expired attestation is re-attested by `POST`, then re-read by nonce.
+    On Arbitrum, EDGE and Plume, which count expiry in L1 blocks, the mint is
+    tried first and re-attested only if it reverts.
+  - Resuming into Solana, Stellar or Starknet is not supported yet.
+- `engine.resumeFromTx({ sourceChain, txHash, destinationAdapter })` does the
+  same from the burn's tx hash alone, building the record from what Iris
+  decoded.
+- `@usewhisk/cctp` adds `isNonceUsed` and `getTransactionStatus`.
+- Removed: `engine.retry`, which only threw "not implemented", and
+  `RetryParams`. Also removed are the browser snapshot helpers
+  (`saveInflight`, `loadInflight`, `clearInflight`, `listInflightSnapshots`,
+  `serializeError`, `deserializeError`, `INFLIGHT_TTL_MS`, `STORAGE_PREFIX`,
+  `InflightSnapshot`, `WalletKind`), which nothing called and which expired
+  burned transfers after 48 hours.
 - The default resolver picks Sepolia or mainnet ENS from the destination chain's
   network.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

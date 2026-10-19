@@ -68,3 +68,56 @@ export async function getBlockNumber(
     options,
   );
 }
+
+const USED_NONCES = "0xfeb61724";
+
+/**
+ * Whether `MessageTransmitterV2.usedNonces(nonce)` is set: the message was
+ * already received on this chain and minting it again would revert.
+ */
+export async function isNonceUsed(
+  chain: EvmChain,
+  nonce: `0x${string}`,
+  options: RpcOptions = {},
+): Promise<boolean> {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(nonce)) {
+    throw new ProtocolError("rpc_unavailable", `nonce ${nonce} is not bytes32`);
+  }
+  return callRpc(
+    chain,
+    "eth_call",
+    [
+      { to: chain.messageTransmitter, data: `${USED_NONCES}${nonce.slice(2)}` },
+      "latest",
+    ],
+    (r) =>
+      typeof r === "string" && /^0x[0-9a-fA-F]{64}$/.test(r)
+        ? BigInt(r) !== 0n
+        : undefined,
+    options,
+  );
+}
+
+export type TransactionStatus = "success" | "reverted" | "unknown";
+
+/** `unknown` until the transaction is mined, or if the node never saw it. */
+export async function getTransactionStatus(
+  chain: EvmChain,
+  hash: `0x${string}`,
+  options: RpcOptions = {},
+): Promise<TransactionStatus> {
+  return callRpc(
+    chain,
+    "eth_getTransactionReceipt",
+    [hash],
+    (r): TransactionStatus | undefined => {
+      if (r === null) return "unknown";
+      if (typeof r !== "object") return undefined;
+      const status = (r as { status?: unknown }).status;
+      if (status === "0x1") return "success";
+      if (status === "0x0") return "reverted";
+      return undefined;
+    },
+    options,
+  );
+}

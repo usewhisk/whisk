@@ -14,6 +14,7 @@ import type { WhiskError } from "../errors/errors.js";
 import type { WhiskMetadata } from "../metadata/types.js";
 import type { RefundInput } from "../refund/index.js";
 import type { WhiskAdapter } from "./adapter.js";
+import type { InflightRecord } from "../inflight/types.js";
 
 export type {
   EvmAdapter,
@@ -68,6 +69,11 @@ export type SendStepListener = (step: Step) => void;
 
 export type SendListeners = {
   onStep?: SendStepListener;
+  /**
+   * Called with the burn's tx hash as soon as the wallet returns it, before
+   * any receipt wait. A caller keeping its own records should save it here.
+   */
+  onBurnSubmitted?: (txHash: string) => void;
 };
 
 export type SendSuccess = {
@@ -82,10 +88,7 @@ export type SendFailure = {
   kind: "failure";
   error: WhiskError;
   steps: Step[];
-  /**
-   * Recovery snapshot — burn tx hash + source domain + intended recipient
-   * so `engine.retry` can resume from the failed step.
-   */
+  /** The executor's recovery snapshot: burn tx hash, domains, recipient. */
   raw?: unknown;
   /** Merged metadata (config defaults + per-call). Omitted if neither was set. */
   metadata?: WhiskMetadata;
@@ -93,9 +96,18 @@ export type SendFailure = {
 
 export type SendResult = SendSuccess | SendFailure;
 
-export type RetryParams = {
-  failed: SendFailure;
-  adapter: WhiskAdapter;
+export type ResumeOptions = {
+  /**
+   * Signs the mint when Circle does not, or when its relayer failed. Not
+   * needed for a transfer Circle forwards.
+   */
+  destinationAdapter?: WhiskAdapter;
+};
+
+export type ResumeFromTxParams = ResumeOptions & {
+  sourceChain: Chain;
+  /** The burn transaction on the source chain. */
+  txHash: string;
 };
 
 /**
@@ -123,7 +135,23 @@ export interface WhiskEngine {
   resolve(input: string, chain: Chain): Promise<ResolvedRecipient>;
   quote(params: QuoteParams): Promise<Quote>;
   send(params: SendParams, listeners?: SendListeners): Promise<SendResult>;
-  retry(params: RetryParams, listeners?: SendListeners): Promise<SendResult>;
+  /** Transfers in the engine's `inflightStore`, oldest first. */
+  inflight(): Promise<readonly InflightRecord[]>;
+  /**
+   * Finishes a transfer from its record without signing the burn again:
+   * waits for the attestation, re-attests an expired one, and mints unless
+   * Circle forwards it or the destination already received it.
+   */
+  resume(
+    record: InflightRecord,
+    options?: ResumeOptions,
+    listeners?: SendListeners,
+  ): Promise<SendResult>;
+  /** As `resume`, from the burn's tx hash alone, such as a receipt link. */
+  resumeFromTx(
+    params: ResumeFromTxParams,
+    listeners?: SendListeners,
+  ): Promise<SendResult>;
   /**
    * Send funds back to the original payer of a previous transfer. Mechanically
    * a regular send from the merchant's adapter on `originalDestinationChain`

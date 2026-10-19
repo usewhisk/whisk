@@ -36,7 +36,8 @@ export type {
   SendResult,
   SendSuccess,
   SendFailure,
-  RetryParams,
+  ResumeFromTxParams,
+  ResumeOptions,
   RefundParams,
   RefundResult,
 } from "./engine/types.js";
@@ -219,26 +220,6 @@ export {
 export type { WhiskMetadata } from "./metadata/index.js";
 
 /* --------------------------------------------------------------------- *
- *  Recovery — browser persistence
- *
- *  Touches `window.localStorage`. Returns null / false on Node, Workers,
- *  or any SSR environment. Server consumers can ignore these — CCTP
- *  recovery is a page-refresh concern, not a server one.
- * --------------------------------------------------------------------- */
-
-export {
-  saveInflight,
-  loadInflight,
-  clearInflight,
-  listInflightSnapshots,
-  serializeError,
-  deserializeError,
-  INFLIGHT_TTL_MS,
-  STORAGE_PREFIX,
-} from "./recovery/index.js";
-export type { InflightSnapshot, WalletKind } from "./recovery/index.js";
-
-/* --------------------------------------------------------------------- *
  *  Recovery — universal
  *
  *  Iris polling, MessageTransmitter helpers, receipt projection. Runs
@@ -274,3 +255,14 @@ export type {
   ReceiptStage,
   ReceiptView,
 } from "./recovery/index.js";
+
+export {
+  createMemoryInflightStore,
+  createStorageInflightStore,
+} from "./inflight/index.js";
+export type {
+  InflightRecord,
+  InflightStep,
+  InflightStorage,
+  InflightStore,
+} from "./inflight/index.js";

@@ -194,6 +194,7 @@ export async function executeSolanaToStellar(
   }
 
   snapshot.burnTxHash = burnSignature as `0x${string}`;
+  listeners?.onBurnSubmitted?.(burnSignature);
   steps[1] = { name: "burn", state: "pending", txHash: burnSignature };
   listeners?.onStep?.(steps[1]);
 

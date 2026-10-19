@@ -179,6 +179,7 @@ export async function executeStarknetToSolana(
     );
   }
   snapshot.burnTxHash = burnHash as `0x${string}`;
+  listeners?.onBurnSubmitted?.(burnHash);
   steps[1] = { name: "burn", state: "pending", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
 

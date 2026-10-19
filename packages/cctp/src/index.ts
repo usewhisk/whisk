@@ -82,8 +82,12 @@ export type {
 } from "./iris/index.js";
 
 // JSON-RPC reads
-export { getBlockNumber } from "./rpc/index.js";
-export type { RpcOptions } from "./rpc/index.js";
+export {
+  getBlockNumber,
+  getTransactionStatus,
+  isNonceUsed,
+} from "./rpc/index.js";
+export type { RpcOptions, TransactionStatus } from "./rpc/index.js";
 
 // Forwarder
 export {

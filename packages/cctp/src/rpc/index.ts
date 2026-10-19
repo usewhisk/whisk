@@ -1,2 +1,7 @@
-export { callRpc, getBlockNumber } from "./jsonRpc.js";
-export type { RpcOptions } from "./jsonRpc.js";
+export {
+  callRpc,
+  getBlockNumber,
+  getTransactionStatus,
+  isNonceUsed,
+} from "./jsonRpc.js";
+export type { RpcOptions, TransactionStatus } from "./jsonRpc.js";

@@ -49,6 +49,9 @@ import { DEFAULT_FEE_BEARER } from "../types/fee.js";
 import { formatUsdcAmount } from "./amount.js";
 import { fitFastAllowance } from "../routing/allowance.js";
 import type { UpfrontFee } from "./bridge/upfront.js";
+import { createMemoryInflightStore } from "../inflight/stores.js";
+import type { InflightRecord } from "../inflight/types.js";
+import { recordFromTx, resumeTransfer, type ResumeContext } from "./resume.js";
 import { buildQuote, rpcUrlsFor } from "./quote.js";
 import { computeBridgeFees, fetchFeeTier } from "./bridge/quote.js";
 import { executeBridge } from "./bridge/execute.js";
@@ -73,7 +76,6 @@ import { buildRefundMetadata, validateRefundInput } from "../refund/index.js";
 import type {
   EvmAdapter,
   QuoteParams,
-  RetryParams,
   RefundParams,
   RefundResult,
   SendListeners,
@@ -85,10 +87,6 @@ import type {
   WhiskAdapter,
   WhiskEngine,
 } from "./types.js";
-
-const RETRY_NOT_IMPLEMENTED = new ConfigError(
-  "Engine retry is not implemented in this build.",
-);
 
 export function createWhisk(config: WhiskConfig): WhiskEngine {
   if (!config.chains || config.chains.length === 0) {
@@ -104,6 +102,12 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     useForwarder: config.useForwarder ?? true,
   };
   const resolver = resolvedConfig.resolver ?? addressResolver;
+  const store = resolvedConfig.inflightStore ?? createMemoryInflightStore();
+  const resumeContext: ResumeContext = {
+    store,
+    ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+    rpcUrls: (chain) => rpcUrlsFor(resolvedConfig, chain),
+  };
   const useForwarder = resolvedConfig.useForwarder ?? true;
 
   const engine: WhiskEngine = {
@@ -138,24 +142,53 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       if (Date.now() > params.quote.expiresAt) {
         throw new QuoteExpiredError(params.quote);
       }
-      const result = await runRoute(
-        {
-          quote: params.quote,
-          adapter: params.adapter,
-          ...(params.destinationAdapter && {
-            destinationAdapter: params.destinationAdapter,
-          }),
-        },
-        listeners,
+      const result = await tracked(params.quote, listeners, (tracking) =>
+        runRoute(
+          {
+            quote: params.quote,
+            adapter: params.adapter,
+            ...(params.destinationAdapter && {
+              destinationAdapter: params.destinationAdapter,
+            }),
+          },
+          tracking,
+        ),
       );
       return attachMetadata(result, metadata);
     },
 
-    async retry(
-      _params: RetryParams,
-      _listeners?: SendListeners,
-    ): Promise<SendResult> {
-      throw RETRY_NOT_IMPLEMENTED;
+    inflight() {
+      return store.list();
+    },
+
+    resume(record, options = {}, listeners) {
+      return resumeTransfer(record, options, resumeContext, listeners);
+    },
+
+    async resumeFromTx(params, listeners) {
+      const known = (await store.list()).find(
+        (r) =>
+          r.sourceChain === params.sourceChain &&
+          r.sourceTxHash?.toLowerCase() === params.txHash.toLowerCase(),
+      );
+      const record =
+        known ??
+        (await recordFromTx(
+          params.sourceChain,
+          params.txHash,
+          resolvedConfig.fetch,
+        ));
+      if (!known) await store.put(record);
+      return resumeTransfer(
+        record,
+        {
+          ...(params.destinationAdapter && {
+            destinationAdapter: params.destinationAdapter,
+          }),
+        },
+        resumeContext,
+        listeners,
+      );
     },
 
     async refund(
@@ -188,10 +221,81 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         },
         { config: resolvedConfig },
       );
-      const result = await runRoute({ quote, ...adapters }, listeners);
+      const result = await tracked(quote, listeners, (tracking) =>
+        runRoute({ quote, ...adapters }, tracking),
+      );
       return attachMetadata(result, refundMetadata);
     },
   };
+
+  /**
+   * Keeps a bridge's record in the store: `signing` before anything runs,
+   * `burned` with the hash the moment the wallet returns it, `minted` at the
+   * end. A transfer that never burned leaves nothing behind.
+   */
+  async function tracked(
+    quote: Quote,
+    listeners: SendListeners | undefined,
+    run: (listeners: SendListeners) => Promise<SendResult>,
+  ): Promise<SendResult> {
+    const plan = quote.plan;
+    if (quote.route.kind !== "bridge" || !plan) return run(listeners ?? {});
+    const now = Date.now();
+    let record: InflightRecord = {
+      version: 2,
+      id: quote.id,
+      network: plan.network,
+      sourceChain: quote.route.sourceChain,
+      destinationChain: quote.route.destinationChain,
+      mint: plan.mint.kind,
+      speed: plan.speed,
+      amountBurned: quote.subunits.burnAmount.toString(),
+      recipient: quote.recipient.address,
+      step: "signing",
+      createdAt: now,
+      updatedAt: now,
+    };
+    await store.put(record);
+
+    let writes = Promise.resolve();
+    const save = (patch: Partial<InflightRecord>) => {
+      record = { ...record, ...patch, updatedAt: Date.now() };
+      const snapshot = record;
+      writes = writes.then(() => store.put(snapshot));
+    };
+    const tracking: SendListeners = {
+      onBurnSubmitted: (txHash) => {
+        save({ step: "burned", sourceTxHash: txHash });
+        listeners?.onBurnSubmitted?.(txHash);
+      },
+      onStep: (step) => {
+        if (step.name === "fetchAttestation" && step.state === "success") {
+          save({ step: "attested" });
+        }
+        listeners?.onStep?.(step);
+      },
+    };
+
+    let result: SendResult;
+    try {
+      result = await run(tracking);
+    } catch (err) {
+      await writes;
+      if (!record.sourceTxHash) await store.remove(record.id);
+      throw err;
+    }
+    await writes;
+    if (result.kind === "success") {
+      save({
+        step: "minted",
+        ...(result.finalTxHash && { mintTxHash: result.finalTxHash }),
+      });
+      await writes;
+    } else if (!record.sourceTxHash) {
+      await store.remove(record.id);
+    }
+    return result;
+  }
 
   type Adapters = { adapter: WhiskAdapter; destinationAdapter?: WhiskAdapter };
 
