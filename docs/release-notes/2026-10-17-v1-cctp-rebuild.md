@@ -277,6 +277,11 @@ Technical shape, per
   - `@usewhisk/cctp` adds `getUsdcBalance`.
 - The widget has DOM tests (Testing Library on jsdom) that mount the real
   components, and a test fails on an unhandled rejection.
+- Every bridge route has a wiring test through `createWhisk().send` (#90),
+  with in-memory Solana, Stellar and Starknet wallets beside the EVM one. Each
+  decodes the burn as its contract reads it (domain, mint recipient,
+  destination caller, max fee, hook) and checks the mint on the destination.
+  Each route also proves a send that fails its checks burns nothing.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 
