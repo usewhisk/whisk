@@ -16,6 +16,7 @@ import {
   isSendRoute,
   QuoteChangedError,
   QuoteExpiredError,
+  toWhiskError,
   type Chain,
   type ChainKind,
   type Quote,
@@ -23,6 +24,7 @@ import {
   type SendFailure,
   type SendSuccess,
   type WhiskAdapter,
+  type WhiskError,
 } from "@usewhisk/core";
 import { Card } from "./ui/Card.js";
 import { Banner } from "./ui/Banner.js";
@@ -187,6 +189,7 @@ export function WhiskSend({
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [feeRise, setFeeRise] = useState<Quote | null>(null);
+  const [sendError, setSendError] = useState<WhiskError | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SendSuccess | SendFailure | null>(null);
 
@@ -343,6 +346,7 @@ export function WhiskSend({
   // success / failure — they're starting a new transfer.
   useEffect(() => {
     setResult(null);
+    setSendError(null);
   }, [tab, sourceChain, destinationChain, recipient, amount]);
 
   async function handleSubmit() {
@@ -350,6 +354,7 @@ export function WhiskSend({
     setSubmitting(true);
     setResult(null);
     setFeeRise(null);
+    setSendError(null);
     try {
       const r = await engine.send({
         adapter,
@@ -366,7 +371,7 @@ export function WhiskSend({
       } else if (err instanceof QuoteExpiredError) {
         setRefreshTick((t) => t + 1);
       } else {
-        throw err;
+        setSendError(toWhiskError(err, "The transfer could not be sent."));
       }
     } finally {
       setSubmitting(false);
@@ -503,6 +508,15 @@ export function WhiskSend({
       )}
 
       {result ? <ResultPanel result={result} /> : null}
+      {sendError ? (
+        <div
+          className="whisk-banner whisk-banner--error"
+          role="alert"
+          data-whisk-error={sendError.code}
+        >
+          <strong>Failed.</strong> {sendError.message}
+        </div>
+      ) : null}
 
       {feeRise && quote ? (
         <Banner variant="warning">

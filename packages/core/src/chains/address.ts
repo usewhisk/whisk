@@ -26,3 +26,8 @@ const FORMATS: Record<Ecosystem, AddressFormat> = {
 export function addressFormat(chain: Chain): AddressFormat {
   return FORMATS[getChain(chain).ecosystem];
 }
+
+/** Whether `input` has the shape of an address on any ecosystem. */
+export function looksLikeAddress(input: string): boolean {
+  return Object.values(FORMATS).some((f) => f.pattern.test(input));
+}

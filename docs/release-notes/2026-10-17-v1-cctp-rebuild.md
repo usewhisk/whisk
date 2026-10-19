@@ -229,6 +229,21 @@ Technical shape, per
   is the same adapter outside a hook.
 - The default resolver picks Sepolia or mainnet ENS from the destination chain's
   network.
+- `addressResolver` accepts an address of any ecosystem it knows: EVM, Solana
+  base58, Stellar `G`, `M` and `C` strkeys, and Starknet felts. Before, it
+  matched only EVM and Solana, so the widget refused a Stellar or Starknet
+  recipient (#65). `looksLikeAddress` exposes the check.
+- Widget errors are visible (#89).
+  - A send that throws shows its message in the form, with its code in
+    `data-whisk-error`, instead of becoming an unhandled rejection.
+  - A wallet that fails to disconnect is reported in the connect dialog,
+    which stays open. Before, the error was dropped and the dialog closed.
+- The chain picker's list and the connect dialog render into a container
+  inside `[data-whisk]`, which `WhiskProvider` mounts, so they keep the
+  widget's styles and theme. Before, they rendered unstyled at the end of
+  `body` (#69).
+- The widget has DOM tests (Testing Library on jsdom) that mount the real
+  components, and a test fails on an unhandled rejection.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 

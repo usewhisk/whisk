@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { toWhiskError } from "@usewhisk/core";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import type { Connector } from "wagmi";
 import { useWallet, type Wallet } from "@solana/wallet-adapter-react";
@@ -10,6 +11,7 @@ import type { ISupportedWallet } from "@creit.tech/stellar-wallets-kit";
 import { Button } from "./Button.js";
 import { useWhiskContext } from "../../hooks/useWhiskContext.js";
 import { useStellarWallet } from "../../provider/stellarContext.js";
+import { useWhiskPortal } from "../../provider/portal.js";
 import {
   useStarknetWallet,
   type StarknetWalletEntry,
@@ -96,6 +98,7 @@ export function ConnectModal({
   description,
 }: ConnectModalProps) {
   const { config } = useWhiskContext();
+  const portal = useWhiskPortal();
   const evm = useAccount();
   const evmConnect = useConnect();
   const evmDisconnect = useDisconnect();
@@ -110,6 +113,7 @@ export function ConnectModal({
   const [solanaError, setSolanaError] = useState<string | null>(null);
   const [stellarError, setStellarError] = useState<string | null>(null);
   const [starknetError, setStarknetError] = useState<string | null>(null);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
   // Always reopen on the ecosystem step and clear stale state when the
   // modal closes. wagmi's mutation error otherwise ghosts into the next
@@ -241,17 +245,19 @@ export function ConnectModal({
   }
 
   async function handleDisconnect() {
-    if (evm.isConnected) {
-      await evmDisconnect.disconnectAsync().catch(() => {});
-    }
-    if (solana.connected) {
-      await solana.disconnect().catch(() => {});
-    }
-    if (stellar?.address) {
-      await stellar.disconnect().catch(() => {});
-    }
-    if (starknet?.address) {
-      await starknet.disconnect().catch(() => {});
+    setDisconnectError(null);
+    const results = await Promise.allSettled([
+      evm.isConnected ? evmDisconnect.disconnectAsync() : undefined,
+      solana.connected ? solana.disconnect() : undefined,
+      stellar?.address ? stellar.disconnect() : undefined,
+      starknet?.address ? starknet.disconnect() : undefined,
+    ]);
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) {
+      setDisconnectError(
+        toWhiskError(failed.reason, "Could not disconnect a wallet.").message,
+      );
+      return;
     }
     onOpenChange(false);
   }
@@ -272,7 +278,7 @@ export function ConnectModal({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
+      <Dialog.Portal container={portal}>
         <Dialog.Overlay className="whisk-dialog__overlay" />
         <Dialog.Content
           className="whisk-dialog__content"
@@ -314,6 +320,7 @@ export function ConnectModal({
               starknetAddress={starknet?.address ?? undefined}
               starknetWalletName={starknet?.wallet?.name ?? undefined}
               onDisconnect={handleDisconnect}
+              errorMessage={disconnectError}
             />
           ) : step === "ecosystem" ? (
             <EcosystemPicker
@@ -672,6 +679,7 @@ type ConnectedViewProps = {
   starknetAddress: string | undefined;
   starknetWalletName: string | undefined;
   onDisconnect: () => void;
+  errorMessage?: string | null;
 };
 
 function ConnectedView({
@@ -684,6 +692,7 @@ function ConnectedView({
   starknetAddress,
   starknetWalletName,
   onDisconnect,
+  errorMessage,
 }: ConnectedViewProps) {
   return (
     <div className="whisk-dialog__list">
@@ -750,6 +759,11 @@ function ConnectedView({
             <span className="whisk-dialog__row-tag">{starknetWalletName}</span>
           ) : null}
         </div>
+      ) : null}
+      {errorMessage ? (
+        <p className="whisk-help whisk-help--error" role="alert">
+          {errorMessage}
+        </p>
       ) : null}
       <Button variant="ghost" onClick={onDisconnect}>
         Disconnect
