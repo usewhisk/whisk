@@ -13,7 +13,8 @@ export type {
   SendResult,
   SendSuccess,
   SendFailure,
-  RetryParams,
+  ResumeFromTxParams,
+  ResumeOptions,
   RefundParams,
   RefundResult,
 } from "./types.js";

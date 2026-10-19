@@ -1,17 +1,4 @@
 export {
-  saveInflight,
-  loadInflight,
-  clearInflight,
-  listInflightSnapshots,
-  serializeError,
-  deserializeError,
-  INFLIGHT_TTL_MS,
-  STORAGE_PREFIX,
-} from "./persistence.js";
-
-export type { InflightSnapshot, WalletKind } from "./persistence.js";
-
-export {
   fetchAttestationOnce,
   pollAttestation,
   getIrisBaseUrl,

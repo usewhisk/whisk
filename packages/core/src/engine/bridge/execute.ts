@@ -204,6 +204,9 @@ export async function executeBridge(
     );
   }
 
+  // Saved before any receipt wait, which can outlive the tab.
+  listeners?.onBurnSubmitted?.(burnHash);
+
   // Sequential wallets: wait for each customFee receipt before the
   // approve step advances. Bundled wallets share `burnHash` here, so
   // the burn-receipt wait below covers them all in one go.

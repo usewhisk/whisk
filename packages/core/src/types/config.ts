@@ -1,3 +1,4 @@
+import type { InflightStore } from "../inflight/types.js";
 import type { Chain } from "./chain.js";
 import type { Token } from "./token.js";
 import type { FeePolicy, FeeBearer } from "./fee.js";
@@ -42,6 +43,12 @@ export type WhiskConfig = {
    * `cctp-forward` hookData (32-byte magic prefix) when this is enabled.
    */
   useForwarder?: boolean;
+
+  /**
+   * Where transfers are kept between the burn and the mint, so a reload can
+   * resume them. Defaults to memory, which lasts as long as the engine.
+   */
+  inflightStore?: InflightStore;
 
   /**
    * Circle's forwarding fee level. Defaults to `high`, or `med` into

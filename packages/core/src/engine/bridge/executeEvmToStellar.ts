@@ -204,6 +204,9 @@ export async function executeEvmToStellar(
     );
   }
 
+  // Saved before any receipt wait, which can outlive the tab.
+  listeners?.onBurnSubmitted?.(burnHash);
+
   for (const hash of customFeeHashes) {
     if (hash === burnHash) continue;
     try {

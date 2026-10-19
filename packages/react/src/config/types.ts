@@ -1,3 +1,4 @@
+import type { InflightStore } from "@usewhisk/core";
 import type {
   Chain,
   FeePolicy,
@@ -48,6 +49,11 @@ export type WhiskClientConfig = {
   rpcUrls?: Partial<Record<Chain, string | string[]>>;
   useForwarder?: boolean;
   appLabel?: string;
+  /**
+   * Where transfers are kept between the burn and the mint. Defaults to
+   * `localStorage`, so a reload can resume them.
+   */
+  inflightStore?: InflightStore;
 };
 
 export type CreateWhiskConfigOptions = WhiskClientConfig;

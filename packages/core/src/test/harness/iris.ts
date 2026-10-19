@@ -1,4 +1,4 @@
-import { encodeAbiParameters } from "viem";
+import { encodeAbiParameters, toFunctionSelector } from "viem";
 import type { BurnFeeTier, IrisMessage } from "@usewhisk/cctp";
 
 export type IrisRequest = {
@@ -33,7 +33,10 @@ export type FakeIris = {
   setFees(sourceDomain: number, destinationDomain: number, rows: unknown): void;
   /** Queued in order. The last reply repeats once the queue drains. */
   replyToMessages(...replies: IrisReply[]): void;
+  /** A `{ message }` reply acknowledges; a `{ status }` reply is an error. */
   replyToReattest(...replies: IrisReply[]): void;
+  /** Nonces every MessageTransmitterV2 reports as used. */
+  setNonceUsed(nonce: `0x${string}`): void;
   /**
    * What every TokenMessengerV2 answers to `getMinFeeAmount` over JSON-RPC.
    * Defaults to 0, which is what each chain returns today.
@@ -80,6 +83,7 @@ export const STANDARD_FEE_ROW = {
 };
 
 const GET_MIN_FEE_AMOUNT = "0x516990e3";
+const USED_NONCES = toFunctionSelector("usedNonces(bytes32)");
 
 const IRIS_HOSTS = new Set([
   "iris-api.circle.com",
@@ -91,6 +95,7 @@ export function createFakeIris(): FakeIris {
   const fees = new Map<string, unknown>();
   const messageReplies: IrisReply[] = [];
   const reattestReplies: IrisReply[] = [];
+  const usedNonces = new Set<string>();
   let standardMinFee = 0n;
   const quoteRequests: QuoteRequest[] = [];
   const quoteReplies: QuoteReply[] = [];
@@ -120,11 +125,28 @@ export function createFakeIris(): FakeIris {
         method?: string;
         params?: [{ data?: string }];
       };
+      // The fake wallet mines every call it is sent.
+      if (rpc.method === "eth_getTransactionReceipt") {
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: { status: "0x1" },
+        });
+      }
       if (rpc.method === "eth_blockNumber") {
         return json(200, {
           jsonrpc: "2.0",
           id: rpc.id ?? 1,
           result: `0x${blockNumber.toString(16)}`,
+        });
+      }
+      const callData = rpc.params?.[0]?.data;
+      if (rpc.method === "eth_call" && callData?.startsWith(USED_NONCES)) {
+        const nonce = `0x${callData.slice(10)}`.toLowerCase();
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: `0x${(usedNonces.has(nonce) ? 1 : 0).toString(16).padStart(64, "0")}`,
         });
       }
       if (
@@ -211,8 +233,15 @@ export function createFakeIris(): FakeIris {
     if (/^\/v2\/messages\/\d+$/.test(url.pathname) && method === "GET") {
       return reply(next(messageReplies));
     }
-    if (/^\/v2\/reattest\/[^/]+$/.test(url.pathname) && method === "POST") {
-      return reply(next(reattestReplies));
+    const reattestPath = url.pathname.match(/^\/v2\/reattest\/([^/]+)$/);
+    if (reattestPath && method === "POST") {
+      const r = next(reattestReplies);
+      if (!r) return json(404, { error: "Message not found" });
+      if ("status" in r) return json(r.status, { error: `status ${r.status}` });
+      return json(200, {
+        message: "Re-attestation successfully requested for nonce.",
+        nonce: reattestPath[1],
+      });
     }
     return json(400, {
       error: `fake iris: no route for ${method} ${url.pathname}`,
@@ -240,6 +269,9 @@ export function createFakeIris(): FakeIris {
     },
     replyToMessages(...replies) {
       messageReplies.splice(0, messageReplies.length, ...replies);
+    },
+    setNonceUsed(nonce) {
+      usedNonces.add(nonce.toLowerCase());
     },
     replyToReattest(...replies) {
       reattestReplies.splice(0, reattestReplies.length, ...replies);
