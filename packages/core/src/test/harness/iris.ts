@@ -50,6 +50,8 @@ export type FakeIris = {
   setFastAllowance(subunits: bigint): void;
   /** What every chain answers to `eth_blockNumber`. Defaults to 100. */
   setBlockNumber(block: number): void;
+  /** What every chain answers to `eth_gasPrice`, in wei. Defaults to 25 gwei. */
+  setGasPrice(wei: bigint): void;
 };
 
 /**
@@ -102,6 +104,7 @@ export function createFakeIris(): FakeIris {
   const quoteReplies: QuoteReply[] = [];
   let fastAllowance = 10n ** 15n;
   let blockNumber = 100;
+  let gasPrice = 25_000_000_000n;
 
   function next(queue: IrisReply[]): IrisReply | undefined {
     return queue.length > 1 ? queue.shift() : queue[0];
@@ -132,6 +135,13 @@ export function createFakeIris(): FakeIris {
           jsonrpc: "2.0",
           id: rpc.id ?? 1,
           result: { status: "0x1" },
+        });
+      }
+      if (rpc.method === "eth_gasPrice") {
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: `0x${gasPrice.toString(16)}`,
         });
       }
       if (rpc.method === "eth_blockNumber") {
@@ -295,6 +305,9 @@ export function createFakeIris(): FakeIris {
     },
     setBlockNumber(block) {
       blockNumber = block;
+    },
+    setGasPrice(wei) {
+      gasPrice = wei;
     },
     setFees(sourceDomain, destinationDomain, rows) {
       fees.set(`${sourceDomain}:${destinationDomain}`, rows);

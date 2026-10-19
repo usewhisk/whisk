@@ -264,12 +264,16 @@ export function createFakeEvmWallet(opts: {
       switches.push(id);
       chainId = id;
     },
-    async sendCalls(calls): Promise<SendCallsResult> {
+    async sendCalls(
+      calls,
+      options?: { onSubmitted?: (hash: Hex, index: number) => void },
+    ): Promise<SendCallsResult> {
       batches.push(calls);
-      const hashes = calls.map((call) => {
+      const hashes = calls.map((call, index) => {
         hashCounter += 1;
         const hash = `0x${hashCounter.toString(16).padStart(64, "0")}` as Hex;
         receipts.set(hash, apply(call) ? "success" : "reverted");
+        options?.onSubmitted?.(hash, index);
         return hash;
       });
       return { hashes };
