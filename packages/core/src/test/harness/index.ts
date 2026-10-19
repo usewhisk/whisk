@@ -19,3 +19,9 @@ export {
   type EvmTransfer,
   type FakeEvmWallet,
 } from "./evm.js";
+export {
+  createFakeSolanaWallet,
+  createFakeStarknetWallet,
+  createFakeStellarWallet,
+  type DecodedBurn,
+} from "./nonEvm.js";
