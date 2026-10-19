@@ -1,9 +1,9 @@
 /**
- * Generate a fresh Stellar testnet keypair for the live sweep.
+ * Generate a fresh Stellar testnet keypair for the testnet matrix.
  *
  * Prints the public key (G…) + raw seed (S…). Save the seed to your
  * password manager and pass it as `WHISK_STELLAR_SEED` when running
- * `test:live`. Never commit, never check into the repo.
+ * `test:testnet`. Never commit, never check into the repo.
  *
  * Fund with:
  *   - XLM (gas)        https://friendbot.stellar.org?addr=<G…>
@@ -33,6 +33,6 @@ console.log(
 console.log(
   `  3. USDC faucet: https://faucet.circle.com (select Stellar Testnet)`,
 );
-console.log(`  4. Run the live sweep:`);
+console.log(`  4. Run the testnet matrix:`);
 console.log(`     WHISK_STELLAR_SEED="${kp.secret()}" \\`);
-console.log(`     pnpm --filter @usewhisk/core test:live -- --phase=stellar\n`);
+console.log(`     pnpm test:testnet --pairs=Arc_Testnet>Stellar_Testnet\n`);

@@ -282,8 +282,13 @@ Technical shape, per
   decodes the burn as its contract reads it (domain, mint recipient,
   destination caller, max fee, hook) and checks the mint on the destination.
   Each route also proves a send that fails its checks burns nothing.
+- `pnpm test:testnet` runs the six-pair testnet matrix from Decision 10.4 with
+  funded keys, checking each recipient's balance on the destination. It also
+  covers Max on Arc and a transfer burned in one process and resumed in
+  another. A nightly `Testnet` workflow runs it, outside `quality`. It replaces
+  the old `test:live` sweep, and core's `lint` now typechecks the scripts.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 
-This note is updated as each Phase 1 step lands on the branch. The testnet matrix
-from Step 10 is the automation this release still needs.
+This note is updated as each Phase 1 step lands on the branch. Step 10 is verified
+once a manual run of the testnet matrix passes.
