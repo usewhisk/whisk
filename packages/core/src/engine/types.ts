@@ -139,6 +139,11 @@ export interface WhiskEngine {
   /** Transfers in the engine's `inflightStore`, oldest first. */
   inflight(): Promise<readonly InflightRecord[]>;
   /**
+   * Removes a transfer from the store, once the payer has seen it finish or
+   * chosen to drop it. Burned records are kept until this is called.
+   */
+  dismiss(id: string): Promise<void>;
+  /**
    * Finishes a transfer from its record without signing the burn again:
    * waits for the attestation, re-attests an expired one, and mints unless
    * Circle forwards it or the destination already received it.

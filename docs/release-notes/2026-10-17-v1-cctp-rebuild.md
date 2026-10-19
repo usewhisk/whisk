@@ -254,6 +254,16 @@ Technical shape, per
   `"system"` is renamed `"auto"`, and the default changes from following the
   OS to light, so a light host page no longer gets a dark widget on a dark OS.
   `tokensToCssVars` maps any set of tokens to `--whisk-*` variables.
+- Transfers can be finished from the widget.
+  - `WhiskSend` lists the transfers in `engine.inflight()` above the form: the
+    amount, the route and where it stands. Each has Resume, which calls
+    `engine.resume` with the connected wallet for the destination chain, and
+    Dismiss, which calls the new `engine.dismiss(id)`. A resume that cannot
+    finish says why. `ResumeList` is exported on its own too.
+  - `WhiskReceipt` has a Finish transfer button for a cross-chain transfer
+    that has not settled, which calls `engine.resumeFromTx` from the burn's
+    hash. Outside a `WhiskProvider` the receipt shows status only.
+  - `useAdapterFor()` returns the connected wallet for a chain.
 - The widget has DOM tests (Testing Library on jsdom) that mount the real
   components, and a test fails on an unhandled rejection.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

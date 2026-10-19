@@ -50,7 +50,7 @@ export type {
  *  Widgets
  * --------------------------------------------------------------------- */
 
-export { WhiskReceipt, WhiskSend } from "./components/index.js";
+export { ResumeList, WhiskReceipt, WhiskSend } from "./components/index.js";
 export type { WhiskReceiptProps, WhiskSendProps } from "./components/index.js";
 
 /* --------------------------------------------------------------------- *
@@ -89,6 +89,7 @@ export type {
 
 export {
   createWagmiEvmAdapter,
+  useAdapterFor,
   useEvmAdapter,
   useReceipt,
   useRefund,

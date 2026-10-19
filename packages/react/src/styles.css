@@ -479,6 +479,12 @@
    alarming. Border picks up the same colour at higher alpha.
 */
 
+[data-whisk] .whisk-resume {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 [data-whisk] .whisk-banner {
   display: flex;
   align-items: center;

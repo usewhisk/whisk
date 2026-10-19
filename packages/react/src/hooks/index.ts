@@ -2,6 +2,7 @@
 
 export { createWagmiEvmAdapter, useEvmAdapter } from "./useEvmAdapter.js";
 
+export { useAdapterFor } from "./useAdapterFor.js";
 export { useReceipt } from "./useReceipt.js";
 export type { UseReceiptInput, UseReceiptResult } from "./useReceipt.js";
 
