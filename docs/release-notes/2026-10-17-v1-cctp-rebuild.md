@@ -213,6 +213,10 @@ Technical shape, per
     Arc mainnet. Before, Arc Testnet pointed at `rpc.testnet.arc.network`,
     which no longer resolves.
   - Arc is the default chain in the examples.
+  - The Next examples load Inter, Familjen Grotesk and JetBrains Mono from
+    `woff2` files in the repo, with each font's OFL licence, through
+    `next/font/local`. `next/font/google` fetched them during `next build` and
+    failed CI whenever Google's reply did not parse.
 - `viem` is a peer dependency of `@usewhisk/core` and `@usewhisk/react`, at
   `>=2.57.5 <3`, and a dependency of `@usewhisk/cctp` in the same range. 2.57.5
   is the first release whose Arc chains carry Arc's current RPCs.

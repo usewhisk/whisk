@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Familjen_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "@usewhisk/react/styles.css";
 import "./globals.css";
 
@@ -10,22 +10,23 @@ import "./globals.css";
  * `--whisk-font-display` / `--whisk-font-mono` stack, so loading them
  * here means the widget picks them up automatically.
  */
-const sans = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const sans = localFont({
+  src: "./fonts/Inter.woff2",
+  weight: "400 700",
   variable: "--font-sans",
   display: "swap",
 });
 
-const display = Familjen_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const display = localFont({
+  src: "./fonts/FamiljenGrotesk.woff2",
+  weight: "400 700",
   variable: "--font-display",
   display: "swap",
 });
 
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
+const mono = localFont({
+  src: "./fonts/JetBrainsMono.woff2",
+  weight: "100 800",
   variable: "--font-mono",
   display: "swap",
 });
