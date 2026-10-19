@@ -12,12 +12,12 @@ import { WhiskProvider } from "@usewhisk/react";
 
 ## Props
 
-| Prop          | Type                            | Default    | What it does                                                 |
-| ------------- | ------------------------------- | ---------- | ------------------------------------------------------------ |
-| `config`      | `WhiskClientConfig`             | required   | The frozen config from `createWhiskConfig(...)`.             |
-| `theme`       | `"light" \| "dark" \| "system"` | `"system"` | Pin a theme. `"system"` defers to OS via media query.        |
-| `queryClient` | `QueryClient`                   | auto       | Reuse a host-app `QueryClient`. Auto-detected when omitted.  |
-| `children`    | `ReactNode`                     | required   | Anything that reads Whisk hooks or renders Whisk components. |
+| Prop          | Type                          | Default   | What it does                                                 |
+| ------------- | ----------------------------- | --------- | ------------------------------------------------------------ |
+| `config`      | `WhiskClientConfig`           | required  | The frozen config from `createWhiskConfig(...)`.             |
+| `theme`       | `"light" \| "dark" \| "auto"` | `"light"` | Pin a theme. `"auto"` defers to the OS via media query.      |
+| `queryClient` | `QueryClient`                 | auto      | Reuse a host-app `QueryClient`. Auto-detected when omitted.  |
+| `children`    | `ReactNode`                   | required  | Anything that reads Whisk hooks or renders Whisk components. |
 
 ## How it decides what to mount
 

@@ -117,6 +117,7 @@ export {
   resolveTheme,
   themePresets,
   themeToCssVars,
+  tokensToCssVars,
 } from "./theme/index.js";
 export type {
   ResolvedTheme,
@@ -124,6 +125,8 @@ export type {
   WhiskTheme,
   WhiskThemeInput,
   WhiskThemeName,
+  WhiskThemeOverrides,
+  WhiskThemeTokens,
 } from "./theme/index.js";
 
 /* --------------------------------------------------------------------- *

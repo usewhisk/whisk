@@ -3,7 +3,7 @@
 import { useReducer } from "react";
 import type { FeeBearer } from "@usewhisk/react";
 
-export type Theme = "system" | "light" | "dark";
+export type Theme = "auto" | "light" | "dark";
 
 export type EventKind = "state" | "success" | "error" | "info";
 
@@ -37,10 +37,10 @@ export type PlaygroundAction =
   | { type: "LOG_EVENT"; event: Omit<PlaygroundEvent, "id" | "at"> }
   | { type: "CLEAR_LOG" };
 
-/* Initial config — sensible defaults. Theme stays "system" so first
+/* Initial config: sensible defaults. Theme stays "auto" so first
  * paint matches the OS. */
 export const INITIAL_CONFIG: PlaygroundConfig = {
-  theme: "system",
+  theme: "auto",
   feeBearer: "sender",
   tabs: ["send", "bridge"],
 };

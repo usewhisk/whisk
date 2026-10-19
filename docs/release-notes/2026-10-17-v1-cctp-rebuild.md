@@ -242,6 +242,18 @@ Technical shape, per
   inside `[data-whisk]`, which `WhiskProvider` mounts, so they keep the
   widget's styles and theme. Before, they rendered unstyled at the end of
   `body` (#69).
+- Theme presets (#73). `WhiskProvider`'s `theme` takes:
+  - `"light"`, which is the default;
+  - `"dark"`;
+  - `"auto"`, which follows `prefers-color-scheme` in CSS alone;
+  - the named palettes;
+  - a full `WhiskTheme`;
+  - `{ preset, tokens }`, which replaces some tokens of a preset or of
+    `"auto"` without pinning its colour scheme.
+
+  `"system"` is renamed `"auto"`, and the default changes from following the
+  OS to light, so a light host page no longer gets a dark widget on a dark OS.
+  `tokensToCssVars` maps any set of tokens to `--whisk-*` variables.
 - The widget has DOM tests (Testing Library on jsdom) that mount the real
   components, and a test fails on an unhandled rejection.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

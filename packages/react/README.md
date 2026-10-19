@@ -263,7 +263,7 @@ No Tailwind plugin, no CSS-in-JS runtime. Dark mode tracks
 on the provider:
 
 ```tsx
-<WhiskProvider config={config} theme="light" />     // or "dark" / "system"
+<WhiskProvider config={config} theme="light" />     // or "dark" / "auto"
 ```
 
 A Tailwind preset is also available:

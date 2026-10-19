@@ -88,7 +88,7 @@ function ThemePicker({
   value: Theme;
   onChange: (t: Theme) => void;
 }) {
-  const options: Theme[] = ["system", "light", "dark"];
+  const options: Theme[] = ["auto", "light", "dark"];
   return (
     <div role="radiogroup" className="pg-radio-group" aria-label="Theme">
       {options.map((opt) => (
