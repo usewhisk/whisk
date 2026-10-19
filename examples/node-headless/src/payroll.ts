@@ -31,13 +31,13 @@ const payees: Array<{ id: string; address: string; amount: string }> = [
 
 async function main() {
   const engine = createWhisk({
-    chains: ["Base_Sepolia", "Ethereum_Sepolia"],
+    chains: ["Arc_Testnet", "Base_Sepolia"],
   });
 
   // One adapter per source chain — in a real payroll batch you'd pick
   // the funding chain per payee's target ecosystem.
   const adapter = createEvmAdapter({
-    chain: "Base_Sepolia",
+    chain: "Arc_Testnet",
     privateKey: PRIVATE_KEY,
   });
 
@@ -51,12 +51,12 @@ async function main() {
   for (const payee of payees) {
     console.log(`\n→ ${payee.id} (${payee.amount} USDC to ${payee.address})`);
     try {
-      const recipient = await engine.resolve(payee.address, "Ethereum_Sepolia");
+      const recipient = await engine.resolve(payee.address, "Base_Sepolia");
       const quote = await engine.quote({
         recipient,
         amount: payee.amount,
-        sourceChain: "Base_Sepolia",
-        destinationChain: "Ethereum_Sepolia",
+        sourceChain: "Arc_Testnet",
+        destinationChain: "Base_Sepolia",
         adapter,
       });
       const r = await engine.send({

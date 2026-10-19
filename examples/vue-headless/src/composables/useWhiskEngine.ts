@@ -16,7 +16,7 @@ import {
   http,
   type Chain as ViemChain,
 } from "viem";
-import { baseSepolia, sepolia } from "viem/chains";
+import { arcTestnet, baseSepolia, sepolia } from "viem/chains";
 import {
   createWhisk,
   tryChainByEvmChainId,
@@ -24,6 +24,7 @@ import {
   type Chain,
   type EvmAdapter,
   type EvmCall,
+  type SendCallsOptions,
   type Quote,
   type SendResult,
   type Step,
@@ -72,12 +73,13 @@ function getEthereum(): EthereumProvider | null {
 }
 
 const VIEM_CHAINS: Record<number, ViemChain> = {
+  [arcTestnet.id]: arcTestnet,
   [baseSepolia.id]: baseSepolia,
   [sepolia.id]: sepolia,
 };
 
 const engine: WhiskEngine = createWhisk({
-  chains: ["Base_Sepolia", "Ethereum_Sepolia"],
+  chains: ["Arc_Testnet", "Base_Sepolia", "Ethereum_Sepolia"],
 });
 
 /**
@@ -115,7 +117,7 @@ function makeAdapter(
       }
     },
 
-    async sendCalls(calls: EvmCall[]) {
+    async sendCalls(calls: EvmCall[], options?: SendCallsOptions) {
       const viem = VIEM_CHAINS[await this.getChainId()];
       const walletClient = createWalletClient({
         account: address,
@@ -133,10 +135,17 @@ function makeAdapter(
           to: call.to,
           data: call.data,
           value: call.value,
+          ...(call.maxFeePerGas !== undefined && {
+            maxFeePerGas: call.maxFeePerGas,
+          }),
+          ...(call.maxPriorityFeePerGas !== undefined && {
+            maxPriorityFeePerGas: call.maxPriorityFeePerGas,
+          }),
           account: address,
           chain: walletClient.chain ?? null,
         });
         hashes.push(hash);
+        options?.onSubmitted?.(hash, hashes.length - 1);
         await publicClient.waitForTransactionReceipt({
           hash,
           confirmations: 2,

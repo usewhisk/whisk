@@ -18,6 +18,7 @@ import {
  * mirrors what production apps will see.
  */
 const TESTNET_CHAINS: Chain[] = [
+  "Arc_Testnet",
   "Arbitrum_Sepolia",
   "Avalanche_Fuji",
   "Base_Sepolia",
@@ -78,8 +79,8 @@ export function PlaygroundProviders({
           starknet(),
         ],
         chains: TESTNET_CHAINS,
-        defaultSourceChain: "Base_Sepolia",
-        defaultDestinationChain: "Ethereum_Sepolia",
+        defaultSourceChain: "Arc_Testnet",
+        defaultDestinationChain: "Base_Sepolia",
         appLabel: "whisk-playground",
       }),
     [feeBearer],

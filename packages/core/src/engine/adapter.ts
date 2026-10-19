@@ -28,6 +28,22 @@ export type EvmCall = {
   data: `0x${string}`;
   /** Native value in wei. CCTP calls always pass `0n`. */
   value: bigint;
+  /**
+   * Set by the engine where the chain needs it, as on Arc, which drops a
+   * transaction offering less than its 20 gwei base fee floor. Adapters pass
+   * both through when set and otherwise let the wallet choose.
+   */
+  maxFeePerGas?: bigint;
+  maxPriorityFeePerGas?: bigint;
+};
+
+export type SendCallsOptions = {
+  /**
+   * Called with each hash as soon as the wallet returns it, before any
+   * receipt wait. `index` is the call it covers; a batch that shares one
+   * hash reports it once, for the last call.
+   */
+  onSubmitted?: (hash: `0x${string}`, index: number) => void;
 };
 
 export type SendCallsResult = {
@@ -84,7 +100,10 @@ export interface EvmAdapter {
    *
    * Rejection contract: throw a `WhiskError` subclass.
    */
-  sendCalls(calls: EvmCall[]): Promise<SendCallsResult>;
+  sendCalls(
+    calls: EvmCall[],
+    options?: SendCallsOptions,
+  ): Promise<SendCallsResult>;
 
   /**
    * Wait for a transaction receipt. Implementations decide the

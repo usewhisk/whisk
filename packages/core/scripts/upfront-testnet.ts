@@ -66,7 +66,7 @@ function adapter(chain: EvmChain): EvmAdapter {
         throw new Error(`This adapter only signs on ${chain.id}.`);
       }
     },
-    async sendCalls(calls) {
+    async sendCalls(calls, options) {
       const hashes: Hex[] = [];
       // One at a time: the burn needs the approve mined first. Base Sepolia's
       // public RPC is load-balanced, and a node one block behind estimates
@@ -76,12 +76,19 @@ function adapter(chain: EvmChain): EvmAdapter {
           to: call.to,
           data: call.data,
           value: call.value,
+          ...(call.maxFeePerGas !== undefined && {
+            maxFeePerGas: call.maxFeePerGas,
+          }),
+          ...(call.maxPriorityFeePerGas !== undefined && {
+            maxPriorityFeePerGas: call.maxPriorityFeePerGas,
+          }),
         });
         await publicClient.waitForTransactionReceipt({
           hash,
           confirmations: 2,
         });
         hashes.push(hash);
+        options?.onSubmitted?.(hash, hashes.length - 1);
       }
       return { hashes };
     },

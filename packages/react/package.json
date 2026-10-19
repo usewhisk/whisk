@@ -74,7 +74,8 @@
   "peerDependencies": {
     "@tanstack/react-query": ">=5",
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "viem": ">=2.57.5 <3"
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "^1.7.7",
@@ -93,7 +94,6 @@
     "@web3icons/react": "^4.1.17",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
-    "viem": "^2.23.0",
     "wagmi": "^2.13.0"
   },
   "devDependencies": {
@@ -104,6 +104,7 @@
     "react-dom": "^19.0.0",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
+    "viem": "^2.57.5",
     "vitest": "^4.1.11"
   }
 }

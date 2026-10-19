@@ -20,6 +20,7 @@ export type {
   WhiskAdapter,
   EvmAdapter,
   EvmCall,
+  SendCallsOptions,
   SendCallsResult,
   CallReceipt,
   SolanaAdapter,

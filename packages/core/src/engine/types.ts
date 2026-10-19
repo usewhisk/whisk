@@ -19,6 +19,7 @@ import type { InflightRecord } from "../inflight/types.js";
 export type {
   EvmAdapter,
   EvmCall,
+  SendCallsOptions,
   SendCallsResult,
   CallReceipt,
   SolanaAdapter,

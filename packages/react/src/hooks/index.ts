@@ -1,6 +1,6 @@
 "use client";
 
-export { useEvmAdapter } from "./useEvmAdapter.js";
+export { createWagmiEvmAdapter, useEvmAdapter } from "./useEvmAdapter.js";
 
 export { useReceipt } from "./useReceipt.js";
 export type { UseReceiptInput, UseReceiptResult } from "./useReceipt.js";

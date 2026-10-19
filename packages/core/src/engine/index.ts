@@ -4,6 +4,7 @@ export type {
   WhiskAdapter,
   EvmAdapter,
   EvmCall,
+  SendCallsOptions,
   SendCallsResult,
   CallReceipt,
   QuoteParams,

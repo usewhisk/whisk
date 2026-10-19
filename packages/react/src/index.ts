@@ -88,6 +88,7 @@ export type {
  * --------------------------------------------------------------------- */
 
 export {
+  createWagmiEvmAdapter,
   useEvmAdapter,
   useReceipt,
   useRefund,
@@ -161,6 +162,7 @@ export type {
   RefundResult,
   ResumeFromTxParams,
   ResumeOptions,
+  SendCallsOptions,
   SendCallsResult,
   SendFailure,
   SendListeners,

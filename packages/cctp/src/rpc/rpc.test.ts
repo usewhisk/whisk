@@ -75,3 +75,26 @@ describe("isNonceUsed and getTransactionStatus", () => {
     ).toBe("unknown");
   });
 });
+
+describe("Arc's load-balanced RPC", () => {
+  it("retries -32014, a backend behind the head, on the same endpoint", async () => {
+    const urls: string[] = [];
+    const replies = [
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        error: { code: -32014, message: "block not found" },
+      },
+      { jsonrpc: "2.0", id: 1, result: "0x10" },
+    ];
+    const fetch: typeof globalThis.fetch = async (input) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify(replies.shift()));
+    };
+    expect(await getBlockNumber(ArcTestnet, { fetch })).toBe(16n);
+    expect(urls).toEqual([
+      ArcTestnet.defaultRpcUrls[0],
+      ArcTestnet.defaultRpcUrls[0],
+    ]);
+  });
+});

@@ -15,6 +15,7 @@ import {
 import { nonceManager, privateKeyToAccount } from "viem/accounts";
 import {
   arbitrumSepolia,
+  arcTestnet,
   avalancheFuji,
   baseSepolia,
   lineaSepolia,
@@ -25,9 +26,15 @@ import {
   worldchainSepolia,
 } from "viem/chains";
 import { getChain, type EvmChain } from "@usewhisk/cctp";
-import type { Chain, EvmAdapter, EvmCall } from "@usewhisk/core";
+import type {
+  Chain,
+  EvmAdapter,
+  EvmCall,
+  SendCallsOptions,
+} from "@usewhisk/core";
 
 const VIEM_CHAINS: Record<number, ViemChain> = {
+  5_042_002: arcTestnet,
   11_155_111: sepolia,
   43_113: avalancheFuji,
   11_155_420: optimismSepolia,
@@ -99,7 +106,7 @@ export function createEvmAdapter({
       }
     },
 
-    async sendCalls(calls: EvmCall[]) {
+    async sendCalls(calls: EvmCall[], options?: SendCallsOptions) {
       const hashes: `0x${string}`[] = [];
       for (let i = 0; i < calls.length; i++) {
         const call = calls[i]!;
@@ -107,10 +114,17 @@ export function createEvmAdapter({
           to: call.to,
           data: call.data,
           value: call.value,
+          ...(call.maxFeePerGas !== undefined && {
+            maxFeePerGas: call.maxFeePerGas,
+          }),
+          ...(call.maxPriorityFeePerGas !== undefined && {
+            maxPriorityFeePerGas: call.maxPriorityFeePerGas,
+          }),
           account: walletClient.account!,
           chain: walletClient.chain,
         });
         hashes.push(hash);
+        options?.onSubmitted?.(hash, hashes.length - 1);
         // CCTP burn depends on approve landing first. Two confirmations
         // are cheap insurance against RPC lag between the two calls.
         await publicClient.waitForTransactionReceipt({

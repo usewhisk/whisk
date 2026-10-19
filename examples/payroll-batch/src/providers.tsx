@@ -26,10 +26,10 @@ export function Providers({ children }: { children: ReactNode }) {
           "Base_Sepolia",
           "Optimism_Sepolia",
         ],
-        // Treasury sits on Arbitrum for cheap outgoing payouts; each
-        // dispatch then bridges to the contractor's preferred chain.
-        defaultSourceChain: "Arbitrum_Sepolia",
-        defaultDestinationChain: "Arbitrum_Sepolia",
+        // Treasury sits on Arc for cheap outgoing payouts; each dispatch
+        // then bridges to the contractor's preferred chain.
+        defaultSourceChain: "Arc_Testnet",
+        defaultDestinationChain: "Arc_Testnet",
         appLabel: "whisk-example-payroll",
       }),
     [],

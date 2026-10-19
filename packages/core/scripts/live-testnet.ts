@@ -82,6 +82,7 @@ import {
   type CctpChain,
   type EvmAdapter,
   type EvmCall,
+  type SendCallsOptions,
   type SolanaChain,
   type SolanaInstruction,
   type StarknetCall,
@@ -522,7 +523,7 @@ function makeNodeAdapter(chain: CctpChain): EvmAdapter {
         );
       }
     },
-    async sendCalls(calls: EvmCall[]) {
+    async sendCalls(calls: EvmCall[], options?: SendCallsOptions) {
       const hashes: `0x${string}`[] = [];
       for (let i = 0; i < calls.length; i++) {
         const call = calls[i]!;
@@ -530,10 +531,17 @@ function makeNodeAdapter(chain: CctpChain): EvmAdapter {
           to: call.to,
           data: call.data,
           value: call.value,
+          ...(call.maxFeePerGas !== undefined && {
+            maxFeePerGas: call.maxFeePerGas,
+          }),
+          ...(call.maxPriorityFeePerGas !== undefined && {
+            maxPriorityFeePerGas: call.maxPriorityFeePerGas,
+          }),
           account: walletClient.account!,
           chain: walletClient.chain,
         });
         hashes.push(hash);
+        options?.onSubmitted?.(hash, hashes.length - 1);
         // Wait per call; CCTP requires approve to be mined before burn.
         // 2 confirmations are belt-and-suspenders against any RPC state
         // lag (Alchemy is usually fine with 1, but cost is negligible).
