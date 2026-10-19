@@ -157,3 +157,32 @@ export async function getTransactionStatus(
     options,
   );
 }
+
+const BALANCE_OF = "0x70a08231";
+
+/** The USDC ERC-20 balance of `owner`, in subunits. */
+export async function getUsdcBalance(
+  chain: EvmChain,
+  owner: `0x${string}`,
+  options: RpcOptions = {},
+): Promise<bigint> {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(owner)) {
+    throw new ProtocolError("rpc_unavailable", `${owner} is not an address`);
+  }
+  return callRpc(
+    chain,
+    "eth_call",
+    [
+      {
+        to: chain.usdc,
+        data: `${BALANCE_OF}${owner.slice(2).padStart(64, "0")}`,
+      },
+      "latest",
+    ],
+    (r) =>
+      typeof r === "string" && /^0x[0-9a-fA-F]{64}$/.test(r)
+        ? BigInt(r)
+        : undefined,
+    options,
+  );
+}

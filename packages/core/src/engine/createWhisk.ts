@@ -18,6 +18,7 @@ import {
   getBlockNumber,
   getChain,
   getSignedBurnQuote,
+  getUsdcBalance,
   type CctpChain,
   type SignedQuoteExpiry,
   type UpfrontFeeType,
@@ -32,6 +33,7 @@ import type { Quote } from "../types/quote.js";
 import type { Chain } from "../types/chain.js";
 import {
   ConfigError,
+  InsufficientBalanceError,
   QuoteChangedError,
   QuoteExpiredError,
 } from "../errors/errors.js";
@@ -49,7 +51,11 @@ import { DEFAULT_FEE_BEARER } from "../types/fee.js";
 import { formatUsdcAmount } from "./amount.js";
 import { fitFastAllowance } from "../routing/allowance.js";
 import type { UpfrontFee } from "./bridge/upfront.js";
-import { withChainRules, type ChainRulesContext } from "./chainRules.js";
+import {
+  gasReserve,
+  withChainRules,
+  type ChainRulesContext,
+} from "./chainRules.js";
 import { createMemoryInflightStore } from "../inflight/stores.js";
 import type { InflightRecord } from "../inflight/types.js";
 import { recordFromTx, resumeTransfer, type ResumeContext } from "./resume.js";
@@ -158,6 +164,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       if (Date.now() > params.quote.expiresAt) {
         throw new QuoteExpiredError(params.quote);
       }
+      await assertCanPay(params.quote, params.adapter);
       const result = await tracked(params.quote, listeners, (tracking) =>
         runRoute(
           {
@@ -171,6 +178,50 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         ),
       );
       return attachMetadata(result, metadata);
+    },
+
+    async balance({ chain, address }) {
+      const source = getChain(chain);
+      if (source.ecosystem !== "evm") return null;
+      const rpcUrls = rpcUrlsFor(resolvedConfig, chain);
+      return getUsdcBalance(source, address as `0x${string}`, {
+        ...(rpcUrls && { rpcUrls }),
+        ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+      });
+    },
+
+    async maxSendable(params) {
+      if (params.adapter.kind !== "evm") return null;
+      const balance = await engine.balance({
+        chain: params.sourceChain,
+        address: params.adapter.address,
+      });
+      if (balance === null) return null;
+      const reserve = await gasReserve(
+        getChain(params.sourceChain),
+        params.sourceChain === params.destinationChain ? "send" : "bridge",
+        chainRules,
+      );
+      const available = balance - reserve;
+      const none = { amount: "0", balance, gasReserve: reserve };
+      if (available <= 0n) return none;
+      // Fees grow with the amount, so quote, move the amount by however much
+      // the total misses the available USDC, and keep the largest that fits.
+      let amount = available;
+      let best = 0n;
+      for (let i = 0; i < 6 && amount > 0n; i++) {
+        const { quote } = await buildQuote(
+          { ...params, amount: formatUsdcAmount(amount) },
+          { config: resolvedConfig },
+        );
+        const left = available - quote.subunits.amountIn;
+        if (left >= 0n && amount > best) best = amount;
+        if (left === 0n) break;
+        amount += left;
+      }
+      return best > 0n
+        ? { amount: formatUsdcAmount(best), balance, gasReserve: reserve }
+        : none;
     },
 
     inflight() {
@@ -320,6 +371,35 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       await store.remove(record.id);
     }
     return result;
+  }
+
+  /**
+   * Refuses before any signature when the payer's USDC cannot cover what the
+   * quote debits and, on Arc, the gas paid from the same balance. Balances
+   * that cannot be read yet are left to the wallet.
+   */
+  async function assertCanPay(quote: Quote, adapter: WhiskAdapter) {
+    if (adapter.kind !== "evm") return;
+    const chain =
+      quote.route.kind === "bridge"
+        ? quote.route.sourceChain
+        : quote.route.chain;
+    const balance = await engine.balance({ chain, address: adapter.address });
+    if (balance === null) return;
+    const required =
+      quote.subunits.amountIn +
+      (await gasReserve(
+        getChain(chain),
+        quote.route.kind === "bridge" ? "bridge" : "send",
+        chainRules,
+      ));
+    if (balance < required) {
+      throw new InsufficientBalanceError(
+        formatUsdcAmount(required),
+        formatUsdcAmount(balance),
+        "USDC",
+      );
+    }
   }
 
   type Adapters = { adapter: WhiskAdapter; destinationAdapter?: WhiskAdapter };

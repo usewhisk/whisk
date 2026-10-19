@@ -86,6 +86,7 @@ export {
   getBlockNumber,
   getGasPrice,
   getTransactionStatus,
+  getUsdcBalance,
   isNonceUsed,
   isStarknetNonceUsed,
   isStellarNonceUsed,

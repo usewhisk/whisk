@@ -102,6 +102,7 @@ export type {
   QuoteParams,
   RefundParams,
   RefundResult,
+  MaxSendable,
   ResumeFromTxParams,
   ResumeOptions,
   SendCallsOptions,
