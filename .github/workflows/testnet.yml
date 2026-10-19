@@ -1,0 +1,60 @@
+name: Testnet
+
+# Real transfers on public testnets with funded keys. Kept out of CI because a
+# faucet running dry or a slow attestation is not a defect in the change.
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+    inputs:
+      pairs:
+        description: "Pairs to run, such as Arc_Testnet>Base_Sepolia. Empty runs all six."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testnet
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    name: testnet matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      WHISK_LIVE_PK: ${{ secrets.WHISK_LIVE_PK }}
+      WHISK_SOLANA_PK: ${{ secrets.WHISK_SOLANA_PK }}
+      WHISK_STELLAR_SEED: ${{ secrets.WHISK_STELLAR_SEED }}
+      WHISK_STARKNET_ADDRESS: ${{ secrets.WHISK_STARKNET_ADDRESS }}
+      WHISK_STARKNET_PK: ${{ secrets.WHISK_STARKNET_PK }}
+      WHISK_RPC_Solana_Devnet: ${{ secrets.WHISK_RPC_SOLANA_DEVNET }}
+      WHISK_RPC_Starknet_Sepolia: ${{ secrets.WHISK_RPC_STARKNET_SEPOLIA }}
+      PAIRS: ${{ inputs.pairs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # pnpm/action-setup reads the version from packageManager; passing one here is an error.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @usewhisk/cctp build
+      - name: pairs
+        run: pnpm test:testnet ${PAIRS:+--pairs=$PAIRS}
+      # Each step below runs even when an earlier one fails, so one bad pair
+      # does not hide the rest.
+      - name: max on arc
+        if: ${{ !cancelled() && inputs.pairs == '' }}
+        run: pnpm test:testnet --scenario=max-arc
+      - name: burn, then exit before the mint
+        if: ${{ !cancelled() && inputs.pairs == '' }}
+        run: pnpm test:testnet --scenario=burn-only
+      - name: resume in a new process
+        if: ${{ !cancelled() && inputs.pairs == '' }}
+        run: pnpm test:testnet --scenario=resume

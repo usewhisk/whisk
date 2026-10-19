@@ -1,9 +1,9 @@
 /**
- * Generate a fresh Solana Devnet keypair for the live sweep.
+ * Generate a fresh Solana Devnet keypair for the testnet matrix.
  *
  * Prints the public key + base58-encoded secret key. Save the secret
  * to a password manager and pass it as `WHISK_SOLANA_PK` when running
- * `test:live`. Never commit, never check into the repo.
+ * `test:testnet`. Never commit, never check into the repo.
  *
  * Fund with:
  *   - SOL    https://faucet.solana.com  (paste the pubkey)
@@ -29,4 +29,4 @@ console.log(
 console.log(`  4. Run the live sweep:`);
 console.log(`     WHISK_SOLANA_PK="${secretBase58}" \\`);
 console.log(`     WHISK_HELIUS_KEY="..." \\`);
-console.log(`     pnpm --filter @usewhisk/core test:live\n`);
+console.log(`     pnpm test:testnet\n`);

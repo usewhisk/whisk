@@ -18,6 +18,7 @@
     "typecheck:packages": "pnpm -r --filter './packages/*' typecheck",
     "typecheck:examples": "pnpm -r --filter './examples/*' typecheck",
     "test": "pnpm -r test",
+    "test:testnet": "pnpm --filter @usewhisk/core test:testnet",
     "lint": "pnpm -r lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

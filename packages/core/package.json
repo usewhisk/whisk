@@ -62,9 +62,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:live": "tsx scripts/live-testnet.ts",
+    "test:testnet": "tsx scripts/testnet-matrix.ts",
     "test:upfront": "tsx scripts/upfront-testnet.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && tsc -p tsconfig.scripts.json"
   },
   "engines": {
     "node": ">=20"
