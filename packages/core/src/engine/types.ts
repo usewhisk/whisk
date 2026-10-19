@@ -97,6 +97,15 @@ export type SendFailure = {
 
 export type SendResult = SendSuccess | SendFailure;
 
+export type MaxSendable = {
+  /** Ready for the amount field and `quote`. */
+  amount: string;
+  /** USDC subunits. */
+  balance: bigint;
+  /** USDC subunits kept back for gas. */
+  gasReserve: bigint;
+};
+
 export type ResumeOptions = {
   /**
    * Signs the mint when Circle does not, or when its relayer failed. Not
@@ -136,6 +145,17 @@ export interface WhiskEngine {
   resolve(input: string, chain: Chain): Promise<ResolvedRecipient>;
   quote(params: QuoteParams): Promise<Quote>;
   send(params: SendParams, listeners?: SendListeners): Promise<SendResult>;
+  /**
+   * The USDC `address` holds on `chain`, in subunits. `null` where Whisk does
+   * not read balances yet: Solana, Stellar and Starknet.
+   */
+  balance(params: { chain: Chain; address: string }): Promise<bigint | null>;
+  /**
+   * The largest amount `adapter` can send on this route: its balance, less
+   * the fees the payer covers and, on Arc, the gas paid from the same USDC.
+   * `null` where the balance cannot be read.
+   */
+  maxSendable(params: Omit<QuoteParams, "amount">): Promise<MaxSendable | null>;
   /** Transfers in the engine's `inflightStore`, oldest first. */
   inflight(): Promise<readonly InflightRecord[]>;
   /**

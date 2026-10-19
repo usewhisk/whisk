@@ -77,3 +77,34 @@ describe("WhiskSend errors", () => {
     expect((button as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+describe("WhiskSend balance", () => {
+  it("shows the payer's USDC and fills Max from the engine", async () => {
+    const engine = fakeEngine();
+    engine.balance.mockResolvedValue(12_500_000n);
+    engine.maxSendable.mockResolvedValue({
+      amount: "12.4975",
+      balance: 12_500_000n,
+      gasReserve: 2_500n,
+    });
+    render(
+      <WithWhisk engine={engine}>
+        <WhiskSend defaultRecipient={RECIPIENT} />
+      </WithWhisk>,
+    );
+
+    expect(await screen.findByText("Balance 12.5 USDC")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Max" }));
+    await waitFor(() =>
+      expect(
+        (screen.getByPlaceholderText("0.00") as HTMLInputElement).value,
+      ).toBe("12.4975"),
+    );
+    expect(engine.maxSendable).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceChain: "Base",
+        destinationChain: "Base",
+      }),
+    );
+  });
+});

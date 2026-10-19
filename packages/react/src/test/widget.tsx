@@ -49,6 +49,8 @@ export type FakeEngine = WhiskEngine & {
   resume: ReturnType<typeof vi.fn>;
   resumeFromTx: ReturnType<typeof vi.fn>;
   dismiss: ReturnType<typeof vi.fn>;
+  balance: ReturnType<typeof vi.fn>;
+  maxSendable: ReturnType<typeof vi.fn>;
 };
 
 export function fakeEngine(): FakeEngine {
@@ -69,6 +71,8 @@ export function fakeEngine(): FakeEngine {
     resume: vi.fn(),
     resumeFromTx: vi.fn(),
     dismiss: vi.fn(async () => undefined),
+    balance: vi.fn(async () => null),
+    maxSendable: vi.fn(async () => null),
   } as unknown as FakeEngine;
 }
 

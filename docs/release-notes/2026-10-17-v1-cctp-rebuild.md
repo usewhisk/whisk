@@ -264,6 +264,17 @@ Technical shape, per
     that has not settled, which calls `engine.resumeFromTx` from the burn's
     hash. Outside a `WhiskProvider` the receipt shows status only.
   - `useAdapterFor()` returns the connected wallet for a chain.
+- Balance and Max (#71).
+  - `engine.balance({ chain, address })` reads the payer's USDC on EVM chains
+    (`null` on Solana, Stellar and Starknet for now).
+  - `engine.maxSendable(params)` returns the largest amount the payer can
+    send on the route: the balance, less the fees the payer covers and, on
+    Arc, a reserve for gas paid from the same USDC (100,000 gas for a send,
+    400,000 for a bridge, at Arc's fee setting).
+  - `send` refuses with `InsufficientBalanceError` before any signature when
+    the balance cannot cover what the quote debits plus that reserve.
+  - `WhiskSend` shows the balance under the amount, with a Max button.
+  - `@usewhisk/cctp` adds `getUsdcBalance`.
 - The widget has DOM tests (Testing Library on jsdom) that mount the real
   components, and a test fails on an unhandled rejection.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

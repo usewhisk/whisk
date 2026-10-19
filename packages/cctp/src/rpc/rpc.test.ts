@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ArcTestnet } from "../chains/index.js";
 import { ProtocolError } from "../errors.js";
-import { getBlockNumber, getTransactionStatus, isNonceUsed } from "./index.js";
+import {
+  getBlockNumber,
+  getTransactionStatus,
+  getUsdcBalance,
+  isNonceUsed,
+} from "./index.js";
 
 describe("getBlockNumber", () => {
   it("reads eth_blockNumber from the chain's RPC", async () => {
@@ -96,5 +101,29 @@ describe("Arc's load-balanced RPC", () => {
       ArcTestnet.defaultRpcUrls[0],
       ArcTestnet.defaultRpcUrls[0],
     ]);
+  });
+});
+
+describe("getUsdcBalance", () => {
+  it("reads balanceOf on the chain's USDC", async () => {
+    const bodies: { params: [{ to: string; data: string }] }[] = [];
+    const fetch: typeof globalThis.fetch = async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result: `0x${"0".repeat(56)}00bebc20`,
+        }),
+      );
+    };
+    const owner = "0x0000000000000000000000000000000000000010";
+    expect(await getUsdcBalance(ArcTestnet, owner, { fetch })).toBe(
+      12_500_000n,
+    );
+    expect(bodies[0]?.params[0]).toEqual({
+      to: ArcTestnet.usdc,
+      data: `0x70a08231${"0".repeat(62)}10`,
+    });
   });
 });

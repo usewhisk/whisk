@@ -9,6 +9,7 @@ import {
 } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useAccount } from "wagmi";
+import { formatUnits } from "viem";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   getChain,
@@ -191,6 +192,9 @@ export function WhiskSend({
   const [refreshTick, setRefreshTick] = useState(0);
   const [feeRise, setFeeRise] = useState<Quote | null>(null);
   const [sendError, setSendError] = useState<WhiskError | null>(null);
+  const [balance, setBalance] = useState<bigint | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [filling, setFilling] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SendSuccess | SendFailure | null>(null);
 
@@ -278,6 +282,61 @@ export function WhiskSend({
       clearTimeout(id);
     };
   }, [recipient, destinationForTab, engine]);
+
+  // The payer's USDC on the source chain, where the engine can read it.
+  const payer = adapter?.kind === "evm" ? adapter.address : null;
+  useEffect(() => {
+    setBalance(null);
+    setBalanceError(null);
+    if (!payer) return;
+    let cancelled = false;
+    engine.balance({ chain: sourceChain, address: payer }).then(
+      (held) => {
+        if (!cancelled) setBalance(held);
+      },
+      (err: unknown) => {
+        if (!cancelled) {
+          setBalanceError(
+            toWhiskError(err, "Could not read the balance.").message,
+          );
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [payer, engine, sourceChain, result]);
+
+  async function fillMax() {
+    if (!adapter) return;
+    setFilling(true);
+    setBalanceError(null);
+    try {
+      const max = await engine.maxSendable({
+        sourceChain,
+        destinationChain: destinationForTab,
+        // Fees do not depend on who receives, so the payer stands in until
+        // a recipient is entered.
+        recipient: resolved ?? {
+          address: adapter.address,
+          chain: destinationForTab,
+        },
+        adapter,
+        ...(destinationAdapter && { destinationAdapter }),
+      });
+      if (max) onAmountChange(max.amount);
+    } catch (err) {
+      setBalanceError(
+        toWhiskError(err, "Could not work out the maximum.").message,
+      );
+    } finally {
+      setFilling(false);
+    }
+  }
+
+  const balanceHelp =
+    balanceError ??
+    (balance !== null ? `Balance ${formatUnits(balance, 6)} USDC` : undefined);
 
   const quoteKey = [
     sourceChain,
@@ -479,6 +538,9 @@ export function WhiskSend({
               recipientError={recipientError}
               amount={amount}
               onAmountChange={onAmountChange}
+              balanceHelp={balanceHelp}
+              {...(balance !== null && { onMax: () => void fillMax() })}
+              filling={filling}
               quote={quote}
               quoteError={quoteError}
             />
@@ -505,6 +567,9 @@ export function WhiskSend({
           recipientError={recipientError}
           amount={amount}
           onAmountChange={setAmount}
+          balanceHelp={balanceHelp}
+          {...(balance !== null && { onMax: () => void fillMax() })}
+          filling={filling}
           quote={quote}
           quoteError={quoteError}
         />
@@ -569,6 +634,11 @@ type TransferFormProps = {
   recipientError: string | null;
   amount: string;
   onAmountChange: (v: string) => void;
+  /** The payer's balance, or why it could not be read. */
+  balanceHelp?: string | undefined;
+  /** Shown as a Max button when the balance is known. */
+  onMax?: () => void;
+  filling?: boolean;
   quote: Quote | null;
   quoteError: string | null;
 };
@@ -587,6 +657,9 @@ function TransferForm({
   recipientError,
   amount,
   onAmountChange,
+  balanceHelp,
+  onMax,
+  filling,
   quote,
   quoteError,
 }: TransferFormProps) {
@@ -642,8 +715,23 @@ function TransferForm({
         value={amount}
         onChange={(e) => onAmountChange(e.target.value)}
         variant="amount"
-        suffix={<span className="whisk-fieldbox__label">USDC</span>}
+        suffix={
+          <>
+            {onMax ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={filling}
+                onClick={onMax}
+              >
+                Max
+              </Button>
+            ) : null}
+            <span className="whisk-fieldbox__label">USDC</span>
+          </>
+        }
         inputMode="decimal"
+        help={balanceHelp}
         {...(quoteError ? { error: quoteError } : {})}
       />
 

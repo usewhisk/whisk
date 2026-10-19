@@ -1,6 +1,7 @@
 import {
   getGasPrice,
   tryChainByEvmChainId,
+  type CctpChain,
   type EvmChain,
 } from "@usewhisk/cctp";
 import type { Chain } from "../types/chain.js";
@@ -42,6 +43,28 @@ export async function arcFees(
         : ARC_MIN_MAX_FEE_PER_GAS,
     maxPriorityFeePerGas: ARC_PRIORITY_FEE,
   };
+}
+
+/**
+ * Gas a transfer may use, generously: a USDC transfer, or an approve and the
+ * heaviest burn, which is the upfront-fee wrapper with a forwarding hook.
+ */
+const GAS_UNITS = { send: 100_000n, bridge: 400_000n } as const;
+
+/**
+ * USDC to keep back for gas, in subunits. Only Arc pays gas in USDC from
+ * the balance being sent; elsewhere gas is a separate native token.
+ */
+export async function gasReserve(
+  chain: CctpChain,
+  kind: keyof typeof GAS_UNITS,
+  ctx: ChainRulesContext,
+): Promise<bigint> {
+  if (chain.ecosystem !== "evm" || !ARC_CHAINS.has(chain.id)) return 0n;
+  const { maxFeePerGas = ARC_MIN_MAX_FEE_PER_GAS } = await arcFees(chain, ctx);
+  // Arc's native USDC has 18 decimals and the ERC-20 view 6.
+  const wei = GAS_UNITS[kind] * maxFeePerGas;
+  return (wei + 999_999_999_999n) / 1_000_000_000_000n;
 }
 
 /**

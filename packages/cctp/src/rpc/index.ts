@@ -3,6 +3,7 @@ export {
   getBlockNumber,
   getGasPrice,
   getTransactionStatus,
+  getUsdcBalance,
   isNonceUsed,
 } from "./jsonRpc.js";
 export { isStarknetNonceUsed, isStellarNonceUsed } from "./nonce.js";
