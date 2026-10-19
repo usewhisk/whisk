@@ -1,6 +1,12 @@
 "use client";
 
-import { useContext, useMemo, type CSSProperties, type ReactNode } from "react";
+import {
+  useContext,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -23,6 +29,7 @@ import { WhiskContext, type WhiskContextValue } from "./context.js";
 import { StellarWalletProvider } from "./stellarContext.js";
 import { StarknetWalletProvider } from "./starknetContext.js";
 import { createBrowserInflightStore } from "../lib/inflightStore.js";
+import { WhiskPortalContext } from "./portal.js";
 
 export type WhiskProviderProps = {
   config: WhiskClientConfig;
@@ -129,6 +136,7 @@ export function WhiskProvider({
     [externalQueryClient],
   );
 
+  const [portal, setPortal] = useState<HTMLElement | null>(null);
   const resolved = resolveTheme(theme);
   const themeAttr = resolved?.colorMode;
   const inlineStyle = resolved?.vars as CSSProperties | undefined;
@@ -140,7 +148,10 @@ export function WhiskProvider({
       className={themeAttr === "dark" ? "dark" : undefined}
       style={inlineStyle}
     >
-      {children}
+      <WhiskPortalContext.Provider value={portal}>
+        {children}
+      </WhiskPortalContext.Provider>
+      <div data-whisk-portal="" ref={setPortal} />
     </div>
   );
 

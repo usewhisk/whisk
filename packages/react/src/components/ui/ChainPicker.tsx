@@ -3,6 +3,7 @@
 import * as Select from "@radix-ui/react-select";
 import { getChain, type Chain } from "@usewhisk/core";
 import { cn } from "../../lib/cn.js";
+import { useWhiskPortal } from "../../provider/portal.js";
 
 export type ChainPickerProps = {
   value: Chain;
@@ -27,6 +28,7 @@ export function ChainPicker({
   disabled,
   className,
 }: ChainPickerProps) {
+  const portal = useWhiskPortal();
   return (
     <Select.Root
       value={value}
@@ -42,7 +44,7 @@ export function ChainPicker({
           <ChevronDown />
         </Select.Icon>
       </Select.Trigger>
-      <Select.Portal>
+      <Select.Portal container={portal}>
         <Select.Content
           position="popper"
           sideOffset={4}
