@@ -25,11 +25,7 @@ export const IRIS_SANDBOX_URL = CCTP_IRIS_SANDBOX_URL;
  * by this client when Iris hasn't observed the burn yet — the upstream
  * API returns an empty list rather than a status string.
  */
-export type IrisStatus =
-  | "pending_confirmations"
-  | "complete"
-  | "failed"
-  | "not_found";
+export type IrisStatus = "pending_confirmations" | "complete" | "not_found";
 
 export type IrisMessage = {
   status: IrisStatus;
@@ -97,9 +93,7 @@ export async function pollAttestation(
 
   let latest = await fetchAttestationOnce(sourceChain, burnTxHash, options);
   options.onUpdate?.(latest);
-  if (latest.status === "complete" || latest.status === "failed") {
-    return latest;
-  }
+  if (latest.status === "complete") return latest;
 
   while (Date.now() < deadline) {
     if (options.signal?.aborted) {
@@ -108,15 +102,16 @@ export async function pollAttestation(
     await sleep(interval, options.signal);
     latest = await fetchAttestationOnce(sourceChain, burnTxHash, options);
     options.onUpdate?.(latest);
-    if (latest.status === "complete" || latest.status === "failed") {
-      return latest;
-    }
+    if (latest.status === "complete") return latest;
   }
   return latest;
 }
 
 function toIrisMessage(raw: CctpIrisMessage): IrisMessage {
-  const out: IrisMessage = { status: raw.status };
+  // Iris sends only these two; anything else has not finished attesting.
+  const out: IrisMessage = {
+    status: raw.status === "complete" ? "complete" : "pending_confirmations",
+  };
   if (raw.message) out.message = raw.message;
   if (raw.attestation) out.attestation = raw.attestation;
   if (raw.eventNonce) out.eventNonce = raw.eventNonce;

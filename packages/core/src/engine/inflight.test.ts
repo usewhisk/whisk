@@ -21,6 +21,37 @@ const RECIPIENT = "0x0000000000000000000000000000000000000020";
 const NONCE = `0x${"ab".repeat(32)}` as const;
 const FORWARD_HOOK = `0x636374702d666f7277617264${"00".repeat(20)}` as const;
 
+const word = (hex: string) => hex.replace(/^0x/, "").padStart(64, "0");
+const u32 = (n: number) => n.toString(16).padStart(8, "0");
+
+/** A CCTP V2 burn of 5 USDC from Base, laid out as the contracts write it. */
+function burnBytes(
+  destinationDomain: number,
+  expirationBlock: string,
+  hookData: `0x${string}` | null,
+): `0x${string}` {
+  return `0x${[
+    u32(1),
+    u32(Base.cctpDomain),
+    u32(destinationDomain),
+    word(NONCE),
+    word("0x0"),
+    word("0x0"),
+    word("0x0"),
+    u32(1000),
+    u32(1000),
+    u32(1),
+    word(Base.usdc),
+    word(RECIPIENT),
+    word(5_000_000n.toString(16)),
+    word("0x0"),
+    word("0x0"),
+    word("0x0"),
+    word(BigInt(expirationBlock).toString(16)),
+    (hookData ?? "0x").slice(2),
+  ].join("")}`;
+}
+
 function message(
   destinationDomain: number,
   overrides: Partial<IrisMessage> = {},
@@ -28,7 +59,7 @@ function message(
   hookData: `0x${string}` | null = null,
 ): IrisMessage {
   return {
-    message: `0x${"11".repeat(32)}`,
+    message: burnBytes(destinationDomain, expirationBlock, hookData),
     attestation: `0x${"22".repeat(65)}`,
     eventNonce: NONCE,
     status: "complete",

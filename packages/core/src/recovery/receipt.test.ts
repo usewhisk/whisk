@@ -99,18 +99,6 @@ describe("deriveReceiptView — cross-chain", () => {
     expect(view.stage).toBe("settled");
   });
 
-  it("fails when Iris reports failed", () => {
-    const view = deriveReceiptView({
-      sourceChain: BASE,
-      destinationChain: ARC,
-      sourceTxHash: SRC_TX,
-      irisStatus: "failed",
-    });
-    expect(view.stage).toBe("failed");
-    expect(view.steps[1]?.state).toBe("error");
-    expect(view.steps[2]?.state).toBe("noop");
-  });
-
   it("respects hasError override on cross-chain", () => {
     const view = deriveReceiptView({
       sourceChain: BASE,

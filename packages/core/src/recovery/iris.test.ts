@@ -131,16 +131,20 @@ describe("pollAttestation", () => {
     expect(onUpdate.mock.calls[1]![0].status).toBe("complete");
   });
 
-  it("returns 'failed' immediately and stops polling further", async () => {
-    const fetchMock = stubFetch({
+  it("treats a status Iris does not send as still pending", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
       json: async () => ({ messages: [{ status: "failed" }] }),
     });
+    vi.stubGlobal("fetch", fetchMock);
     const result = await pollAttestation("Arc_Testnet", "0xburn", {
       pollingInterval: 1,
-      timeout: 1000,
+      timeout: 20,
     });
-    expect(result.status).toBe("failed");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("pending_confirmations");
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
   });
 
   it("returns the latest message when the timeout elapses without terminal status", async () => {

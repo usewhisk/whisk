@@ -176,11 +176,23 @@ Technical shape, per
   - An expired attestation is re-attested by `POST`, then re-read by nonce.
     On Arbitrum, EDGE and Plume, which count expiry in L1 blocks, the mint is
     tried first and re-attested only if it reverts.
-  - Resuming into Solana, Stellar or Starknet is not supported yet.
+  - It resumes into Solana, Stellar and Starknet as well, minting with the
+    destination wallet. Before minting it checks the destination has not
+    received the message: the `used_nonce` account on Solana, and
+    `is_nonce_used` on Stellar and Starknet. An expired attestation is
+    re-attested if the mint reverts, since those chains count expiry in slots
+    and ledgers the wallets do not report alike.
+  - Before any mint, the attested bytes are checked against the record: the
+    destination domain and the amount burned.
 - `engine.resumeFromTx({ sourceChain, txHash, destinationAdapter })` does the
   same from the burn's tx hash alone, building the record from what Iris
   decoded.
-- `@usewhisk/cctp` adds `isNonceUsed` and `getTransactionStatus`.
+- `@usewhisk/cctp` adds `isNonceUsed`, `isStellarNonceUsed`,
+  `isStarknetNonceUsed` and `getTransactionStatus`, and `decodeBurnMessage`,
+  which reads a CCTP V2 burn message's fields from its bytes.
+- Core's receipt client (`fetchAttestationOnce`, `pollAttestation`,
+  `IrisStatus`) and `useReceipt` drop the `failed` status Iris never sends; a
+  status other than `complete` is still pending.
 - Removed: `engine.retry`, which only threw "not implemented", and
   `RetryParams`. Also removed are the browser snapshot helpers
   (`saveInflight`, `loadInflight`, `clearInflight`, `listInflightSnapshots`,

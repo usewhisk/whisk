@@ -26,7 +26,7 @@ import type { IrisStatus } from "./iris.js";
  *   destination tx hash).
  * - `"settled"` — destination tx hash present (or same-chain transfer
  *   submitted with no further stages required).
- * - `"failed"` — Iris reported failure or the caller passed `hasError`.
+ * - `"failed"`: the caller passed `hasError`.
  */
 export type ReceiptStage =
   | "submitted"
@@ -125,24 +125,6 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
   const status = input.irisStatus;
 
   // Iris reported a hard failure — render error.
-  if (status === "failed") {
-    return {
-      stage: "failed",
-      isCrossChain: true,
-      sourceExplorerUrl,
-      destinationExplorerUrl,
-      steps: buildCrossChainSteps({
-        sourceTxHash,
-        sourceExplorerUrl,
-        destinationTxHash,
-        destinationExplorerUrl,
-        burnState: "success",
-        attestationState: "error",
-        mintState: "noop",
-      }),
-    };
-  }
-
   // We have a destination tx — settled regardless of Iris state.
   if (destinationTxHash) {
     return {

@@ -2,6 +2,7 @@ import {
   attestationSeconds,
   buildMintIntent,
   chainByDomain,
+  decodeBurnMessage,
   getBlockNumber,
   getChain,
   getMessages,
@@ -15,12 +16,17 @@ import {
   type CctpChain,
   type EvmChain,
   type IrisMessage,
+  type SolanaChain,
+  type StarknetChain,
+  type StellarChain,
 } from "@usewhisk/cctp";
+import { isReceivedOn, mintOn } from "./mint/destinations.js";
 import {
   BridgeStepError,
   ConfigError,
   OnchainRevertError,
   RouteUnavailableError,
+  toWhiskError,
   WhiskError,
 } from "../errors/errors.js";
 import type { InflightRecord, InflightStore } from "../inflight/types.js";
@@ -136,15 +142,21 @@ export async function resumeTransfer(
       ),
     );
   }
-  const decodedDomain = message.decodedMessage?.destinationDomain;
-  if (
-    decodedDomain !== undefined &&
-    decodedDomain !== String(destination.cctpDomain)
-  ) {
+  // Checked against the attested bytes, which are what the mint will use.
+  const burn = decodeBurnMessage(message.message);
+  if (burn.destinationDomain !== destination.cctpDomain) {
     return fail(
       "fetchAttestation",
       new ConfigError(
-        `The burn is bound for domain ${decodedDomain}, not ${destination.id}.`,
+        `The burn is bound for domain ${burn.destinationDomain}, not ${destination.id}.`,
+      ),
+    );
+  }
+  if (burn.body.amount.toString() !== record.amountBurned) {
+    return fail(
+      "fetchAttestation",
+      new ConfigError(
+        `The burn moved ${burn.body.amount} subunits, not the ${record.amountBurned} recorded.`,
       ),
     );
   }
@@ -186,14 +198,55 @@ export async function resumeTransfer(
   }
 
   if (!isEvmChain(destination)) {
-    return fail(
-      "mint",
-      new ConfigError(
-        `Resuming a mint on ${destination.id} is not supported yet. The attestation is ready for a manual mint.`,
-      ),
-    );
+    return mintElsewhere(destination, message);
   }
   return mintOnEvm(destination, message);
+
+  /**
+   * Solana counts expiry in slots and Stellar in ledgers, which the wallets
+   * do not expose consistently, so the mint is tried first and an expired
+   * attestation re-attested after it reverts.
+   */
+  async function mintElsewhere(
+    dest: SolanaChain | StellarChain | StarknetChain,
+    attested: IrisMessage,
+  ): Promise<SendResult> {
+    const adapter = options.destinationAdapter;
+    try {
+      if (await isReceivedOn(dest, attested, adapter, rpc(dest))) {
+        await save({ step: "minted" });
+        emit({ name: "mint", state: "success", forwarded: false });
+        return { kind: "success", steps };
+      }
+      emit({ name: "mint", state: "pending", forwarded: false });
+      let current = attested;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const mintTxHash = await mintOn(dest, current, adapter);
+          await save({ step: "minted", mintTxHash });
+          emit({
+            name: "mint",
+            state: "success",
+            forwarded: false,
+            txHash: mintTxHash,
+          });
+          return { kind: "success", finalTxHash: mintTxHash, steps };
+        } catch (err) {
+          if (
+            !(err instanceof OnchainRevertError) ||
+            attempt > 0 ||
+            expirationOf(current) === 0n
+          ) {
+            throw err;
+          }
+          current = await reattested(current);
+        }
+      }
+    } catch (err) {
+      if (err instanceof RouteUnavailableError) throw err;
+      return fail("mint", toWhiskError(err, `The mint on ${dest.id} failed.`));
+    }
+  }
 
   async function mintOnEvm(
     dest: EvmChain,

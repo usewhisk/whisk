@@ -1,4 +1,4 @@
-import type { EvmChain } from "../chains/types.js";
+import type { CctpChain, EvmChain } from "../chains/types.js";
 import { ProtocolError } from "../errors.js";
 
 export type RpcOptions = {
@@ -13,9 +13,9 @@ export type RpcOptions = {
  * not a verdict.
  */
 export async function callRpc<T>(
-  chain: EvmChain,
+  chain: Pick<CctpChain, "id" | "defaultRpcUrls">,
   method: string,
-  params: readonly unknown[],
+  params: readonly unknown[] | Record<string, unknown>,
   parse: (result: unknown) => T | undefined,
   options: RpcOptions = {},
 ): Promise<T> {
