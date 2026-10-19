@@ -18,24 +18,24 @@ const TO = env.required("TO");
 const AMOUNT = process.env.AMOUNT ?? "1.00";
 
 const engine = createWhisk({
-  chains: ["Base_Sepolia", "Ethereum_Sepolia"],
+  chains: ["Arc_Testnet", "Base_Sepolia"],
 });
 
 const adapter = createEvmAdapter({
-  chain: "Base_Sepolia",
+  chain: "Arc_Testnet",
   privateKey: PRIVATE_KEY,
 });
 
 async function main() {
-  console.log(`Resolving ${TO} on Ethereum_Sepolia…`);
-  const recipient = await engine.resolve(TO, "Ethereum_Sepolia");
+  console.log(`Resolving ${TO} on Base_Sepolia…`);
+  const recipient = await engine.resolve(TO, "Base_Sepolia");
 
-  console.log(`Quoting ${AMOUNT} USDC from Base_Sepolia → Ethereum_Sepolia…`);
+  console.log(`Quoting ${AMOUNT} USDC from Arc_Testnet → Base_Sepolia…`);
   const quote = await engine.quote({
     recipient,
     amount: AMOUNT,
-    sourceChain: "Base_Sepolia",
-    destinationChain: "Ethereum_Sepolia",
+    sourceChain: "Arc_Testnet",
+    destinationChain: "Base_Sepolia",
     adapter,
   });
   console.log(`Fees: ${quote.fees.total} ${quote.fees.token}`);

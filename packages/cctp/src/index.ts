@@ -84,6 +84,7 @@ export type {
 // JSON-RPC reads
 export {
   getBlockNumber,
+  getGasPrice,
   getTransactionStatus,
   isNonceUsed,
   isStarknetNonceUsed,

@@ -23,7 +23,8 @@ export async function callRpc<T>(
   const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method, params });
   const urls = [...(options.rpcUrls ?? []), ...chain.defaultRpcUrls];
   const failures: string[] = [];
-  for (const url of urls) {
+  for (let i = 0, behind = 0; i < urls.length; i++) {
+    const url = urls[i]!;
     try {
       const res = await doFetch(url, {
         method: "POST",
@@ -41,6 +42,15 @@ export async function callRpc<T>(
           : undefined;
       if (result !== undefined) return result;
       failures.push(`${url}: ${JSON.stringify(payload)}`);
+      // Arc's primary endpoint is load-balanced, and a backend behind the
+      // head answers -32014 until it catches up. Ask the same URL again.
+      if (errorCode(payload) === LAGGING_BACKEND && behind < LAG_RETRIES) {
+        behind += 1;
+        await new Promise((resolve) => setTimeout(resolve, 250 * behind));
+        i -= 1;
+        continue;
+      }
+      behind = 0;
     } catch (err) {
       failures.push(
         `${url}: ${err instanceof Error ? err.message : String(err)}`,
@@ -50,6 +60,32 @@ export async function callRpc<T>(
   throw new ProtocolError(
     "rpc_unavailable",
     `${method} on ${chain.id} failed: ${failures.join("; ")}`,
+  );
+}
+
+const LAGGING_BACKEND = -32014;
+const LAG_RETRIES = 3;
+
+function errorCode(payload: unknown): unknown {
+  if (typeof payload !== "object" || payload === null) return undefined;
+  const error = (payload as { error?: { code?: unknown } }).error;
+  return error?.code;
+}
+
+/** `eth_gasPrice`, in wei. */
+export async function getGasPrice(
+  chain: EvmChain,
+  options: RpcOptions = {},
+): Promise<bigint> {
+  return callRpc(
+    chain,
+    "eth_gasPrice",
+    [],
+    (r) =>
+      typeof r === "string" && /^0x[0-9a-fA-F]+$/.test(r)
+        ? BigInt(r)
+        : undefined,
+    options,
   );
 }
 

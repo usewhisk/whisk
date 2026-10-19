@@ -170,7 +170,14 @@ export async function executeBridge(
   let burnHash: `0x${string}`;
   const customFeeHashes: `0x${string}`[] = [];
   try {
-    const { hashes } = await input.sourceAdapter.sendCalls(submittedCalls);
+    const { hashes } = await input.sourceAdapter.sendCalls(submittedCalls, {
+      // The burn is the last call, or the whole batch when it shares a hash.
+      onSubmitted: (hash, index) => {
+        if (index === submittedCalls.length - 1) {
+          listeners?.onBurnSubmitted?.(hash);
+        }
+      },
+    });
     if (hashes.length === 0) {
       return fail(
         steps,

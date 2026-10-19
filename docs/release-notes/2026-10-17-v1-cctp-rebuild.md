@@ -199,6 +199,30 @@ Technical shape, per
   `serializeError`, `deserializeError`, `INFLIGHT_TTL_MS`, `STORAGE_PREFIX`,
   `InflightSnapshot`, `WalletKind`), which nothing called and which expired
   burned transfers after 48 hours.
+- Arc rules (#71):
+  - Every EVM call the engine sends on Arc carries `maxFeePerGas`, a quarter
+    above Arc's `eth_gasPrice` and never under its 20 gwei floor, plus a 1 gwei
+    `maxPriorityFeePerGas`. Arc drops an offer under the floor, which left the
+    payer waiting on a transaction that would never mine. Other chains leave
+    fees to the wallet.
+  - `EvmCall` has optional `maxFeePerGas` and `maxPriorityFeePerGas`, which
+    adapters pass to the wallet when set.
+  - JSON-RPC reads retry `-32014`, which Arc's load-balanced endpoint returns
+    from a backend behind the head.
+  - `WhiskProvider`'s wagmi config uses viem's `arc` and `arcTestnet`, adding
+    Arc mainnet. Before, Arc Testnet pointed at `rpc.testnet.arc.network`,
+    which no longer resolves.
+  - Arc is the default chain in the examples.
+- `viem` is a peer dependency of `@usewhisk/core` and `@usewhisk/react`, at
+  `>=2.57.5 <3`, and a dependency of `@usewhisk/cctp` in the same range. 2.57.5
+  is the first release whose Arc chains carry Arc's current RPCs.
+- `EvmAdapter.sendCalls(calls, { onSubmitted })` reports each hash as the
+  wallet returns it, before any receipt wait. The engine saves the burn hash
+  from it (#86). `useEvmAdapter` reports them, and waits for a second
+  confirmation before a call that depends on the one before, so a
+  load-balanced RPC one block behind cannot estimate a burn against the
+  allowance from before its approve. `createWagmiEvmAdapter(config, address)`
+  is the same adapter outside a hook.
 - The default resolver picks Sepolia or mainnet ENS from the destination chain's
   network.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook

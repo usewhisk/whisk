@@ -15,23 +15,13 @@ import {
 } from "wagmi/chains";
 import { coinbaseWallet, injected, walletConnect } from "wagmi/connectors";
 import { defineChain, fallback, http, type Chain as ViemChain } from "viem";
+import { arc, arcTestnet } from "viem/chains";
 import type { Chain } from "@usewhisk/core";
 import type { EvmAdapterFactory } from "../types.js";
 
 // Chain IDs MUST match App Kit's table — drift breaks `useSwitchChain` and
 // wallet-side network detection. For chains where viem's built-in id disagrees
 // (e.g. Sonic Testnet) or has no entry, `defineChain` inline.
-
-const ARC_TESTNET = defineChain({
-  id: 5_042_002,
-  name: "Arc Testnet",
-  nativeCurrency: { name: "Arc", symbol: "ARC", decimals: 18 },
-  rpcUrls: { default: { http: ["https://rpc.testnet.arc.network"] } },
-  blockExplorers: {
-    default: { name: "Arc Explorer", url: "https://testnet.arcscan.app" },
-  },
-  testnet: true,
-});
 
 const CODEX_MAINNET = defineChain({
   id: 81_224,
@@ -292,6 +282,7 @@ const XDC_APOTHEM = defineChain({
 const VIEM_CHAIN_BY_WHISK: Partial<Record<Chain, ViemChain>> = {
   // Mainnets
   Arbitrum: arbitrum,
+  Arc: arc,
   Avalanche: avalanche,
   Base: base,
   Codex: CODEX_MAINNET,
@@ -310,7 +301,7 @@ const VIEM_CHAIN_BY_WHISK: Partial<Record<Chain, ViemChain>> = {
   XDC: XDC_MAINNET,
   // Testnets
   Arbitrum_Sepolia: arbitrumSepolia,
-  Arc_Testnet: ARC_TESTNET,
+  Arc_Testnet: arcTestnet,
   Avalanche_Fuji: avalancheFuji,
   Base_Sepolia: baseSepolia,
   Codex_Testnet: CODEX_TESTNET,

@@ -49,6 +49,7 @@ import { DEFAULT_FEE_BEARER } from "../types/fee.js";
 import { formatUsdcAmount } from "./amount.js";
 import { fitFastAllowance } from "../routing/allowance.js";
 import type { UpfrontFee } from "./bridge/upfront.js";
+import { withChainRules, type ChainRulesContext } from "./chainRules.js";
 import { createMemoryInflightStore } from "../inflight/stores.js";
 import type { InflightRecord } from "../inflight/types.js";
 import { recordFromTx, resumeTransfer, type ResumeContext } from "./resume.js";
@@ -85,6 +86,7 @@ import type {
   StarknetAdapter,
   StellarAdapter,
   WhiskAdapter,
+  ResumeOptions,
   WhiskEngine,
 } from "./types.js";
 
@@ -109,6 +111,20 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     rpcUrls: (chain) => rpcUrlsFor(resolvedConfig, chain),
   };
   const useForwarder = resolvedConfig.useForwarder ?? true;
+  const chainRules: ChainRulesContext = {
+    ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+    rpcUrls: (chain) => rpcUrlsFor(resolvedConfig, chain),
+  };
+  function ruled<A extends WhiskAdapter | undefined>(adapter: A): A {
+    return (
+      adapter?.kind === "evm" ? withChainRules(adapter, chainRules) : adapter
+    ) as A;
+  }
+  function ruledOptions(options: ResumeOptions): ResumeOptions {
+    return options.destinationAdapter
+      ? { ...options, destinationAdapter: ruled(options.destinationAdapter) }
+      : options;
+  }
 
   const engine: WhiskEngine = {
     config: resolvedConfig,
@@ -162,7 +178,12 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     },
 
     resume(record, options = {}, listeners) {
-      return resumeTransfer(record, options, resumeContext, listeners);
+      return resumeTransfer(
+        record,
+        ruledOptions(options),
+        resumeContext,
+        listeners,
+      );
     },
 
     async resumeFromTx(params, listeners) {
@@ -181,11 +202,11 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       if (!known) await store.put(record);
       return resumeTransfer(
         record,
-        {
+        ruledOptions({
           ...(params.destinationAdapter && {
             destinationAdapter: params.destinationAdapter,
           }),
-        },
+        }),
         resumeContext,
         listeners,
       );
@@ -438,9 +459,16 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
   }
 
   async function runRoute(
-    input: Adapters & { quote: Quote },
+    given: Adapters & { quote: Quote },
     listeners?: SendListeners,
   ): Promise<SendResult> {
+    const input = {
+      ...given,
+      adapter: ruled(given.adapter),
+      ...(given.destinationAdapter && {
+        destinationAdapter: ruled(given.destinationAdapter),
+      }),
+    };
     const { sourceChain, destinationChain } = quoteParams(input.quote, input);
     const recipient = input.quote.recipient;
     const amount = input.quote.subunits.requested;

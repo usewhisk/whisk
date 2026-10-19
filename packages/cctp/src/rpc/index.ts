@@ -1,6 +1,7 @@
 export {
   callRpc,
   getBlockNumber,
+  getGasPrice,
   getTransactionStatus,
   isNonceUsed,
 } from "./jsonRpc.js";
