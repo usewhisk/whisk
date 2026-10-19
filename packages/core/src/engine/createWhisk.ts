@@ -177,6 +177,10 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       return store.list();
     },
 
+    dismiss(id) {
+      return store.remove(id);
+    },
+
     resume(record, options = {}, listeners) {
       return resumeTransfer(
         record,

@@ -1,12 +1,16 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useContext, useState, type ReactNode } from "react";
 import {
   getChain,
   RECEIPT_STAGE_HELP,
   RECEIPT_STAGE_LABELS,
+  toWhiskError,
   type Chain,
 } from "@usewhisk/core";
+import { Button } from "./ui/Button.js";
+import { WhiskContext } from "../provider/context.js";
+import { useAdapterFor } from "../hooks/useAdapterFor.js";
 import { Card } from "./ui/Card.js";
 import { StepRail } from "./ui/StepRail.js";
 import { Banner } from "./ui/Banner.js";
@@ -50,6 +54,36 @@ export function WhiskReceipt({
   pollIntervalMs,
   pollTimeoutMs,
 }: WhiskReceiptProps) {
+  // Outside a WhiskProvider the receipt still shows status, without the
+  // button that finishes the transfer.
+  const engine = useContext(WhiskContext)?.engine;
+  const adapterFor = useAdapterFor();
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
+  const [delivered, setDelivered] = useState<string | null>(null);
+
+  async function finish(txHash: string) {
+    if (!engine) return;
+    setFinishing(true);
+    setFinishError(null);
+    const destinationAdapter = adapterFor(destinationChain);
+    try {
+      const result = await engine.resumeFromTx({
+        sourceChain,
+        txHash,
+        ...(destinationAdapter && { destinationAdapter }),
+      });
+      if (result.kind === "success") setDelivered(result.finalTxHash ?? "");
+      else setFinishError(result.error.message);
+    } catch (err) {
+      setFinishError(
+        toWhiskError(err, "The transfer could not be finished.").message,
+      );
+    } finally {
+      setFinishing(false);
+    }
+  }
+
   const { view, isLoading, error } = useReceipt({
     sourceChain,
     sourceTxHash,
@@ -113,6 +147,24 @@ export function WhiskReceipt({
       ) : null}
 
       {view ? <StepRail steps={view.steps} /> : null}
+      {delivered !== null ? (
+        <Banner variant="info">
+          <strong>Delivered.</strong> The recipient has the USDC.
+        </Banner>
+      ) : engine && view?.isCrossChain && view.stage !== "settled" ? (
+        <Button
+          variant="outline"
+          disabled={finishing}
+          onClick={() => void finish(sourceTxHash)}
+        >
+          {finishing ? "Finishing…" : "Finish transfer"}
+        </Button>
+      ) : null}
+      {finishError ? (
+        <Banner variant="error" role="alert">
+          {finishError}
+        </Banner>
+      ) : null}
 
       {isLoading ? (
         <p className="whisk-help">Checking attestation status…</p>

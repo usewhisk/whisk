@@ -33,6 +33,7 @@ import { ChainPicker } from "./ui/ChainPicker.js";
 import { ConnectModal } from "./ui/ConnectModal.js";
 import { FieldBox } from "./ui/FieldBox.js";
 import { PoweredByWhisk } from "./ui/PoweredByWhisk.js";
+import { ResumeList } from "./ResumeList.js";
 import { useWhiskContext } from "../hooks/useWhiskContext.js";
 import { useWhiskEngine } from "../hooks/useWhiskEngine.js";
 import { useEvmAdapter } from "../hooks/useEvmAdapter.js";
@@ -441,6 +442,8 @@ export function WhiskSend({
           )}
         </div>
       </header>
+
+      <ResumeList />
 
       {availableTabs.length > 1 ? (
         <Tabs.Root

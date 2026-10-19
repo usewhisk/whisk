@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { vi } from "vitest";
 import type {
   Chain,
@@ -41,10 +42,16 @@ export function sameChainQuote(amount: string): Quote {
 }
 
 /** An engine whose every method is a mock; tests set what `send` does. */
-export function fakeEngine(): WhiskEngine & {
+export type FakeEngine = WhiskEngine & {
   send: ReturnType<typeof vi.fn>;
   quote: ReturnType<typeof vi.fn>;
-} {
+  inflight: ReturnType<typeof vi.fn>;
+  resume: ReturnType<typeof vi.fn>;
+  resumeFromTx: ReturnType<typeof vi.fn>;
+  dismiss: ReturnType<typeof vi.fn>;
+};
+
+export function fakeEngine(): FakeEngine {
   return {
     config: { chains: ["Base"] },
     resolve: vi.fn(
@@ -61,10 +68,8 @@ export function fakeEngine(): WhiskEngine & {
     inflight: vi.fn(async () => []),
     resume: vi.fn(),
     resumeFromTx: vi.fn(),
-  } as unknown as WhiskEngine & {
-    send: ReturnType<typeof vi.fn>;
-    quote: ReturnType<typeof vi.fn>;
-  };
+    dismiss: vi.fn(async () => undefined),
+  } as unknown as FakeEngine;
 }
 
 export function WithWhisk({
@@ -76,9 +81,14 @@ export function WithWhisk({
   children: ReactNode;
   config?: WhiskClientConfig;
 }) {
+  const [queryClient] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  );
   return (
-    <WhiskContext.Provider value={{ engine, config, theme: "light" }}>
-      {children}
-    </WhiskContext.Provider>
+    <QueryClientProvider client={queryClient}>
+      <WhiskContext.Provider value={{ engine, config, theme: "light" }}>
+        {children}
+      </WhiskContext.Provider>
+    </QueryClientProvider>
   );
 }

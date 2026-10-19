@@ -23,5 +23,6 @@ export type {
 export { WhiskReceipt } from "./WhiskReceipt.js";
 export type { WhiskReceiptProps } from "./WhiskReceipt.js";
 
+export { ResumeList } from "./ResumeList.js";
 export { WhiskSend } from "./WhiskSend.js";
 export type { WhiskSendProps } from "./WhiskSend.js";

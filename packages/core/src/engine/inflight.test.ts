@@ -306,3 +306,13 @@ describe("createStorageInflightStore", () => {
     expect(map.has("unrelated")).toBe(true);
   });
 });
+
+describe("engine.dismiss", () => {
+  it("removes a transfer from the in-flight store", async () => {
+    const record = await sendThenLoseTheTab("Arbitrum");
+    const engine = createWhisk({ chains: ["Base", "Arbitrum"] });
+    await engine.dismiss(record.id);
+    expect(await engine.inflight()).toEqual([]);
+    expect(await store.list()).toEqual([]);
+  });
+});

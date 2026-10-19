@@ -52,6 +52,7 @@ export type {
 
 export {
   createWagmiEvmAdapter,
+  useAdapterFor,
   useEvmAdapter,
   useReceipt,
   useRefund,
