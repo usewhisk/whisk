@@ -35,7 +35,7 @@ export type UseReceiptResult = {
   error: Error | null;
 };
 
-const TERMINAL: ReadonlyArray<IrisStatus> = ["complete", "failed"];
+const TERMINAL: ReadonlyArray<IrisStatus> = ["complete"];
 
 /**
  * Poll Iris for the attestation lifecycle of a single transfer and
@@ -45,7 +45,7 @@ const TERMINAL: ReadonlyArray<IrisStatus> = ["complete", "failed"];
  *     the source tx is observed, so the hook returns a `settled` view
  *     immediately.
  *   - Cross-chain transfers poll until the attestation reaches a
- *     terminal state (`complete` / `failed`) or the timeout elapses.
+ *     is `complete` or the timeout elapses.
  *   - Once the merchant supplies `destinationTxHash`, polling stops
  *     even if Iris hasn't reported `complete` yet.
  */

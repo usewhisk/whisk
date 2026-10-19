@@ -86,6 +86,8 @@ export {
   getBlockNumber,
   getTransactionStatus,
   isNonceUsed,
+  isStarknetNonceUsed,
+  isStellarNonceUsed,
 } from "./rpc/index.js";
 export type { RpcOptions, TransactionStatus } from "./rpc/index.js";
 
@@ -122,6 +124,10 @@ export type {
   ComputeMaxFeeResult,
   GetStandardMinFeeOptions,
 } from "./fees/index.js";
+
+// CCTP message decoding
+export { decodeBurnMessage } from "./message/index.js";
+export type { DecodedBurnMessage } from "./message/index.js";
 
 // Burn intent builder
 export { buildBurnIntent, buildBurnWithFeesIntent } from "./burn/index.js";

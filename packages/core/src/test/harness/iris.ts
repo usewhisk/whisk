@@ -1,4 +1,5 @@
 import { encodeAbiParameters, toFunctionSelector } from "viem";
+import { xdr } from "@stellar/stellar-sdk";
 import type { BurnFeeTier, IrisMessage } from "@usewhisk/cctp";
 
 export type IrisRequest = {
@@ -138,6 +139,37 @@ export function createFakeIris(): FakeIris {
           jsonrpc: "2.0",
           id: rpc.id ?? 1,
           result: `0x${blockNumber.toString(16)}`,
+        });
+      }
+      // Stellar's is_nonce_used is read by simulating a transaction that
+      // carries the nonce bytes; Starknet's takes it as a low/high u256.
+      if (rpc.method === "simulateTransaction") {
+        const tx = Buffer.from(
+          String(
+            (rpc.params as unknown as { transaction: string }).transaction,
+          ),
+          "base64",
+        );
+        const used = [...usedNonces].some((n) =>
+          tx.includes(Buffer.from(n.slice(2), "hex")),
+        );
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: {
+            results: [{ xdr: xdr.ScVal.scvBool(used).toXDR("base64") }],
+          },
+        });
+      }
+      if (rpc.method === "starknet_call") {
+        const [low, high] = (
+          rpc.params as unknown as { request: { calldata: string[] } }
+        ).request.calldata;
+        const nonce = `0x${high!.slice(2).padStart(32, "0")}${low!.slice(2).padStart(32, "0")}`;
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: [usedNonces.has(nonce) ? "0x1" : "0x0"],
         });
       }
       const callData = rpc.params?.[0]?.data;
