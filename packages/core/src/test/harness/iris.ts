@@ -52,6 +52,11 @@ export type FakeIris = {
   setBlockNumber(block: number): void;
   /** What every chain answers to `eth_gasPrice`, in wei. Defaults to 25 gwei. */
   setGasPrice(wei: bigint): void;
+  /**
+   * What every USDC contract answers to `balanceOf(owner)`, in subunits.
+   * Owners not set hold 1,000,000 USDC.
+   */
+  setUsdcBalance(owner: `0x${string}`, subunits: bigint): void;
 };
 
 /**
@@ -87,6 +92,7 @@ export const STANDARD_FEE_ROW = {
 
 const GET_MIN_FEE_AMOUNT = "0x516990e3";
 const USED_NONCES = toFunctionSelector("usedNonces(bytes32)");
+const BALANCE_OF = toFunctionSelector("balanceOf(address)");
 
 const IRIS_HOSTS = new Set([
   "iris-api.circle.com",
@@ -99,6 +105,7 @@ export function createFakeIris(): FakeIris {
   const messageReplies: IrisReply[] = [];
   const reattestReplies: IrisReply[] = [];
   const usedNonces = new Set<string>();
+  const usdcBalances = new Map<string, bigint>();
   let standardMinFee = 0n;
   const quoteRequests: QuoteRequest[] = [];
   const quoteReplies: QuoteReply[] = [];
@@ -183,6 +190,15 @@ export function createFakeIris(): FakeIris {
         });
       }
       const callData = rpc.params?.[0]?.data;
+      if (rpc.method === "eth_call" && callData?.startsWith(BALANCE_OF)) {
+        const owner = `0x${callData.slice(-40)}`.toLowerCase();
+        const held = usdcBalances.get(owner) ?? 1_000_000_000_000n;
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: `0x${held.toString(16).padStart(64, "0")}`,
+        });
+      }
       if (rpc.method === "eth_call" && callData?.startsWith(USED_NONCES)) {
         const nonce = `0x${callData.slice(10)}`.toLowerCase();
         return json(200, {
@@ -308,6 +324,9 @@ export function createFakeIris(): FakeIris {
     },
     setGasPrice(wei) {
       gasPrice = wei;
+    },
+    setUsdcBalance(owner, subunits) {
+      usdcBalances.set(owner.toLowerCase(), subunits);
     },
     setFees(sourceDomain, destinationDomain, rows) {
       fees.set(`${sourceDomain}:${destinationDomain}`, rows);
