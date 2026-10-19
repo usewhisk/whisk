@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ArcTestnet } from "../chains/index.js";
 import { ProtocolError } from "../errors.js";
-import { getBlockNumber } from "./index.js";
+import { getBlockNumber, getTransactionStatus, isNonceUsed } from "./index.js";
 
 describe("getBlockNumber", () => {
   it("reads eth_blockNumber from the chain's RPC", async () => {
@@ -24,5 +24,54 @@ describe("getBlockNumber", () => {
     await expect(getBlockNumber(ArcTestnet, { fetch })).rejects.toBeInstanceOf(
       ProtocolError,
     );
+  });
+});
+
+describe("isNonceUsed and getTransactionStatus", () => {
+  const reply =
+    (result: unknown): typeof globalThis.fetch =>
+    async () =>
+      new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }));
+  const NONCE = `0x${"ab".repeat(32)}` as const;
+
+  it("reads usedNonces from MessageTransmitterV2", async () => {
+    const bodies: { params: [{ to: string; data: string }] }[] = [];
+    const fetch: typeof globalThis.fetch = async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result: `0x${"0".repeat(63)}1`,
+        }),
+      );
+    };
+    expect(await isNonceUsed(ArcTestnet, NONCE, { fetch })).toBe(true);
+    expect(bodies[0]?.params[0]).toEqual({
+      to: ArcTestnet.messageTransmitter,
+      data: `0xfeb61724${"ab".repeat(32)}`,
+    });
+    expect(
+      await isNonceUsed(ArcTestnet, NONCE, {
+        fetch: reply(`0x${"0".repeat(64)}`),
+      }),
+    ).toBe(false);
+  });
+
+  it("maps a receipt to success, reverted or unknown", async () => {
+    const hash = `0x${"12".repeat(32)}` as const;
+    expect(
+      await getTransactionStatus(ArcTestnet, hash, {
+        fetch: reply({ status: "0x1" }),
+      }),
+    ).toBe("success");
+    expect(
+      await getTransactionStatus(ArcTestnet, hash, {
+        fetch: reply({ status: "0x0" }),
+      }),
+    ).toBe("reverted");
+    expect(
+      await getTransactionStatus(ArcTestnet, hash, { fetch: reply(null) }),
+    ).toBe("unknown");
   });
 });

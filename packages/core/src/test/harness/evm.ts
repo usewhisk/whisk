@@ -81,6 +81,8 @@ export type FakeEvmWallet = {
   balanceOf(chainId: number, token: Hex, holder?: Hex): bigint;
   /** The next call to `functionName` is mined but reverts and changes nothing. */
   revertNext(functionName: string): void;
+  /** The next receipt wait throws, as when the tab or connection dies. */
+  dropNextReceipt(): void;
 };
 
 const ABIS: readonly Abi[] = [
@@ -114,6 +116,7 @@ export function createFakeEvmWallet(opts: {
   const allowances = new Map<string, bigint>();
   const receipts = new Map<Hex, CallReceipt["status"]>();
   const pendingReverts: string[] = [];
+  let dropReceipt = false;
 
   const key = (...parts: (string | number)[]) =>
     parts.map((p) => String(p).toLowerCase()).join(":");
@@ -272,6 +275,10 @@ export function createFakeEvmWallet(opts: {
       return { hashes };
     },
     async waitForReceipt(hash) {
+      if (dropReceipt) {
+        dropReceipt = false;
+        throw new Error("fake evm: connection lost waiting for a receipt");
+      }
       const status = receipts.get(hash);
       if (!status) throw new Error(`fake evm: unknown tx ${hash}`);
       return { status, blockNumber: 1n };
@@ -301,6 +308,9 @@ export function createFakeEvmWallet(opts: {
     },
     revertNext(functionName) {
       pendingReverts.push(functionName);
+    },
+    dropNextReceipt() {
+      dropReceipt = true;
     },
   };
 }
