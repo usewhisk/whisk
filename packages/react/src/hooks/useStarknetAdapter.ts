@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
+import type { StarknetWindowObject } from "@starknet-io/get-starknet-core";
 import { RpcProvider } from "starknet";
 import { toWhiskError, type StarknetAdapter } from "@usewhisk/core";
+import type { StarknetConfig } from "../config/adapters/starknet.js";
 import { useStarknetWallet } from "../provider/starknetContext.js";
 
 /**
@@ -27,66 +29,73 @@ export function useStarknetAdapter(): StarknetAdapter | null {
 
   return useMemo<StarknetAdapter | null>(() => {
     if (!starknet || !starknet.wallet || !starknet.address) return null;
-    const { wallet, address, config } = starknet;
-    const rpc = new RpcProvider({ nodeUrl: config.rpcUrl });
-
-    return {
-      kind: "starknet",
-      address,
-
-      async getChainId() {
-        try {
-          const chainId = await wallet.request({
-            type: "wallet_requestChainId",
-          });
-          return chainId;
-        } catch (cause) {
-          throw toWhiskError(cause, "Failed to read Starknet chainId.");
-        }
-      },
-
-      async submitCalls(calls) {
-        try {
-          const result = await wallet.request({
-            type: "wallet_addInvokeTransaction",
-            params: {
-              calls: calls.map((c) => ({
-                contract_address: c.contractAddress,
-                entry_point: c.entrypoint,
-                calldata: c.calldata,
-              })),
-            },
-          });
-          const hash = (result as { transaction_hash?: string })
-            .transaction_hash;
-          if (!hash) {
-            throw new Error("Wallet returned no transaction_hash.");
-          }
-          return { hashes: [hash] };
-        } catch (cause) {
-          throw toWhiskError(cause, "Failed to submit Starknet calls.");
-        }
-      },
-
-      async confirmTransaction(hash) {
-        try {
-          const receipt = await rpc.waitForTransaction(hash, {
-            retryInterval: 3000,
-          });
-          const status =
-            "isSuccess" in receipt && receipt.isSuccess()
-              ? "success"
-              : "reverted";
-          const blockNumber =
-            (receipt as { block_number?: number }).block_number ?? 0;
-          return { status, blockNumber };
-        } catch (cause) {
-          throw toWhiskError(
-            cause,
-            "Failed waiting for Starknet confirmation.",
-          );
-        }
-      },
-    };
+    return createStarknetAdapter(
+      starknet.wallet,
+      starknet.address,
+      starknet.config,
+    );
   }, [starknet]);
+}
+
+export function createStarknetAdapter(
+  wallet: StarknetWindowObject,
+  address: string,
+  config: StarknetConfig,
+): StarknetAdapter {
+  const rpc = new RpcProvider({ nodeUrl: config.rpcUrl });
+
+  return {
+    kind: "starknet",
+    address,
+
+    async getChainId() {
+      try {
+        const chainId = await wallet.request({
+          type: "wallet_requestChainId",
+        });
+        return chainId;
+      } catch (cause) {
+        throw toWhiskError(cause, "Failed to read Starknet chainId.");
+      }
+    },
+
+    async submitCalls(calls) {
+      try {
+        const result = await wallet.request({
+          type: "wallet_addInvokeTransaction",
+          params: {
+            calls: calls.map((c) => ({
+              contract_address: c.contractAddress,
+              entry_point: c.entrypoint,
+              calldata: c.calldata,
+            })),
+          },
+        });
+        const hash = (result as { transaction_hash?: string }).transaction_hash;
+        if (!hash) {
+          throw new Error("Wallet returned no transaction_hash.");
+        }
+        return { hashes: [hash] };
+      } catch (cause) {
+        throw toWhiskError(cause, "Failed to submit Starknet calls.");
+      }
+    },
+
+    async confirmTransaction(hash) {
+      try {
+        const receipt = await rpc.waitForTransaction(hash, {
+          retryInterval: 3000,
+        });
+        const status =
+          "isSuccess" in receipt && receipt.isSuccess()
+            ? "success"
+            : "reverted";
+        const blockNumber =
+          (receipt as { block_number?: number }).block_number ?? 0;
+        return { status, blockNumber };
+      } catch (cause) {
+        throw toWhiskError(cause, "Failed waiting for Starknet confirmation.");
+      }
+    },
+  };
 }
