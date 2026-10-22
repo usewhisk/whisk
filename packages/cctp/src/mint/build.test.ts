@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { Arbitrum, Base, BaseSepolia } from "../chains/index.js";
+import {
+  Arbitrum,
+  Base,
+  BaseSepolia,
+  Solana,
+  Starknet,
+  Stellar,
+} from "../chains/index.js";
 import { InvalidInputError, UnsupportedError } from "../errors.js";
 import { buildMintIntent } from "./index.js";
 
@@ -83,5 +90,19 @@ describe("buildMintIntent", () => {
         attestation: ATTESTATION as `0x${string}`,
       }),
     ).toThrow(UnsupportedError);
+  });
+
+  it.each([
+    { chain: Solana, builder: "buildSolanaReceiveIntent" },
+    { chain: Stellar, builder: "buildStellarMintIntent" },
+    { chain: Starknet, builder: "buildStarknetReceiveIntent" },
+  ])("points a $chain.id mint at $builder", ({ chain, builder }) => {
+    expect(() =>
+      buildMintIntent({
+        destination: chain as unknown as typeof Base,
+        message: MESSAGE as `0x${string}`,
+        attestation: ATTESTATION as `0x${string}`,
+      }),
+    ).toThrow(builder);
   });
 });

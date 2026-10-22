@@ -12,19 +12,12 @@ describe("resolveTheme", () => {
     expect(resolveTheme("auto")).toBeNull();
   });
 
-  it("resolves the 'light' preset", () => {
-    const result = resolveTheme("light");
-    expect(result).not.toBeNull();
-    expect(result!.colorMode).toBe("light");
-    expect(result!.vars["--whisk-bg"]).toBe("#cdc3a3");
-    expect(result!.vars["--whisk-primary"]).toBe("#d65c3c");
-  });
-
-  it("resolves the 'dark' preset", () => {
-    const result = resolveTheme("dark");
-    expect(result!.colorMode).toBe("dark");
-    expect(result!.vars["--whisk-bg"]).toBe("#2a1d21");
-  });
+  it.each(["light", "dark"] as const)(
+    "resolves '%s' to its colour mode and leaves the palette to styles.css",
+    (name) => {
+      expect(resolveTheme(name)).toEqual({ colorMode: name, vars: {} });
+    },
+  );
 
   it("resolves the 'wine' preset", () => {
     const result = resolveTheme("wine");
