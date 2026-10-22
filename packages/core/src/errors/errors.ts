@@ -245,7 +245,8 @@ export class NetworkMismatchError extends WhiskError {
 export type RouteUnavailableReason =
   | "same_chain"
   | "source_adapter_required"
-  | "destination_adapter_required";
+  | "destination_adapter_required"
+  | "recipient_account_missing";
 
 export class RouteUnavailableError extends WhiskError {
   constructor(

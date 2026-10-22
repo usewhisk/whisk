@@ -3,6 +3,7 @@
  * and the Solana wallet signs `receive_message` once Iris attests.
  */
 import { attestationPolling } from "./polling.js";
+import { solanaRecipientProblem } from "./solanaRecipient.js";
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import {
@@ -126,6 +127,15 @@ export async function executeStarknetToSolana(
       "Failed to build Starknet burn calls.",
       snapshot,
     );
+  }
+
+  const problem = await solanaRecipientProblem(
+    input.destination,
+    input.destinationAdapter,
+    recipientUsdcAta,
+  );
+  if (problem) {
+    return fail(steps, "burn", problem, problem.message, snapshot);
   }
 
   try {

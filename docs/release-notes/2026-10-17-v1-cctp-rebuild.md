@@ -297,6 +297,13 @@ Technical shape, per
     minutes instead of waiting forever.
   - `starknet()` defaults its `rpcUrl` to the registry's endpoint.
   - starknet.js moves to `^10.8.0` in cctp, core and react.
+- Transfers into Solana check the recipient before the burn. Solana's
+  `receive_message` cannot create the recipient's USDC account, and the check
+  used to run after the attestation, so a recipient without one left the USDC
+  burned and unminted. EVM, Stellar and Starknet to Solana now fail first with
+  `RouteUnavailableError` reason `recipient_account_missing`, or with
+  `WrongChainError` when the Solana wallet is on the other cluster, and nothing
+  is sent.
 - Comments in the packages and examples follow Directive 6 (#92). Banners,
   narration and history are gone, and comments that no longer matched the code
   were corrected, among them the `createWhisk` header, the Iris timeout and 429
