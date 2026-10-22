@@ -309,6 +309,19 @@ Technical shape, per
   were corrected, among them the `createWhisk` header, the Iris timeout and 429
   behaviour in cctp, the `rpcUrls` and `FeePolicy.bps` docs, and the example
   providers' chain lists. No code changed.
+- Pre-release fixes to the widget.
+  - Host stylesheet rules on `[data-whisk]` win again with the `light`
+    (default) and `dark` themes. Both palettes live in `styles.css`, so the
+    provider sets only the colour mode for them; the other presets and
+    `tokens` are still written inline. `resolveTheme("light")` and
+    `resolveTheme("dark")` return no variables.
+  - `fonts.css` loads Inter, Familjen Grotesk and Geist Mono from Fontsource
+    packages pinned on jsDelivr. The Familjen Grotesk file it named returned
+    404 and the Geist Mono URL returned an HTML page.
+  - `@usewhisk/react` and `/headless` export `QuoteExpiredError` and
+    `QuoteChangedError`.
+  - cctp's `buildMintIntent` names the right builder for a Solana, Stellar or
+    Starknet destination.
 - Release (#74).
   - Changesets publish `@usewhisk/cctp@0.1.0`, `@usewhisk/core@0.2.0` and
     `@usewhisk/react@0.2.0`. Core and react depend on each other with a `^`

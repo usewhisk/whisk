@@ -36,10 +36,22 @@ function root(theme?: Parameters<typeof WhiskProvider>[0]["theme"]) {
 }
 
 describe("WhiskProvider themes (#73)", () => {
-  it("renders the light preset when no theme is given", () => {
-    const el = root();
-    expect(el.dataset.whiskTheme).toBe("light");
-    expect(el.style.getPropertyValue("--whisk-bg")).toBe(themePresets.light.bg);
+  // styles.css already holds the light and dark palettes. Writing them inline
+  // as well would beat every host rule on `[data-whisk]`.
+  it.each([undefined, "light", "dark"] as const)(
+    "leaves the %s palette to styles.css so host overrides still win",
+    (theme) => {
+      const el = root(theme);
+      expect(el.dataset.whiskTheme).toBe(theme ?? "light");
+      expect(el.getAttribute("style")).toBeNull();
+    },
+  );
+
+  it("writes the other presets inline", () => {
+    const el = root("indigo");
+    expect(el.style.getPropertyValue("--whisk-bg")).toBe(
+      themePresets.indigo.bg,
+    );
   });
 
   it("leaves 'auto' to the visitor's colour scheme", () => {
@@ -52,7 +64,7 @@ describe("WhiskProvider themes (#73)", () => {
     const el = root({ preset: "dark", tokens: { primary: "#123456" } });
     expect(el.dataset.whiskTheme).toBe("dark");
     expect(el.style.getPropertyValue("--whisk-primary")).toBe("#123456");
-    expect(el.style.getPropertyValue("--whisk-bg")).toBe(themePresets.dark.bg);
+    expect(el.style.getPropertyValue("--whisk-bg")).toBe("");
   });
 
   it("applies token overrides to 'auto' without pinning a colour scheme", () => {

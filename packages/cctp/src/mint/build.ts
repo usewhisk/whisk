@@ -26,6 +26,12 @@ export type BuildMintIntentInput = {
 
 const HEX_PREFIX_REGEX = /^0x[0-9a-fA-F]+$/;
 
+const NON_EVM_BUILDERS = {
+  solana: "buildSolanaReceiveIntent",
+  stellar: "buildStellarMintIntent",
+  starknet: "buildStarknetReceiveIntent",
+} as const;
+
 /**
  * `receiveMessage` on the destination's `MessageTransmitterV2`. EVM
  * destinations only. Whoever submits the call pays destination gas.
@@ -34,7 +40,7 @@ export function buildMintIntent(input: BuildMintIntentInput): MintIntent {
   if (input.destination.ecosystem !== "evm") {
     throw new UnsupportedError(
       "unsupported_ecosystem",
-      `Destination chain "${input.destination.id}" is not EVM. v1 supports EVM only.`,
+      `buildMintIntent builds EVM mints. Use ${NON_EVM_BUILDERS[input.destination.ecosystem]} for "${input.destination.id}".`,
     );
   }
   if (!HEX_PREFIX_REGEX.test(input.message)) {
