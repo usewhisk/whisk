@@ -49,6 +49,23 @@ describe("getIrisBaseUrl", () => {
 });
 
 describe("fetchAttestationOnce", () => {
+  it("queries the baseUrl override instead of Circle's host", async () => {
+    const injected = vi.fn<typeof fetch>(
+      async () =>
+        new Response(JSON.stringify({ messages: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    await fetchAttestationOnce("Arc_Testnet", "0xburn", {
+      baseUrl: "https://iris.proxy.example",
+      fetch: injected,
+    });
+    const url = new URL(String(injected.mock.calls[0]?.[0]));
+    expect(url.origin).toBe("https://iris.proxy.example");
+    expect(url.pathname).toBe("/v2/messages/26");
+  });
+
   it("throws for a chain outside the registry without calling Iris", async () => {
     const fetchMock = stubFetch();
     await expect(
