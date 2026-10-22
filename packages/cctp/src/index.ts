@@ -85,13 +85,18 @@ export type {
 export {
   getBlockNumber,
   getGasPrice,
+  getStarknetTransactionStatus,
   getTransactionStatus,
   getUsdcBalance,
   isNonceUsed,
   isStarknetNonceUsed,
   isStellarNonceUsed,
 } from "./rpc/index.js";
-export type { RpcOptions, TransactionStatus } from "./rpc/index.js";
+export type {
+  RpcOptions,
+  StarknetTransactionStatus,
+  TransactionStatus,
+} from "./rpc/index.js";
 
 // Forwarder
 export {

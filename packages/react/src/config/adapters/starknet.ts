@@ -6,6 +6,7 @@
  * transaction confirmation. Per-wallet selection happens later via the
  * `ConnectModal`.
  */
+import { getChain } from "@usewhisk/core";
 import type { StarknetAdapterFactory } from "../types.js";
 
 export type StarknetNetwork = "mainnet" | "sepolia";
@@ -34,10 +35,10 @@ export const STARKNET_CHAIN_IDS: Record<StarknetNetwork, string> = {
   sepolia: "0x534e5f5345504f4c4941", // SN_SEPOLIA
 };
 
-const NETWORK_RPC: Record<StarknetNetwork, string> = {
-  mainnet: "https://starknet-mainnet.public.blastapi.io/rpc/v0_8",
-  sepolia: "https://starknet-sepolia.public.blastapi.io/rpc/v0_8",
-};
+export const STARKNET_CHAINS = {
+  mainnet: "Starknet",
+  sepolia: "Starknet_Sepolia",
+} as const satisfies Record<StarknetNetwork, string>;
 
 export function starknet(
   options: StarknetFactoryOptions = {},
@@ -46,7 +47,8 @@ export function starknet(
   const config: StarknetConfig = {
     network,
     chainId: options.chainId ?? STARKNET_CHAIN_IDS[network],
-    rpcUrl: options.rpcUrl ?? NETWORK_RPC[network],
+    rpcUrl:
+      options.rpcUrl ?? getChain(STARKNET_CHAINS[network]).defaultRpcUrls[0]!,
     autoConnect: options.autoConnect ?? false,
   };
   return { kind: "starknet", config };

@@ -313,8 +313,15 @@ function starknetAccount(chain: StarknetChain) {
     "a deployed Starknet Sepolia account address",
   );
   const key = required("WHISK_STARKNET_PK", "that account's private key");
-  const provider = new StarknetRpcProvider({ nodeUrl: rpcUrl(chain) });
-  return { provider, account: new StarknetAccount(provider, address, key) };
+  // starknet.js defaults to block `pending`, which public RPCs reject.
+  const provider = new StarknetRpcProvider({
+    nodeUrl: rpcUrl(chain),
+    blockIdentifier: "latest",
+  });
+  return {
+    provider,
+    account: new StarknetAccount({ provider, address, signer: key }),
+  };
 }
 
 function starknetWallet(chain: StarknetChain): StarknetAdapter {
@@ -326,18 +333,12 @@ function starknetWallet(chain: StarknetChain): StarknetAdapter {
       return provider.getChainId();
     },
     async submitCalls(calls) {
-      // starknet.js asks for the nonce at `pending`, which public RPCs reject.
-      const nonce = await provider.getNonceForAddress(
-        account.address,
-        "latest",
-      );
       const result = await account.execute(
         calls.map((c) => ({
           contractAddress: c.contractAddress,
           entrypoint: c.entrypoint,
           calldata: c.calldata,
         })),
-        { nonce, version: 3 },
       );
       return { hashes: [result.transaction_hash] };
     },

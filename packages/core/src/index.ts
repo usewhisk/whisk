@@ -173,6 +173,8 @@ export {
 } from "./chains/index.js";
 export type { AddressFormat } from "./chains/index.js";
 export type { CctpChain } from "@usewhisk/cctp";
+export { getStarknetTransactionStatus } from "@usewhisk/cctp";
+export type { StarknetTransactionStatus } from "@usewhisk/cctp";
 export {
   connectedEcosystems,
   decideRoute,

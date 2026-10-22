@@ -78,7 +78,7 @@
     "@stellar/stellar-sdk": "^14.1.1",
     "@usewhisk/cctp": "workspace:*",
     "bs58": "^6.0.0",
-    "starknet": "^7.0.0"
+    "starknet": "^10.8.0"
   },
   "devDependencies": {
     "tsup": "^8.3.5",

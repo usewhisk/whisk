@@ -93,7 +93,7 @@
     "@web3icons/react": "^4.1.17",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
-    "starknet": "^7.0.0",
+    "starknet": "^10.8.0",
     "wagmi": "^2.13.0"
   },
   "devDependencies": {

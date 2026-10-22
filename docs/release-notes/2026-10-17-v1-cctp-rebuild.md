@@ -287,6 +287,16 @@ Technical shape, per
   covers Max on Arc and a transfer burned in one process and resumed in
   another. A nightly `Testnet` workflow runs it, outside `quality`. It replaces
   the old `test:live` sweep, and core's `lint` now typechecks the scripts.
+- Starknet confirmations work against current nodes. Public Starknet RPCs now
+  serve spec 0.10, which starknet.js 7 refuses, and the widget's default RPC was
+  Blast, which has shut down.
+  - `getStarknetTransactionStatus` (cctp, re-exported by core) reads the receipt
+    over plain JSON-RPC, so a node on a newer spec version cannot break it.
+  - The widget's Starknet adapter confirms through it, trying the integrator's
+    `rpcUrl` first and the registry's endpoints after, and fails after 10
+    minutes instead of waiting forever.
+  - `starknet()` defaults its `rpcUrl` to the registry's endpoint.
+  - starknet.js moves to `^10.8.0` in cctp, core and react.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 

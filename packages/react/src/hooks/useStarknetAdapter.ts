@@ -1,8 +1,17 @@
 "use client";
 
 import { useMemo } from "react";
-import { RpcProvider } from "starknet";
-import { toWhiskError, type StarknetAdapter } from "@usewhisk/core";
+import type { StarknetWindowObject } from "@starknet-io/get-starknet-core";
+import {
+  getChain,
+  getStarknetTransactionStatus,
+  toWhiskError,
+  type StarknetAdapter,
+} from "@usewhisk/core";
+import {
+  STARKNET_CHAINS,
+  type StarknetConfig,
+} from "../config/adapters/starknet.js";
 import { useStarknetWallet } from "../provider/starknetContext.js";
 
 /**
@@ -27,66 +36,87 @@ export function useStarknetAdapter(): StarknetAdapter | null {
 
   return useMemo<StarknetAdapter | null>(() => {
     if (!starknet || !starknet.wallet || !starknet.address) return null;
-    const { wallet, address, config } = starknet;
-    const rpc = new RpcProvider({ nodeUrl: config.rpcUrl });
+    return createStarknetAdapter(
+      starknet.wallet,
+      starknet.address,
+      starknet.config,
+    );
+  }, [starknet]);
+}
 
-    return {
-      kind: "starknet",
-      address,
+const POLL_MS = 3_000;
+const CONFIRM_TIMEOUT_MS = 10 * 60_000;
 
-      async getChainId() {
-        try {
-          const chainId = await wallet.request({
-            type: "wallet_requestChainId",
-          });
-          return chainId;
-        } catch (cause) {
-          throw toWhiskError(cause, "Failed to read Starknet chainId.");
+export function createStarknetAdapter(
+  wallet: StarknetWindowObject,
+  address: string,
+  config: StarknetConfig,
+): StarknetAdapter {
+  const chain = getChain(STARKNET_CHAINS[config.network]);
+
+  return {
+    kind: "starknet",
+    address,
+
+    async getChainId() {
+      try {
+        const chainId = await wallet.request({
+          type: "wallet_requestChainId",
+        });
+        return chainId;
+      } catch (cause) {
+        throw toWhiskError(cause, "Failed to read Starknet chainId.");
+      }
+    },
+
+    async submitCalls(calls) {
+      try {
+        const result = await wallet.request({
+          type: "wallet_addInvokeTransaction",
+          params: {
+            calls: calls.map((c) => ({
+              contract_address: c.contractAddress,
+              entry_point: c.entrypoint,
+              calldata: c.calldata,
+            })),
+          },
+        });
+        const hash = (result as { transaction_hash?: string }).transaction_hash;
+        if (!hash) {
+          throw new Error("Wallet returned no transaction_hash.");
         }
-      },
+        return { hashes: [hash] };
+      } catch (cause) {
+        throw toWhiskError(cause, "Failed to submit Starknet calls.");
+      }
+    },
 
-      async submitCalls(calls) {
-        try {
-          const result = await wallet.request({
-            type: "wallet_addInvokeTransaction",
-            params: {
-              calls: calls.map((c) => ({
-                contract_address: c.contractAddress,
-                entry_point: c.entrypoint,
-                calldata: c.calldata,
-              })),
-            },
-          });
-          const hash = (result as { transaction_hash?: string })
-            .transaction_hash;
-          if (!hash) {
-            throw new Error("Wallet returned no transaction_hash.");
-          }
-          return { hashes: [hash] };
-        } catch (cause) {
-          throw toWhiskError(cause, "Failed to submit Starknet calls.");
-        }
-      },
-
-      async confirmTransaction(hash) {
-        try {
-          const receipt = await rpc.waitForTransaction(hash, {
-            retryInterval: 3000,
-          });
-          const status =
-            "isSuccess" in receipt && receipt.isSuccess()
-              ? "success"
-              : "reverted";
-          const blockNumber =
-            (receipt as { block_number?: number }).block_number ?? 0;
-          return { status, blockNumber };
-        } catch (cause) {
+    async confirmTransaction(hash) {
+      if (chain.ecosystem !== "starknet") {
+        throw toWhiskError(
+          new Error(`${chain.id} is not a Starknet chain.`),
+          "Failed waiting for Starknet confirmation.",
+        );
+      }
+      const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
+      while (Date.now() < deadline) {
+        const status = await getStarknetTransactionStatus(chain, hash, {
+          rpcUrls: [config.rpcUrl],
+        }).catch((cause: unknown) => {
           throw toWhiskError(
             cause,
             "Failed waiting for Starknet confirmation.",
           );
+        });
+        if (status.state !== "pending") {
+          return { status: status.state, blockNumber: status.blockNumber };
         }
-      },
-    };
-  }, [starknet]);
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+      }
+      throw toWhiskError(
+        new Error(`${hash} was not accepted on ${chain.id} within 10 minutes.`),
+        "Failed waiting for Starknet confirmation.",
+      );
+    },
+  };
 }
