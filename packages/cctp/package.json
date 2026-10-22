@@ -76,7 +76,7 @@
     "@solana/web3.js": "^1.95.0",
     "@solana/spl-token": "^0.4.0",
     "@stellar/stellar-sdk": "^14.1.1",
-    "starknet": "^7.0.0",
+    "starknet": "^10.8.0",
     "viem": ">=2.57.5 <3"
   },
   "devDependencies": {

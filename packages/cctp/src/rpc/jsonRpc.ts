@@ -10,7 +10,8 @@ export type RpcOptions = {
 /**
  * One JSON-RPC call, tried on each URL in turn until one returns a result
  * that `parse` accepts. Public RPCs fail often enough that one bad answer is
- * not a verdict.
+ * not a verdict. `parseError` turns an error code that is itself an answer,
+ * such as "not found", into a result.
  */
 export async function callRpc<T>(
   chain: Pick<CctpChain, "id" | "defaultRpcUrls">,
@@ -18,6 +19,7 @@ export async function callRpc<T>(
   params: readonly unknown[] | Record<string, unknown>,
   parse: (result: unknown) => T | undefined,
   options: RpcOptions = {},
+  parseError?: (code: unknown) => T | undefined,
 ): Promise<T> {
   const doFetch = options.fetch ?? globalThis.fetch;
   const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method, params });
@@ -41,6 +43,8 @@ export async function callRpc<T>(
           ? parse(payload.result)
           : undefined;
       if (result !== undefined) return result;
+      const answer = parseError?.(errorCode(payload));
+      if (answer !== undefined) return answer;
       failures.push(`${url}: ${JSON.stringify(payload)}`);
       // Arc's primary endpoint is load-balanced, and a backend behind the
       // head answers -32014 until it catches up. Ask the same URL again.

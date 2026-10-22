@@ -36,8 +36,8 @@ if (!ADDRESS || !PK) {
 }
 
 async function main() {
-  const provider = new RpcProvider({ nodeUrl: RPC });
-  const account = new Account(provider, ADDRESS!, PK!);
+  const provider = new RpcProvider({ nodeUrl: RPC, blockIdentifier: "latest" });
+  const account = new Account({ provider, address: ADDRESS!, signer: PK! });
   console.log(`Starknet signer: ${account.address}`);
   console.log(`Source domain:   ${sourceDomain}`);
   console.log(`Burn hash:       ${burnHash}\n`);

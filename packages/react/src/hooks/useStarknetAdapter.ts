@@ -2,9 +2,16 @@
 
 import { useMemo } from "react";
 import type { StarknetWindowObject } from "@starknet-io/get-starknet-core";
-import { RpcProvider } from "starknet";
-import { toWhiskError, type StarknetAdapter } from "@usewhisk/core";
-import type { StarknetConfig } from "../config/adapters/starknet.js";
+import {
+  getChain,
+  getStarknetTransactionStatus,
+  toWhiskError,
+  type StarknetAdapter,
+} from "@usewhisk/core";
+import {
+  STARKNET_CHAINS,
+  type StarknetConfig,
+} from "../config/adapters/starknet.js";
 import { useStarknetWallet } from "../provider/starknetContext.js";
 
 /**
@@ -37,12 +44,15 @@ export function useStarknetAdapter(): StarknetAdapter | null {
   }, [starknet]);
 }
 
+const POLL_MS = 3_000;
+const CONFIRM_TIMEOUT_MS = 10 * 60_000;
+
 export function createStarknetAdapter(
   wallet: StarknetWindowObject,
   address: string,
   config: StarknetConfig,
 ): StarknetAdapter {
-  const rpc = new RpcProvider({ nodeUrl: config.rpcUrl });
+  const chain = getChain(STARKNET_CHAINS[config.network]);
 
   return {
     kind: "starknet",
@@ -82,20 +92,31 @@ export function createStarknetAdapter(
     },
 
     async confirmTransaction(hash) {
-      try {
-        const receipt = await rpc.waitForTransaction(hash, {
-          retryInterval: 3000,
-        });
-        const status =
-          "isSuccess" in receipt && receipt.isSuccess()
-            ? "success"
-            : "reverted";
-        const blockNumber =
-          (receipt as { block_number?: number }).block_number ?? 0;
-        return { status, blockNumber };
-      } catch (cause) {
-        throw toWhiskError(cause, "Failed waiting for Starknet confirmation.");
+      if (chain.ecosystem !== "starknet") {
+        throw toWhiskError(
+          new Error(`${chain.id} is not a Starknet chain.`),
+          "Failed waiting for Starknet confirmation.",
+        );
       }
+      const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
+      while (Date.now() < deadline) {
+        const status = await getStarknetTransactionStatus(chain, hash, {
+          rpcUrls: [config.rpcUrl],
+        }).catch((cause: unknown) => {
+          throw toWhiskError(
+            cause,
+            "Failed waiting for Starknet confirmation.",
+          );
+        });
+        if (status.state !== "pending") {
+          return { status: status.state, blockNumber: status.blockNumber };
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+      }
+      throw toWhiskError(
+        new Error(`${hash} was not accepted on ${chain.id} within 10 minutes.`),
+        "Failed waiting for Starknet confirmation.",
+      );
     },
   };
 }
