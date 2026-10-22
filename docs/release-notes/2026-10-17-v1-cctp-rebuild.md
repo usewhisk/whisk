@@ -332,6 +332,9 @@ Technical shape, per
     through Trusted Publishing with provenance, and skips the dependency cache.
   - Package metadata points to `usewhisk/whisk`, cctp ships its LICENSE, and
     the four READMEs match the 0.2 API.
+- Recovery's `baseUrl` reaches Iris again (#115). cctp's `getMessages` and
+  `pollMessages` take a `baseUrl`, and core's `fetchAttestationOnce` and
+  `pollAttestation` pass theirs through instead of always calling Circle's host.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 

@@ -25,6 +25,8 @@ import type {
 
 export type GetMessagesOptions = FetchJsonOptions & {
   network: Network;
+  /** Defaults to Circle's Iris host for `network`. */
+  baseUrl?: string;
 };
 
 /**
@@ -35,10 +37,9 @@ export async function getMessages(
   query: GetMessagesQuery,
   options: GetMessagesOptions,
 ): Promise<IrisMessage[]> {
-  const { network, ...fetchOpts } = options;
-  const url = new URL(
-    `${irisBaseUrl(network)}/v2/messages/${query.sourceDomain}`,
-  );
+  const { network, baseUrl, ...fetchOpts } = options;
+  const base = (baseUrl ?? irisBaseUrl(network)).replace(/\/+$/, "");
+  const url = new URL(`${base}/v2/messages/${query.sourceDomain}`);
   if (query.transactionHash) {
     url.searchParams.set("transactionHash", query.transactionHash);
   }
