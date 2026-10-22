@@ -1,6 +1,4 @@
 /**
- * Burn intent builder.
- *
  * Produces ready-to-sign calldata for a CCTP V2 bridge. The engine
  * hands the resulting `BurnIntent.calls` array to its wallet adapter
  * one by one (or batched via EIP-5792 when the wallet supports it).
@@ -8,7 +6,7 @@
  * The burn's finality threshold is the fee tier's: 1000 for Fast,
  * 2000 for Standard. A Fast tier on a chain without Fast is refused.
  *
- * Forwarder is on by default — the burn call uses
+ * Forwarder is on by default: the burn call uses
  * `depositForBurnWithHook` with the canonical `cctp-forward` magic
  * bytes so Circle's Orbit relayer handles the destination mint. To
  * skip the forwarder set `withForwarder: false`; the user will then
@@ -37,7 +35,10 @@ export type BuildBurnIntentInput = {
   destination: CctpChain;
   /** USDC subunits (6 decimals). Must be > 0 and ≤ 10M USDC. */
   amount: bigint;
-  /** Recipient on the destination chain as a 20-byte EVM address. */
+  /**
+   * Recipient in the destination's format: a 20-byte EVM address, a base58
+   * Solana pubkey, or 0x-prefixed 32-byte hex for Stellar and Starknet.
+   */
   mintRecipient: Address | string;
   /**
    * Restrict who can call `receiveMessage` on the destination. Defaults
@@ -67,11 +68,11 @@ export type BuildBurnIntentInput = {
    * Override the hookData. When `withForwarder` is true and this is
    * unset, the EVM-side `cctp-forward` magic bytes are used (Circle's
    * Orbit relayer). For Stellar destinations, pass the Stellar
-   * `CctpForwarder` hookData instead — the EVM relayer is irrelevant
+   * `CctpForwarder` hookData instead. The EVM relayer is irrelevant
    * because the Stellar Forwarder is what reads this field on chain.
    */
   customHookData?: `0x${string}`;
-  /** Forwarder fee math inputs. See `computeMaxFee` for details. */
+  /** Fee math inputs. See `computeMaxFee`. */
   fee: Pick<
     ComputeMaxFeeInput,
     "tier" | "forwarderLevel" | "forwarderBufferBps"
@@ -84,15 +85,11 @@ export type BuildBurnIntentInput = {
   };
 };
 
-/** Hard cap from CCTP — single burn cannot exceed $10M USDC. */
+/** CCTP refuses a single burn above 10M USDC. */
 const MAX_USDC_AMOUNT = 10_000_000n * 1_000_000n; // 10M × 1e6 subunits
 
-/**
- * Build the calldata for a CCTP V2 bridge.
- */
 export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
-  // ---- validation ----------------------------------------------------------
-  // `buildBurnIntent` produces EVM calldata — source MUST be EVM.
+  // The source must be EVM since this produces EVM calldata.
   // Destination ecosystem is free; the only thing the burn cares about
   // is the destination domain and the bytes32 mintRecipient encoding.
   if (input.source.ecosystem !== "evm") {
@@ -137,7 +134,6 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
   const withForwarder = input.withForwarder ?? true;
   const destinationCaller = input.destinationCaller ?? ANY_DESTINATION_CALLER;
 
-  // ---- fee math ------------------------------------------------------------
   const computed = computeMaxFee({
     amount: input.amount,
     tier: input.fee.tier,
@@ -158,7 +154,6 @@ export function buildBurnIntent(input: BuildBurnIntentInput): BurnIntent {
     );
   }
 
-  // ---- encode --------------------------------------------------------------
   const calls: EvmCall[] = [];
 
   if (!input.skipApprove) {

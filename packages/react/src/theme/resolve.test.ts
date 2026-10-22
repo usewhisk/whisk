@@ -154,8 +154,7 @@ describe("listThemeNames", () => {
 });
 
 describe("preset snapshots (deterministic CSS output per preset)", () => {
-  // One snapshot per preset locks the exact CSS variable map. Any color
-  // change becomes a visible test diff, prevents accidental palette drift.
+  // A palette change should show up as a snapshot diff, never by accident.
   it("light", () => {
     expect(themeToCssVars(themePresets.light)).toMatchInlineSnapshot(`
       {

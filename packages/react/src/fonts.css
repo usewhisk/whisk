@@ -1,5 +1,5 @@
 /**
- * Whisk fonts — opt-in stylesheet.
+ * Opt-in fonts for Whisk.
  *
  * Whisk's `styles.css` references Inter, Familjen Grotesk, and Geist Mono
  * in its font stack but deliberately does not load them: a widget that
@@ -18,10 +18,7 @@
  * file or if any single font fails to load.
  */
 
-/* ============================================================
-   Inter — body / UI
-   Variable font: weight 100–900, slnt -10–0
-   ============================================================ */
+/* Inter for body and UI text. */
 
 @font-face {
   font-family: "Inter";
@@ -41,10 +38,7 @@
     format("woff2");
 }
 
-/* ============================================================
-   Familjen Grotesk — headlines, amount readouts, eyebrows
-   Variable font: weight 400–700
-   ============================================================ */
+/* Familjen Grotesk for headlines, amounts and eyebrows. */
 
 @font-face {
   font-family: "Familjen Grotesk";
@@ -55,10 +49,7 @@
     format("woff2");
 }
 
-/* ============================================================
-   Geist Mono — addresses, txHashes, anything monospaced
-   Variable font: weight 100–900
-   ============================================================ */
+/* Geist Mono for addresses and transaction hashes. */
 
 @font-face {
   font-family: "Geist Mono";

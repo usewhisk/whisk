@@ -6,10 +6,8 @@ import { PayingStep } from "./components/paying-step";
 import { DoneStep } from "./components/done-step";
 
 /**
- * Studio Fortune payroll — composition root. The batch state machine
- * (review → paying → done) lives in `useBatch`; each step has its own module.
- * Skip + advance both call `useBatch.advance()` so the run handles excluded
- * payees and successful settlements identically from the UI's perspective.
+ * Skipping a payee mid-run also calls `advance`, so a skipped payee counts
+ * as done the same way a settled one does.
  */
 export function App() {
   const batch = useBatch();

@@ -1,12 +1,8 @@
 /**
- * Starknet → Stellar bridge executor.
- *
- * Starknet source: approve + deposit_for_burn_with_hook multicall.
- * `mintRecipient` AND `destinationCaller` = Stellar CctpForwarder felt;
- * hookData carries the recipient strkey.
- *
- * Destination Stellar wallet signs `mint_and_forward(message, attestation)`
- * on the CctpForwarder.
+ * Starknet to Stellar bridge. The burn's `mintRecipient` and
+ * `destinationCaller` must both be Stellar's `CctpForwarder`, with the
+ * recipient strkey in the hook data. The Stellar wallet then signs
+ * `mint_and_forward` on the forwarder.
  */
 import { attestationPolling } from "./polling.js";
 import {
@@ -81,8 +77,8 @@ export async function executeStarknetToStellar(
     recipientAddress: input.recipientAddress,
   };
 
-  // mintRecipient = Stellar Forwarder strkey decoded to 32 bytes,
-  // packed as u256. destinationCaller = same.
+  // The forwarder is both mintRecipient and destinationCaller; any other
+  // value loses the funds.
   const forwarderBytes = decodeStrkeyToBytes32(input.destination.cctpForwarder);
   const forwarderU256 = BigInt(
     "0x" +
@@ -247,7 +243,6 @@ export async function executeStarknetToStellar(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Stellar mint_and_forward.
   let mintIntent;
   try {
     mintIntent = buildStellarMintIntent({

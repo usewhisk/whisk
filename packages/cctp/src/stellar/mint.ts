@@ -11,7 +11,8 @@
  *   3. Calls `receive_message` on MessageTransmitter (mints USDC to the
  *      Forwarder contract itself)
  *   4. Transfers minted USDC to `forward_recipient`
- *   5. Atomic — any failure reverts the entire invocation
+ *
+ * The call is atomic: any failure reverts the entire invocation.
  */
 import { Contract, nativeToScVal, xdr } from "@stellar/stellar-sdk";
 import type { StellarChain } from "../chains/types.js";

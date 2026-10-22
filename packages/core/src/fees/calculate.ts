@@ -11,15 +11,9 @@ import { splitCustomFee, WHISK_TREASURY_ADDRESS } from "./treasury.js";
 const USDC_DECIMALS_BIG = 10n ** 6n;
 
 /**
- * Build the merchant fee entries from an integrator-supplied
- * {@link FeePolicy}. The total comes out to `policy.value`, split 90/10
- * between `policy.recipient` (merchant) and the Whisk treasury. The end
- * user always pays the same total — the split decides how it's
- * distributed.
- *
- * Only the absolute-amount form is supported (`policy.value`). The
- * basis-points form (`policy.bps`) is reserved for the future Swap
- * surface and is ignored here.
+ * Merchant fee entries for a {@link FeePolicy}: `policy.value` split 90/10
+ * between `policy.recipient` and the Whisk treasury. The payer pays the same
+ * total either way. `policy.bps` is not supported and is ignored.
  */
 export function buildCustomFeeEntries(
   policy: FeePolicy | undefined,
@@ -94,9 +88,9 @@ export function sumProtocolFees(entries: FeeEntry[], token: Token): bigint {
 }
 
 /**
- * Just the Forwarder fee, in subunits of the transfer token. Isolated from
- * the other deducted fees because it's gas-priced at mint time, so it's the
- * only part the `"sender"` gross-up cushions against drift.
+ * The Forwarder fee alone, in subunits of the transfer token. It is priced
+ * from destination gas at mint time, so it is the part that can drift after
+ * the quote.
  */
 export function sumForwarderFees(entries: FeeEntry[], token: Token): bigint {
   return sumSubunits(

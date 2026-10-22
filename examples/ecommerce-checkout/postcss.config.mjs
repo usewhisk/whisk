@@ -1,6 +1,6 @@
 /**
- * Tailwind v4 plugs in via its dedicated PostCSS plugin. No tailwind.config.js
- * is needed — the theme tokens live inside the `@theme` block in globals.css.
+ * Tailwind v4 needs no tailwind.config.js. The theme tokens live in the
+ * `@theme` block in globals.css.
  */
 export default {
   plugins: {

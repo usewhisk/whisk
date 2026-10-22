@@ -6,11 +6,6 @@ import { InvoiceCard } from "../components/invoice-card";
 import { PayAside } from "../components/pay-aside";
 import { EmptyState } from "../components/empty-state";
 
-/**
- * Customer view — top-level composition. URL → validated invoice happens in
- * `useInvoiceParams`. If the parse fails for any reason we render the empty
- * state with the demo links; otherwise the invoice card + pay aside.
- */
 export function ExampleInvoice() {
   const invoice = useInvoiceParams();
   const [txHash, setTxHash] = useState<string | null>(null);

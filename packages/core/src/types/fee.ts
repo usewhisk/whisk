@@ -1,13 +1,13 @@
 import type { Token } from "./token.js";
 
 /**
- * Custom merchant fee collected on top of every Whisk transfer. The
- * fee is split: 90% goes to `recipient`, 10% to the Whisk treasury.
+ * Merchant fee the payer pays on top of every transfer, split 90% to
+ * `recipient` and 10% to the Whisk treasury.
  */
 export type FeePolicy = {
-  /** Absolute USDC amount. Mutually exclusive with `bps`. */
+  /** Decimal USDC amount, such as `"0.25"`. */
   value?: string;
-  /** Basis points on the transfer amount. Mutually exclusive with `value`. */
+  /** Not supported yet; the engine ignores it. */
   bps?: number;
   recipient: string;
 };
@@ -20,7 +20,7 @@ export type FeeEntryKind =
   | "provider";
 
 /**
- * Who absorbs the CCTP protocol + Forwarder fees on a bridge.
+ * Who absorbs the CCTP protocol and Forwarder fees on a bridge.
  *
  * - `"sender"` (default): the burn is sized up by the estimated fees so the
  *   recipient receives the full `amount`. The sender's debit grows to cover
@@ -30,11 +30,11 @@ export type FeeEntryKind =
  * - `"receiver"`: fees are deducted from the bridged amount, so the
  *   recipient nets `amount − fees`. The sender's debit equals `amount`.
  *
- * No fees on same-chain Send — `feeBearer` is bridge-only.
+ * Bridges only. A same-chain Send has no protocol fees.
  */
 export type FeeBearer = "sender" | "receiver";
 
-/** Engine-wide default applied when `WhiskConfig.feeBearer` is omitted. */
+/** Used when `WhiskConfig.feeBearer` is omitted. */
 export const DEFAULT_FEE_BEARER: FeeBearer = "sender";
 
 export type FeeEntry = {

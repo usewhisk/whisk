@@ -19,7 +19,7 @@ export type WhiskErrorCode =
   | "QUOTE_CHANGED"
   | "UNKNOWN";
 
-/** Mirrored from App Kit's `BridgeStepErrorCategory` (App Kit 1.4.2+). */
+/** Same values as Circle App Kit's `BridgeStepErrorCategory`. */
 export type WhiskErrorCategory =
   | "user_rejected"
   | "atomic_unsupported"
@@ -57,7 +57,7 @@ export class WhiskError extends Error {
     this.step = opts.step;
     this.category = opts.category;
     this.cause = opts.cause;
-    // Maintain prototype chain for `instanceof` after transpilation.
+    // Keeps `instanceof` working for subclasses after transpilation.
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
@@ -293,14 +293,13 @@ const TRANSIENT_PATTERNS =
 
 const REJECTION_PATTERNS = /user rejected|user denied|rejected by user/i;
 
-/** Shown when the user declines the wallet prompt. The raw provider error
- *  (the full viem/App Kit dump) is kept on `cause` for debugging. */
+/** The provider's full error stays on `cause`. */
 const REJECTION_MESSAGE = "You cancelled the transaction in your wallet.";
 
 /**
- * App Kit's Swap (RFQ liquidity) and routing report this when no quote exists
- * for the requested pair, direction, or size — common on testnet, where
- * liquidity is sparse and often one-directional.
+ * Swap and routing APIs say this when no quote exists for the pair,
+ * direction, or size. Common on testnet, where liquidity is thin and often
+ * one-directional.
  */
 const NO_ROUTE_PATTERNS =
   /no route|route or resource not found|route not found/i;
@@ -315,18 +314,14 @@ const NO_ROUTE_MESSAGE =
  * `cause`, so nothing is lost for debugging.
  */
 export function cleanErrorMessage(message: string): string {
-  // Plain string scans only (indexOf/startsWith/slice) — no regex, so there's
-  // no backtracking to make this superlinear on adversarial input.
-
-  // First line only — the human part sits up front.
+  // String scans rather than a regex, so hostile input cannot trigger
+  // superlinear backtracking.
   const newline = message.indexOf("\n");
   let line = newline === -1 ? message : message.slice(0, newline);
 
-  // Drop viem's "Request Arguments: …" tail.
   const argsAt = line.toLowerCase().indexOf("request arguments:");
   if (argsAt !== -1) line = line.slice(0, argsAt);
 
-  // Strip App Kit's "Unknown blockchain error on <chain>: " wrapper.
   const prefix = "unknown blockchain error on ";
   if (line.toLowerCase().startsWith(prefix)) {
     const colon = line.indexOf(":", prefix.length);
@@ -336,7 +331,7 @@ export function cleanErrorMessage(message: string): string {
   return line.trim() || message.trim();
 }
 
-/** Coerce an unknown thrown value into a `WhiskError`. Prefer `category` over heuristic message matching. */
+/** A known `category` decides the error type; otherwise the message is matched against known patterns. */
 export function toWhiskError(
   err: unknown,
   fallbackMessage = "Unknown error",

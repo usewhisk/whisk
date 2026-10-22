@@ -1,8 +1,6 @@
-// Polyfill Buffer for the browser before any Solana code loads.
-// @solana/web3.js uses Node's `Buffer` global (for base58 encoding,
-// transaction serialization, etc.). Next.js polyfills this automatically;
-// Vite does not — so without this line, anything that touches Solana
-// (e.g. CCTP cross-ecosystem bridges) throws "Buffer is not defined".
+// @solana/web3.js expects Node's `Buffer` global. Next.js polyfills it but
+// Vite does not, so set it before any Solana code loads or a Solana bridge
+// throws "Buffer is not defined".
 import { Buffer } from "buffer";
 if (typeof globalThis.Buffer === "undefined") {
   globalThis.Buffer = Buffer;

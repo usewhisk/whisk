@@ -1,11 +1,3 @@
-/**
- * Same-chain USDC transfer.
- *
- * The recipient and sender are on the same chain — no bridging needed.
- * The engine encodes one ERC-20 `transfer(to, amount)` call and hands
- * it to the adapter. There's no approve step because direct transfers
- * do not require an allowance.
- */
 import { encodeFunctionData, isAddress as viemIsAddress } from "viem";
 import { usdcAbi } from "@usewhisk/cctp";
 import type { EvmChain } from "@usewhisk/cctp";
@@ -23,27 +15,16 @@ import type {
 } from "../types.js";
 
 export type ExecuteSameChainSendInput = {
-  /** Chain definition from `@usewhisk/cctp` — gives us USDC address + EVM chain ID. */
   chain: EvmChain;
   recipientAddress: string;
-  /** Amount in USDC subunits (6 decimals). */
+  /** USDC subunits. */
   amount: bigint;
   adapter: EvmAdapter;
-  /**
-   * Optional integrator-fee transfer calls — prepended to the main
-   * transfer (merchant share first, treasury share second). Bundled
-   * via EIP-5792 when the wallet supports it; signed sequentially
-   * otherwise.
-   */
+  /** Merchant and treasury transfers, sent ahead of the main transfer. */
   customFeeCalls?: EvmCall[];
 };
 
-/**
- * Execute a same-chain USDC transfer. Returns a {@link SendResult} —
- * either a `success` with the transfer txHash or a `failure` with the
- * typed error and the snapshot of steps so the caller can render
- * progress. The function never throws.
- */
+/** Never throws; every failure resolves to a `failure` result. */
 export async function executeSameChainSend(
   input: ExecuteSameChainSendInput,
   listeners?: SendListeners,
@@ -53,8 +34,8 @@ export async function executeSameChainSend(
     { name: "transfer", state: "pending" },
   ];
 
-  // Address validation happens BEFORE any wallet interaction so the
-  // user isn't asked to sign a malformed call.
+  // Checked before the wallet is touched, so nobody is asked to sign a
+  // malformed call.
   if (!viemIsAddress(input.recipientAddress)) {
     const err = new InvalidAddressError(input.recipientAddress);
     return failure(steps, err, "transfer", err.message);
@@ -72,8 +53,6 @@ export async function executeSameChainSend(
   const customFeeCalls = input.customFeeCalls ?? [];
   const submittedCalls: EvmCall[] = [...customFeeCalls, transferCall];
 
-  // Make sure the wallet is on the right chain. The adapter resolves
-  // the prompt itself; we only surface the failure.
   try {
     const live = await input.adapter.getChainId();
     if (live !== input.chain.evmChainId) {
@@ -95,9 +74,8 @@ export async function executeSameChainSend(
       );
       return failure(steps, err, "transfer", err.message);
     }
-    // sendCalls returns one hash per call (or a single bundle hash).
-    // Last entry is always the main transfer; earlier entries (if
-    // present and distinct) are the merchant-fee transfers.
+    // One hash per call, or one for a whole batch. The main transfer is
+    // always last.
     hash = hashes[hashes.length - 1] as `0x${string}`;
     if (customFeeCalls.length > 0 && hashes.length > 1) {
       for (let i = 0; i < customFeeCalls.length; i++) {
@@ -109,9 +87,8 @@ export async function executeSameChainSend(
     return failure(steps, err, "transfer", err.message);
   }
 
-  // Sequential wallets: wait for each customFee receipt before the
-  // main transfer is treated as confirmed. Bundled wallets share
-  // `hash`, so the transfer-receipt wait below covers every call.
+  // A bundled wallet shares `hash`, so the transfer receipt covers the fee
+  // transfers too.
   for (const customFeeHash of customFeeHashes) {
     if (customFeeHash === hash) continue;
     try {

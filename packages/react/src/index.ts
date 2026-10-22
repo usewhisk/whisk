@@ -1,25 +1,11 @@
 /**
- * `@usewhisk/react` — embeddable USDC send + bridge widget.
- *
- * Drop-in components, headless hooks, and config builders. v1 is
- * EVM-only via wagmi; the `solana()` adapter factory is accepted today
- * for forward compatibility (Solana lands in v1.1 — see ROADMAP.md).
+ * `@usewhisk/react`: an embeddable USDC send and bridge widget, with its
+ * hooks and config builders.
  */
-
-/* --------------------------------------------------------------------- *
- *  Provider
- * --------------------------------------------------------------------- */
 
 export { WhiskProvider } from "./provider/WhiskProvider.js";
 export { createBrowserInflightStore } from "./lib/inflightStore.js";
 export type { WhiskProviderProps } from "./provider/WhiskProvider.js";
-
-/* --------------------------------------------------------------------- *
- *  Configuration
- *
- *  `createWhiskConfig` validates the input and freezes the result.
- *  `evm()` / `solana()` are factory functions for `config.wallets`.
- * --------------------------------------------------------------------- */
 
 export { createWhiskConfig } from "./config/index.js";
 export { evm } from "./config/adapters/evm.js";
@@ -46,21 +32,11 @@ export type {
   WhiskClientConfig,
 } from "./config/index.js";
 
-/* --------------------------------------------------------------------- *
- *  Widgets
- * --------------------------------------------------------------------- */
-
 export { ResumeList, WhiskReceipt, WhiskSend } from "./components/index.js";
 export type { WhiskReceiptProps, WhiskSendProps } from "./components/index.js";
 
-/* --------------------------------------------------------------------- *
- *  UI primitives
- *
- *  Lower-level pieces for custom widget assembly. `PoweredByWhisk` is
- *  included so anyone composing the primitives by hand still ships the
- *  attribution badge.
- * --------------------------------------------------------------------- */
-
+// `PoweredByWhisk` is here so widgets built from these parts still show
+// the attribution badge.
 export {
   Banner,
   Button,
@@ -83,10 +59,6 @@ export type {
   StepRailProps,
 } from "./components/index.js";
 
-/* --------------------------------------------------------------------- *
- *  Hooks
- * --------------------------------------------------------------------- */
-
 export {
   createWagmiEvmAdapter,
   useAdapterFor,
@@ -108,10 +80,6 @@ export type {
   UseWhiskResult,
 } from "./hooks/index.js";
 
-/* --------------------------------------------------------------------- *
- *  Theme
- * --------------------------------------------------------------------- */
-
 export {
   getThemePreset,
   listThemeNames,
@@ -130,11 +98,6 @@ export type {
   WhiskThemeTokens,
 } from "./theme/index.js";
 
-/* --------------------------------------------------------------------- *
- *  Resolvers — `addressResolver` / `composeResolvers` come straight
- *  from `@usewhisk/core`; the ENS helpers live in this package.
- * --------------------------------------------------------------------- */
-
 export { addressResolver, composeResolvers } from "@usewhisk/core";
 export {
   createDefaultResolver,
@@ -150,12 +113,6 @@ export type {
   EnsResolverChain,
   EnsResolverOptions,
 } from "./resolvers/index.js";
-
-/* --------------------------------------------------------------------- *
- *  Engine — types only. Most consumers reach the engine through
- *  `useWhisk()`; types are re-exported here so custom widgets can name
- *  the same shapes without importing from `@usewhisk/core`.
- * --------------------------------------------------------------------- */
 
 export type {
   CallReceipt,
@@ -179,10 +136,6 @@ export type {
   WhiskEngine,
 } from "@usewhisk/core";
 
-/* --------------------------------------------------------------------- *
- *  Refund correlation primitives
- * --------------------------------------------------------------------- */
-
 export {
   buildRefundMetadata,
   REFUND_OF_TX_KEY,
@@ -191,10 +144,6 @@ export {
 } from "@usewhisk/core";
 export type { RefundInput, RefundPlan } from "@usewhisk/core";
 
-/* --------------------------------------------------------------------- *
- *  Metadata correlation
- * --------------------------------------------------------------------- */
-
 export {
   METADATA_MAX_BYTES,
   METADATA_RESERVED_PREFIX,
@@ -202,10 +151,6 @@ export {
   validateMetadata,
 } from "@usewhisk/core";
 export type { WhiskMetadata } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Errors — typed hierarchy + helpers for runtime branching.
- * --------------------------------------------------------------------- */
 
 export {
   BridgeStepError,
@@ -231,10 +176,6 @@ export type {
   WhiskErrorCode,
   WhiskErrorOptions,
 } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Types — Chain, Token, Route, Step, Quote, Fee* etc.
- * --------------------------------------------------------------------- */
 
 export type {
   Chain,
@@ -267,12 +208,8 @@ export {
   planRoute,
 } from "@usewhisk/core";
 
-/* --------------------------------------------------------------------- *
- *  Fees — merchant fee primitives. Useful when surfacing the 90/10
- *  split in a custom UI; `WHISK_TREASURY_ADDRESS` is exported so the
- *  10% destination is auditable.
- * --------------------------------------------------------------------- */
-
+// The treasury address is exported so its share of a custom fee can be
+// audited.
 export {
   BPS_DENOMINATOR,
   buildCustomFeeEntries,
@@ -284,10 +221,6 @@ export {
   WHISK_TREASURY_BPS,
 } from "@usewhisk/core";
 export type { CustomFeeSplit } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Chain registry helpers — same lookups the engine uses internally.
- * --------------------------------------------------------------------- */
 
 export {
   CHAINS,
@@ -302,11 +235,6 @@ export {
   tryChainByEvmChainId,
 } from "@usewhisk/core";
 export type { AddressFormat, CctpChain } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Recovery — Iris polling, MessageTransmitter helpers, receipt view.
- *  Useful for advanced consumers building their own receipt surface.
- * --------------------------------------------------------------------- */
 
 export {
   buildReceiveMessageCall,
@@ -335,10 +263,6 @@ export type {
   ReceiptView,
   ReceiveMessageCall,
 } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Amount helpers
- * --------------------------------------------------------------------- */
 
 export {
   formatUsdcAmount,

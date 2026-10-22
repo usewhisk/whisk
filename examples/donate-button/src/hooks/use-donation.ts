@@ -9,14 +9,13 @@ export type DonationSelection =
 export type ConfirmedDonation = {
   amount?: string;
   txHash?: string;
-  /** Trees the donor's payment maps to. Null when custom mode (we don't know). */
+  /** Null for a custom amount, which maps to no fixed tree count. */
   trees: number | null;
 };
 
 /**
- * Donation flow state. The tier-vs-custom split matters: tiers feed the widget
- * a controlled `amount` (locks the field), custom mode omits it entirely so
- * the donor types whatever they like.
+ * A tier passes `amount` to the widget, which locks the field. Custom mode
+ * passes nothing so the donor can type any amount.
  */
 export function useDonation() {
   const [selection, setSelection] = useState<DonationSelection>({
@@ -46,10 +45,6 @@ export function useDonation() {
 
   const reset = useCallback(() => setConfirmed(null), []);
 
-  /**
-   * The widget receives `amount` (controlled, locks the input) when a tier is
-   * selected. In custom mode it receives nothing — the donor types their own.
-   */
   const widgetAmount =
     selection.kind === "tier" ? selection.tier.amount : undefined;
 

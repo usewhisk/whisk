@@ -96,7 +96,7 @@ export type ComputeMaxFeeInput = {
   amount: bigint;
   /** Selected tier (Fast or Standard). */
   tier: BurnFeeTier;
-  /** Forwarder tier; defaults to `"med"`. */
+  /** Forwarder fee level; defaults to `"med"`. */
   forwarderLevel?: keyof ForwarderFeeTier;
   /**
    * Whole basis points added to the forwarder fee (0 to 10000). Iris's
@@ -115,7 +115,7 @@ export type ComputeMaxFeeInput = {
 };
 
 export type ComputeMaxFeeResult = {
-  /** The protocol fee Iris quotes, before any buffer. */
+  /** The protocol fee, raised to `minBurnFee` if lower, before any buffer. */
   burnFee: bigint;
   forwarderFee: bigint;
   /** Total cap to pass as `maxFee` on `depositForBurnWithHook`. */
@@ -123,8 +123,6 @@ export type ComputeMaxFeeResult = {
 };
 
 /**
- * Compute `maxFee` for a CCTP V2 bridge.
- *
  *   maxFee = burnFee (+ buffer) + forwarderFee (+ buffer)
  *
  * The result is a cap; the actual deducted fee can be less.

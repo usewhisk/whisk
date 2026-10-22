@@ -22,7 +22,7 @@ export type UseRefundResult = {
   refundAsync: (input: UseRefundVariables) => Promise<RefundResult>;
   /** Latest engine result. Branch on `data.kind` for success vs failure. */
   data: RefundResult | null;
-  /** Set when `refundAsync` itself throws (missing adapter, network blowup). */
+  /** Set when the refund throws, such as with no wallet connected or a network failure. */
   error: Error | null;
   /** True while the refund is in flight. */
   isPending: boolean;
@@ -30,15 +30,7 @@ export type UseRefundResult = {
   reset: () => void;
 };
 
-/**
- * Refund-flavoured mutation hook. Pulls the merchant adapter from the
- * connected EVM wallet, validates the input via the engine, and
- * stamps the Whisk-internal correlation keys on the result.
- *
- * Mirrors wagmi's `useWriteContract` shape — `mutate` /
- * `mutateAsync` / `isPending` / `data` / `error` / `reset` — so the
- * ergonomics match what most integrators already know.
- */
+/** Refunds from the connected EVM wallet, which acts as the merchant. */
 export function useRefund(): UseRefundResult {
   const engine = useWhiskEngine();
   const adapter = useEvmAdapter();

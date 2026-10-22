@@ -21,7 +21,7 @@ import { useWhiskEngine } from "./useWhiskEngine.js";
 export type UseWhiskResult = {
   /** Engine constructed by `<WhiskProvider>`. */
   engine: WhiskEngine;
-  /** Live adapter — `null` until the user connects an EVM wallet. */
+  /** `null` until the user connects an EVM wallet. */
   adapter: EvmAdapter | null;
   /** Connected account address. */
   address: `0x${string}` | undefined;
@@ -42,23 +42,17 @@ export type UseWhiskResult = {
 
   /** True while a send is in flight. */
   isSending: boolean;
-  /** Latest engine result. `SendResult` is a tagged union — branch on `kind`. */
+  /** Latest engine result. Branch on `kind` for success or failure. */
   lastResult: SendResult | null;
-  /** Set when `send` itself throws (network blowup, adapter missing, etc.). */
+  /** Set when `send` throws, such as with no wallet connected or a network failure. */
   sendError: Error | null;
   /** Clear the latest result and any error. */
   reset: () => void;
 };
 
 /**
- * High-level entry point for custom widgets. Combines the engine, the
- * adapter, and a mutation-style send state in a single object — the
- * shape integrators reach for first when they don't need the full
- * `<WhiskSend>` UI but want the same wiring.
- *
- * For ergonomic refunds, prefer `useRefund` — it follows the
- * wagmi-style `mutate` / `mutateAsync` / `isPending` shape consumers
- * are already familiar with.
+ * The engine, the connected EVM wallet, and send state, for custom widgets
+ * that do not use `<WhiskSend>`. Refunds go through `useRefund`.
  */
 export function useWhisk(): UseWhiskResult {
   const engine = useWhiskEngine();

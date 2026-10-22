@@ -1,18 +1,9 @@
 /**
- * Custom merchant fee — on-chain encoding.
- *
- * An integrator-supplied {@link FeePolicy} pays a USDC fee on top of
- * the transferred amount. The total is split 90/10 between
- * `policy.recipient` (the merchant) and the Whisk treasury. The engine
- * encodes each share as its own ERC-20 `transfer` call and prepends
- * them to the source-chain call list — same wallet, same chain, same
- * token as the burn (bridges) or transfer (same-chain).
- *
- * The end user always pays the configured total; the split only
- * decides how that total is distributed.
- *
- * The `bps` form is reserved for the future Swap surface and is
- * ignored for v1.
+ * A {@link FeePolicy} charges the sender a USDC fee on top of the amount,
+ * split 90/10 between the merchant and the Whisk treasury. Each share is
+ * its own ERC-20 `transfer`, sent from the same wallet ahead of the burn or
+ * transfer. The split never changes what the sender pays. The policy's
+ * `bps` form is ignored here.
  */
 import { encodeFunctionData, isAddress as viemIsAddress } from "viem";
 import { usdcAbi, type EvmChain } from "@usewhisk/cctp";
@@ -23,23 +14,19 @@ import { splitCustomFee, WHISK_TREASURY_ADDRESS } from "../fees/treasury.js";
 import type { EvmCall } from "./adapter.js";
 
 export type CustomFee = {
-  /** Source-chain `transfer` calls in submission order: merchant first, treasury second. */
+  /** Merchant first, treasury second. */
   calls: EvmCall[];
-  /** USDC subunits paid to `policy.recipient`. */
+  /** USDC subunits. */
   merchantAmount: bigint;
-  /** USDC subunits paid to {@link WHISK_TREASURY_ADDRESS}. */
+  /** USDC subunits. */
   whiskAmount: bigint;
-  /** Total sender debit (merchantAmount + whiskAmount). */
   totalAmount: bigint;
-  /** Resolved merchant recipient address. */
   merchantRecipient: `0x${string}`;
 };
 
 /**
- * Build the on-chain merchant-fee transfers for a source chain.
- * Returns `null` when no policy is set or when the policy resolves to
- * zero. When the 10% share rounds to zero (micro-fee amounts), only
- * the merchant transfer is emitted.
+ * Returns `null` without a policy or when it resolves to zero. When the
+ * treasury share rounds to zero, only the merchant transfer is emitted.
  */
 export function buildCustomFee(
   policy: FeePolicy | undefined,

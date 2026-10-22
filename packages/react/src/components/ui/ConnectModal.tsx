@@ -20,9 +20,9 @@ import {
 export type ConnectModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Override the modal title. Defaults adjust per step. */
+  /** Defaults to a title for the current step. */
   title?: string;
-  /** Override the descriptive lede shown under the title. */
+  /** Shown under the title. */
   description?: ReactNode;
 };
 
@@ -31,16 +31,14 @@ type EcosystemKind = "evm" | "solana" | "stellar" | "starknet";
 type EcosystemRow = {
   kind: EcosystemKind;
   label: string;
-  /** Short hint shown under the row when the ecosystem isn't wired. */
+  /** Tag shown on the row when the ecosystem is not enabled. Defaults to "Coming soon". */
   comingSoonLabel?: string;
   gradient: string;
 };
 
 /**
- * Static ecosystem catalogue. Order matches the visual priority in the
- * picker. The `kind` strings map 1:1 to the `WalletAdapterFactory.kind`
- * discriminator, so an entry only enables when the merchant added the
- * matching factory to `config.wallets`.
+ * Listed in display order. Each `kind` matches a `WalletAdapterFactory.kind`,
+ * and a row is enabled only when that factory is in `config.wallets`.
  */
 const ECOSYSTEMS: ReadonlyArray<EcosystemRow> = [
   {
@@ -75,21 +73,9 @@ const ECOSYSTEMS_WITH_TRANSPORT: ReadonlySet<EcosystemKind> = new Set([
 type Step = "ecosystem" | "wallet";
 
 /**
- * Wallet selection modal — two-step flow.
- *
- *   1. **Ecosystem picker** — user picks EVM, Solana, Stellar, Starknet.
- *      An ecosystem is clickable when (a) the merchant added the matching
- *      factory to `config.wallets`, AND (b) Whisk has a transport for it.
- *      Everything else renders as "Coming v1.x" placeholders so the
- *      multi-chain story stays visible from day one.
- *
- *   2. **Wallet picker** — for EVM the wagmi connectors detected in the
- *      browser. For Solana the wallets advertised via Wallet Standard
- *      (Phantom, Solflare, Backpack, etc.).
- *
- * When an account is connected on either ecosystem the modal flips to a
- * connected view regardless of step — disconnect, see address + network,
- * done.
+ * Pick an ecosystem, then a wallet in it. Ecosystems missing from
+ * `config.wallets` are shown disabled. While any wallet is connected the
+ * modal shows the connected account and a disconnect button instead.
  */
 export function ConnectModal({
   open,
@@ -115,9 +101,7 @@ export function ConnectModal({
   const [starknetError, setStarknetError] = useState<string | null>(null);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
-  // Always reopen on the ecosystem step and clear stale state when the
-  // modal closes. wagmi's mutation error otherwise ghosts into the next
-  // session.
+  // Reset on close, or wagmi's last connect error shows up on the next open.
   useEffect(() => {
     if (!open) {
       setStep("ecosystem");
@@ -155,7 +139,7 @@ export function ConnectModal({
       await evmConnect.connectAsync({ connector });
       onOpenChange(false);
     } catch {
-      // Surface via `error` — leave the picker open so the user can retry.
+      // wagmi keeps the error for the picker to show; it stays open for a retry.
     } finally {
       setPendingId(null);
     }
@@ -166,10 +150,8 @@ export function ConnectModal({
     setPendingId(wallet.adapter.name);
     try {
       solana.select(wallet.adapter.name as WalletName);
-      // `select` is sync but `connect` only works after the next render
-      // cycle picks up the new selected wallet. The Wallet Standard
-      // adapter listens for the change and connects automatically when
-      // `autoConnect` is set; otherwise we kick it manually below.
+      // `connect` only works once a render has picked up the wallet that
+      // `select` chose.
       await new Promise((r) => setTimeout(r, 0));
       await wallet.adapter.connect();
       onOpenChange(false);
@@ -213,8 +195,7 @@ export function ConnectModal({
       return;
     }
     if (!entry.wallet) {
-      // Discovery-only entry — send the user to install. Prefer the
-      // Chrome store, then fall back to Firefox / Edge / mobile stores.
+      // Not installed: open an install page, Chrome's store first.
       const downloads = entry.install?.downloads as
         | Record<string, string | undefined>
         | undefined;

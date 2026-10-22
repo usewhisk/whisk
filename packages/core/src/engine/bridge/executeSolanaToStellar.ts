@@ -1,14 +1,8 @@
 /**
- * Solana → Stellar bridge executor.
- *
- * Flow:
- *   1. Solana source burns via `deposit_for_burn_with_hook`. The burn's
- *      `mintRecipient` AND `destinationCaller` MUST both be the Stellar
- *      `CctpForwarder` contract (decoded to 32 bytes). The actual user
- *      recipient strkey goes in hookData.
- *   2. Iris attests.
- *   3. The destination Stellar wallet signs `mint_and_forward` on
- *      `CctpForwarder`. Atomic mint + forward to the user.
+ * Solana to Stellar bridge. The burn's `mintRecipient` and
+ * `destinationCaller` must both be Stellar's `CctpForwarder`, with the
+ * recipient strkey in the hook data. The Stellar wallet then signs
+ * `mint_and_forward`, which mints and forwards to the recipient atomically.
  */
 import { attestationPolling } from "./polling.js";
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -41,7 +35,7 @@ export type ExecuteSolanaToStellarInput = {
   network: Network;
   source: SolanaChain;
   destination: StellarChain;
-  /** Recipient Stellar strkey (G/M/C). Encoded into hookData. */
+  /** G, M or C strkey, carried in the hook data. */
   recipientAddress: string;
   burnAmount: bigint;
   maxFee: bigint;
@@ -50,7 +44,7 @@ export type ExecuteSolanaToStellarInput = {
   tier: BurnFeeTier;
   forwarderLevel?: keyof ForwarderFeeTier;
   sourceAdapter: SolanaAdapter;
-  /** REQUIRED — signs mint_and_forward on Stellar. */
+  /** Signs `mint_and_forward` on Stellar. */
   destinationAdapter: StellarAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
@@ -75,7 +69,7 @@ export async function executeSolanaToStellar(
   }
 
   const steps: Step[] = ALL_STEPS.map((name) => ({ name, state: "pending" }));
-  steps[0] = { name: "approve", state: "noop" }; // Solana doesn't need approve
+  steps[0] = { name: "approve", state: "noop" };
   listeners?.onStep?.(steps[0]);
 
   const snapshot: BridgeRecoverySnapshot = {
@@ -105,8 +99,8 @@ export async function executeSolanaToStellar(
     );
   }
 
-  // Build Solana burn intent. mintRecipient + destinationCaller =
-  // Forwarder bytes32.
+  // The forwarder is both mintRecipient and destinationCaller; any other
+  // value loses the funds.
   const messageSentEventData = Keypair.generate();
   let owner: PublicKey;
   try {
@@ -274,7 +268,6 @@ export async function executeSolanaToStellar(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Mint on Stellar via Forwarder.
   let mintIntent: ReturnType<typeof buildStellarMintIntent>;
   try {
     mintIntent = buildStellarMintIntent({

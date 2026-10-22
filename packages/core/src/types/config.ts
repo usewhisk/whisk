@@ -24,23 +24,20 @@ export type WhiskConfig = {
   /**
    * Default correlation metadata merged into every send. Per-call
    * `SendParams.metadata` overrides on key conflict. See
-   * {@link WhiskMetadata} for size and value constraints.
-   *
-   * Stored client-side in localStorage alongside the recovery snapshot.
-   * Do not put PII, payment credentials, or anything sensitive here.
+   * {@link WhiskMetadata} for size and value constraints. Do not put PII,
+   * payment credentials, or anything sensitive here.
    */
   defaultMetadata?: WhiskMetadata;
 
   /**
-   * Override the default public RPC endpoints. Pass an array to install a
-   * viem `fallback` transport that re-ranks by latency.
+   * RPC endpoints to try, in order, before the chain's default public ones.
    */
   rpcUrls?: Partial<Record<Chain, string | string[]>>;
 
   /**
    * Use Circle's Forwarder Service to submit the destination mint on
-   * cross-chain bridges. Default `true`. Whisk encodes the canonical
-   * `cctp-forward` hookData (32-byte magic prefix) when this is enabled.
+   * cross-chain bridges. Default `true`. The burn then carries Circle's
+   * `cctp-forward` hookData (32-byte magic prefix).
    */
   useForwarder?: boolean;
 

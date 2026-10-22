@@ -2,8 +2,8 @@
  * Minimal Borsh encoders for CCTP V2's Solana program params.
  *
  * The handful of primitives we need (u32/u64 little-endian, fixed-32-byte
- * pubkey, length-prefixed `Vec<u8>`) are small enough to hand-roll —
- * no need to drag in a Borsh runtime.
+ * pubkey, length-prefixed `Vec<u8>`) are small enough to hand-roll
+ * without a Borsh runtime.
  */
 import { Buffer } from "node:buffer";
 
@@ -56,7 +56,7 @@ export function writePubkey(w: BorshWriter, bytes: Uint8Array): void {
   w.offset += 32;
 }
 
-/** Write a `Vec<u8>` — 4-byte LE length prefix + raw bytes. */
+/** `Vec<u8>`: 4-byte LE length prefix, then the raw bytes. */
 export function writeBytes(w: BorshWriter, bytes: Uint8Array): void {
   writeU32LE(w, bytes.length);
   ensure(w, bytes.length);

@@ -1,6 +1,3 @@
-/**
- * Fee math.
- */
 export {
   computeBurnFee,
   computeMaxFee,

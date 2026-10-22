@@ -1,9 +1,6 @@
 /**
- * Solana → Starknet bridge executor.
- *
- * Solana source burn (no hookData — no Iris forwarder). Recipient
- * Starknet felt is zero-extended into the 32-byte mintRecipient field.
- * Destination Starknet wallet signs `receive_message`.
+ * Solana to Starknet bridge. Circle does not forward to Starknet, so the
+ * burn carries no hook and the Starknet wallet signs `receive_message`.
  */
 import { attestationPolling } from "./polling.js";
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -79,7 +76,6 @@ export async function executeSolanaToStarknet(
     recipientAddress: input.recipientAddress,
   };
 
-  // Starknet recipient felt → 32-byte mintRecipient.
   const recipientHex = feltToBytes32Hex(input.recipientAddress as StarknetFelt);
   const mintRecipientBytes32 = hexToBytes(recipientHex);
 
@@ -198,7 +194,6 @@ export async function executeSolanaToStarknet(
   steps[1] = { name: "burn", state: "success", txHash: burnSignature };
   listeners?.onStep?.(steps[1]);
 
-  // Iris.
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);
   let message: IrisMessage | null;
@@ -249,7 +244,6 @@ export async function executeSolanaToStarknet(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Starknet receive.
   let receiveIntent;
   try {
     receiveIntent = buildStarknetReceiveIntent({

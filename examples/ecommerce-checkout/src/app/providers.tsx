@@ -4,10 +4,9 @@ import { useMemo } from "react";
 import { WhiskProvider, createWhiskConfig, evm } from "@usewhisk/react";
 
 /**
- * The merchant fixes a single chain (Base Sepolia here). The `chains`
- * array contains only that chain so the widget's pickers collapse to
- * a no-op — there's nothing to choose. In a real app you'd configure
- * whatever chain your back-office has settled on for receivables.
+ * <PaymentAside> pins both source and destination to Base Sepolia, so the
+ * customer never picks a chain. Use the chain your back office settles
+ * receivables on.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   const config = useMemo(

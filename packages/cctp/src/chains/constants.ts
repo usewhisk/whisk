@@ -16,8 +16,6 @@ import type {
   StellarStrkey,
 } from "./types.js";
 
-/* ─── EVM ─────────────────────────────────────────────────────────── */
-
 export const TOKEN_MESSENGER_V2_EVM_MAINNET: Address =
   "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d";
 
@@ -37,8 +35,6 @@ export const TOKEN_MESSENGER_WITH_FEES_EVM_MAINNET: Address =
 export const TOKEN_MESSENGER_WITH_FEES_EVM_TESTNET: Address =
   "0x8745D906D67C346E5eb1aEEED38Eb87F34DF0C0A";
 
-/* ─── Solana ──────────────────────────────────────────────────────── */
-
 /** `TokenMessengerMinterV2` program ID (same on mainnet-beta + devnet). */
 export const TOKEN_MESSENGER_MINTER_V2_SOLANA: SolanaPubkey =
   "CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe";
@@ -57,8 +53,6 @@ export const USDC_SPL_DEVNET: SolanaPubkey =
 
 /** Circle-assigned CCTP domain ID for Solana. */
 export const SOLANA_CCTP_DOMAIN = 5 as const;
-
-/* ─── Stellar ─────────────────────────────────────────────────────── */
 
 /**
  * Stellar's CCTP V2 contract IDs (Soroban contract strkeys). Each
@@ -86,7 +80,7 @@ export const USDC_ISSUER_STELLAR_MAINNET: StellarStrkey =
 export const USDC_ISSUER_STELLAR_TESTNET: StellarStrkey =
   "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
-/** Stellar network passphrases — required when signing Soroban transactions. */
+/** Required when signing Soroban transactions. */
 export const STELLAR_NETWORK_PASSPHRASE_MAINNET =
   "Public Global Stellar Network ; September 2015" as const;
 export const STELLAR_NETWORK_PASSPHRASE_TESTNET =
@@ -102,8 +96,6 @@ export const STELLAR_CCTP_DOMAIN = 27 as const;
  */
 export const STELLAR_USDC_DECIMALS = 7 as const;
 export const CCTP_USDC_DECIMALS = 6 as const;
-
-/* ─── Starknet ────────────────────────────────────────────────────── */
 
 export const TOKEN_MESSENGER_MINTER_V2_STARKNET_MAINNET: StarknetFelt =
   "0x07d421B9cA8aA32DF259965cDA8ACb93F7599F69209A41872AE84638B2A20F2a";
@@ -121,8 +113,8 @@ export const USDC_STARKNET_SEPOLIA: StarknetFelt =
   "0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343";
 
 /**
- * Starknet chain IDs — shortstring felts. `SN_MAIN` and `SN_SEPOLIA`
- * encoded as bytes-to-felt. Wallets compare against these when signing.
+ * Starknet chain IDs: `SN_MAIN` and `SN_SEPOLIA` as shortstring felts.
+ * Wallets compare against these when signing.
  */
 export const STARKNET_CHAIN_ID_MAINNET: StarknetFelt = "0x534e5f4d41494e"; // SN_MAIN
 export const STARKNET_CHAIN_ID_SEPOLIA: StarknetFelt = "0x534e5f5345504f4c4941"; // SN_SEPOLIA

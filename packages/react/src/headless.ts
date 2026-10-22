@@ -1,25 +1,10 @@
 /**
- * `@usewhisk/react/headless` — UI-free entry for advanced consumers.
- *
- * Exposes the provider, hooks, config builders, resolvers, and every
- * engine / type / utility export — minus the visual components and
- * their CSS. Useful for headless widgets, custom layouts,
- * server-rendered receipt pages, or non-DOM runtimes that just need
- * the wiring.
- *
- * For the full widget surface, import from `@usewhisk/react`.
+ * `@usewhisk/react/headless`: the provider, hooks, config builders and core
+ * exports, without the visual components or their CSS.
  */
-
-/* --------------------------------------------------------------------- *
- *  Provider
- * --------------------------------------------------------------------- */
 
 export { WhiskProvider } from "./provider/WhiskProvider.js";
 export type { WhiskProviderProps } from "./provider/WhiskProvider.js";
-
-/* --------------------------------------------------------------------- *
- *  Configuration
- * --------------------------------------------------------------------- */
 
 export { createWhiskConfig } from "./config/index.js";
 export { evm } from "./config/adapters/evm.js";
@@ -46,10 +31,6 @@ export type {
   WhiskClientConfig,
 } from "./config/index.js";
 
-/* --------------------------------------------------------------------- *
- *  Hooks
- * --------------------------------------------------------------------- */
-
 export {
   createWagmiEvmAdapter,
   useAdapterFor,
@@ -71,10 +52,6 @@ export type {
   UseWhiskResult,
 } from "./hooks/index.js";
 
-/* --------------------------------------------------------------------- *
- *  Resolvers
- * --------------------------------------------------------------------- */
-
 export { addressResolver, composeResolvers } from "@usewhisk/core";
 export {
   createDefaultResolver,
@@ -90,10 +67,6 @@ export type {
   EnsResolverChain,
   EnsResolverOptions,
 } from "./resolvers/index.js";
-
-/* --------------------------------------------------------------------- *
- *  Engine types
- * --------------------------------------------------------------------- */
 
 export type {
   CallReceipt,
@@ -117,10 +90,6 @@ export type {
   WhiskEngine,
 } from "@usewhisk/core";
 
-/* --------------------------------------------------------------------- *
- *  Refund correlation primitives
- * --------------------------------------------------------------------- */
-
 export {
   buildRefundMetadata,
   REFUND_OF_TX_KEY,
@@ -129,10 +98,6 @@ export {
 } from "@usewhisk/core";
 export type { RefundInput, RefundPlan } from "@usewhisk/core";
 
-/* --------------------------------------------------------------------- *
- *  Metadata correlation
- * --------------------------------------------------------------------- */
-
 export {
   METADATA_MAX_BYTES,
   METADATA_RESERVED_PREFIX,
@@ -140,10 +105,6 @@ export {
   validateMetadata,
 } from "@usewhisk/core";
 export type { WhiskMetadata } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Errors
- * --------------------------------------------------------------------- */
 
 export {
   BridgeStepError,
@@ -169,10 +130,6 @@ export type {
   WhiskErrorCode,
   WhiskErrorOptions,
 } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Types
- * --------------------------------------------------------------------- */
 
 export type {
   Chain,
@@ -205,10 +162,8 @@ export {
   planRoute,
 } from "@usewhisk/core";
 
-/* --------------------------------------------------------------------- *
- *  Fees
- * --------------------------------------------------------------------- */
-
+// The treasury address is exported so its share of a custom fee can be
+// audited.
 export {
   BPS_DENOMINATOR,
   buildCustomFeeEntries,
@@ -220,10 +175,6 @@ export {
   WHISK_TREASURY_BPS,
 } from "@usewhisk/core";
 export type { CustomFeeSplit } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Chain registry helpers
- * --------------------------------------------------------------------- */
 
 export {
   CHAINS,
@@ -238,10 +189,6 @@ export {
   tryChainByEvmChainId,
 } from "@usewhisk/core";
 export type { AddressFormat, CctpChain } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Recovery
- * --------------------------------------------------------------------- */
 
 export {
   buildReceiveMessageCall,
@@ -270,10 +217,6 @@ export type {
   ReceiptView,
   ReceiveMessageCall,
 } from "@usewhisk/core";
-
-/* --------------------------------------------------------------------- *
- *  Amount helpers
- * --------------------------------------------------------------------- */
 
 export {
   formatUsdcAmount,

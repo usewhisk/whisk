@@ -10,7 +10,7 @@
  * Account list verified against
  * `circlefin/solana-cctp-contracts/programs/v2`:
  *
- * MessageTransmitterV2 — ReceiveMessageContext (with #[event_cpi]):
+ * MessageTransmitterV2 ReceiveMessageContext (with #[event_cpi]):
  *   1.  payer                           (signer, writable)
  *   2.  caller                          (signer, ro)
  *   3.  authority_pda                   (ro)
@@ -21,7 +21,7 @@
  *   8.  event_authority (MT)            (ro)
  *   9.  program (MT)                    (ro)
  *
- * Remaining accounts — TokenMessengerMinterV2's
+ * Remaining accounts, from TokenMessengerMinterV2's
  * HandleReceiveMessageContext (with #[event_cpi]):
  *  10.  token_messenger                 (ro)
  *  11.  remote_token_messenger          (ro)
@@ -69,14 +69,11 @@ export type BuildSolanaReceiveIntentInput = {
   sourceDomain: number;
   /** Source-chain USDC token, 32-byte left-padded. */
   sourceTokenBytes32: Uint8Array;
-  /** Mint fee recipient — pulled from the on-chain TokenMessenger state. */
+  /** The `fee_recipient` ATA, read from the on-chain TokenMessenger state. */
   feeRecipientUsdcAta: PublicKey;
   /** End-recipient's USDC ATA on Solana. Must be pre-created. */
   recipientUsdcAta: PublicKey;
-  /**
-   * Pays + signs the receiveMessage tx. `caller` is the same signer
-   * unless the merchant runs a separate relayer setup.
-   */
+  /** Pays for and signs the receive. Also passed as `caller`. */
   payer: PublicKey;
 };
 

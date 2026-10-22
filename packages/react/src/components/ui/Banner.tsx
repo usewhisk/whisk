@@ -7,16 +7,15 @@ export type BannerVariant = "info" | "warning" | "error";
 
 export type BannerProps = HTMLAttributes<HTMLDivElement> & {
   variant?: BannerVariant;
-  /** Optional leading icon — rendered before the text. */
+  /** Rendered before the text. */
   icon?: ReactNode;
-  /** Optional trailing action — typically a retry / cancel button. */
+  /** Rendered after the text, such as a retry or cancel button. */
   action?: ReactNode;
 };
 
 /**
- * Status banner for receipts, results, and inline alerts. Themes via
- * `whisk-banner--{variant}` so the colour mode tracks the active
- * theme.
+ * Status banner for receipts, results, and inline alerts. Errors default to
+ * `role="alert"`, everything else to `role="status"`.
  */
 export function Banner({
   variant = "info",

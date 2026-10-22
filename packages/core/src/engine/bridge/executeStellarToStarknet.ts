@@ -1,9 +1,6 @@
 /**
- * Stellar → Starknet bridge executor.
- *
- * Stellar source: approve + deposit_for_burn (no hook — Starknet has
- * no on-chain Forwarder-style contract that picks up Stellar messages).
- * Destination Starknet wallet signs `receive_message`.
+ * Stellar to Starknet bridge. Circle does not forward to Starknet, so the
+ * burn carries no hook and the Starknet wallet signs `receive_message`.
  */
 import { attestationPolling } from "./polling.js";
 import {
@@ -37,7 +34,7 @@ export type ExecuteStellarToStarknetInput = {
   source: StellarChain;
   destination: StarknetChain;
   recipientAddress: string;
-  /** Amount in 6-decimal canonical USDC subunits. */
+  /** 6-decimal subunits. */
   burnAmount: bigint;
   maxFee: bigint;
   burnFee: bigint;
@@ -80,7 +77,6 @@ export async function executeStellarToStarknet(
     recipientAddress: input.recipientAddress,
   };
 
-  // mintRecipient = Starknet felt zero-extended to 32 bytes.
   const mintRecipientBytes32 = hexToBytes(
     feltToBytes32Hex(input.recipientAddress as StarknetFelt),
   );
@@ -110,7 +106,8 @@ export async function executeStellarToStarknet(
     );
   }
 
-  // Stellar SAC approve.
+  // The SAC requires `live_until_ledger >= current ledger`, so a static 0
+  // fails.
   let approveExpirationLedger: number;
   try {
     const latest = await input.sourceAdapter.getLatestLedger();

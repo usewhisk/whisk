@@ -24,7 +24,7 @@
  * on the user's Stellar balance.
  *
  * `amount` and `max_fee` here are expressed in Stellar's 7-decimal
- * subunits — multiply 6-decimal CCTP amounts by 10 before passing in.
+ * subunits: multiply 6-decimal CCTP amounts by 10 before passing in.
  */
 import {
   Address,
@@ -43,26 +43,19 @@ export type StellarInvocation = {
   contractId: string;
   functionName: string;
   args: xdr.ScVal[];
-  /**
-   * Pre-built XDR operation — handed to the adapter to build the
-   * Soroban transaction. `Operation.invokeContractFunction` accepts the
-   * (contract, function, args) tuple directly.
-   */
+  /** Pre-built XDR operation the adapter wraps in a Soroban transaction. */
   operation: xdr.Operation;
 };
 
 export type BuildStellarBurnIntentInput = {
   source: StellarChain;
-  /** Destination CCTP domain. */
   destinationDomain: number;
   /**
    * `mintRecipient` 32-byte payload as encoded into the CCTP message.
-   * For Stellar destinations on the same domain (impossible — different
-   * chains) this would be a Stellar contract; for any other destination,
-   * the caller is responsible for encoding correctly:
+   * The caller is responsible for encoding it correctly:
    *   - EVM       20-byte address left-padded to 32 bytes
    *   - Solana    recipient USDC ATA pubkey (32 bytes raw)
-   *   - Stellar   CctpForwarder contract decoded to 32 bytes
+   *   - Starknet  felt zero-padded to 32 bytes
    */
   mintRecipientBytes32: Uint8Array;
   /** Amount in 7-decimal Stellar USDC subunits. */
@@ -143,18 +136,18 @@ export function buildStellarBurnIntent(
   const usdcSac = input.source.usdc;
 
   const args: xdr.ScVal[] = [
-    new Address(input.caller).toScVal(), // caller: Address
-    nativeToScVal(input.amount, { type: "i128" }), // amount: i128
-    nativeToScVal(input.destinationDomain, { type: "u32" }), // destination_domain
+    new Address(input.caller).toScVal(),
+    nativeToScVal(input.amount, { type: "i128" }),
+    nativeToScVal(input.destinationDomain, { type: "u32" }),
     nativeToScVal(Buffer.from(input.mintRecipientBytes32), {
       type: "bytes",
     }),
-    new Address(usdcSac).toScVal(), // burn_token: Address
+    new Address(usdcSac).toScVal(),
     nativeToScVal(Buffer.from(input.destinationCallerBytes32), {
       type: "bytes",
     }),
-    nativeToScVal(input.maxFee, { type: "i128" }), // max_fee: i128
-    nativeToScVal(input.minFinalityThreshold, { type: "u32" }), // min_finality_threshold
+    nativeToScVal(input.maxFee, { type: "i128" }),
+    nativeToScVal(input.minFinalityThreshold, { type: "u32" }),
   ];
 
   if (withHook) {
@@ -179,11 +172,7 @@ export function buildStellarBurnIntent(
   };
 }
 
-/**
- * Helper — decode a contract-strkey directly into the 32-byte payload
- * required for `mintRecipientBytes32` / `destinationCallerBytes32`
- * when the destination is Stellar (both should be the CctpForwarder).
- */
+/** The 32-byte payload of a strkey, as CCTP message fields carry it. */
 export function strkeyTo32Bytes(strkey: string): Uint8Array {
   return decodeStrkeyToBytes32(strkey);
 }

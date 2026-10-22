@@ -18,9 +18,8 @@ const DEFAULT_LABELS: Record<StepName, string> = {
 };
 
 /**
- * Vertical step rail that mirrors a `Step[]` from the engine or from
- * `deriveReceiptView`. Each step renders a state-coloured dot plus a
- * label; the first `pending` step is marked active (animated pulse).
+ * Renders a `Step[]` from the engine or from `deriveReceiptView`. The first
+ * `pending` step is the active one.
  */
 export function StepRail({ steps, labels }: StepRailProps) {
   const activeIndex = steps.findIndex((s) => s.state === "pending");

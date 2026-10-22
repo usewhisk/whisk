@@ -19,9 +19,9 @@ import { arc, arcTestnet } from "viem/chains";
 import type { Chain } from "@usewhisk/core";
 import type { EvmAdapterFactory } from "../types.js";
 
-// Chain IDs MUST match App Kit's table — drift breaks `useSwitchChain` and
-// wallet-side network detection. For chains where viem's built-in id disagrees
-// (e.g. Sonic Testnet) or has no entry, `defineChain` inline.
+// Chain ids must match App Kit's table, or `useSwitchChain` and the wallet's
+// network detection break. Chains that viem lacks, or where its id differs
+// (Sonic Testnet), are defined here.
 
 const CODEX_MAINNET = defineChain({
   id: 81_224,
@@ -280,7 +280,6 @@ const XDC_APOTHEM = defineChain({
 });
 
 const VIEM_CHAIN_BY_WHISK: Partial<Record<Chain, ViemChain>> = {
-  // Mainnets
   Arbitrum: arbitrum,
   Arc: arc,
   Avalanche: avalanche,
@@ -299,7 +298,6 @@ const VIEM_CHAIN_BY_WHISK: Partial<Record<Chain, ViemChain>> = {
   Unichain: UNICHAIN_MAINNET,
   World_Chain: WORLD_CHAIN_MAINNET,
   XDC: XDC_MAINNET,
-  // Testnets
   Arbitrum_Sepolia: arbitrumSepolia,
   Arc_Testnet: arcTestnet,
   Avalanche_Fuji: avalancheFuji,
@@ -327,7 +325,7 @@ export function viemChainForWhisk(chain: Chain): ViemChain | undefined {
 
 export type EvmFactoryOptions = {
   chains?: Chain[];
-  /** WalletConnect Cloud project ID — free at https://cloud.walletconnect.com. */
+  /** WalletConnect Cloud project ID, free at https://cloud.walletconnect.com. WalletConnect is left out without one. */
   projectId?: string;
   /** Pass an array for a viem `fallback` transport with latency ranking. */
   rpcUrls?: Partial<Record<Chain, string | string[]>>;

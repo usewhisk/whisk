@@ -173,7 +173,7 @@ describe("verifyWebhook", () => {
 
   it("rejects a header timestamp that doesn't match the envelope timestamp", async () => {
     const { out } = await fresh({ x: 1 });
-    // Manually substitute a different header timestamp — closes a forwarder-swap attack.
+    // The header timestamp must match the one inside the signed envelope.
     const headers = {
       [WHISK_SIGNATURE_HEADER]: out.headers[WHISK_SIGNATURE_HEADER]!,
       [WHISK_TIMESTAMP_HEADER]: String(NOW + 1),

@@ -1,6 +1,3 @@
-/**
- * Iris API response shapes.
- */
 import type { CctpDomain } from "../chains/types.js";
 
 /** Fast Transfer attests after a block or two, before hard finality. */
@@ -33,9 +30,6 @@ export type BurnFeeTier = {
   forwardFee?: ForwarderFeeTier;
 };
 
-/**
- * Iris attestation lifecycle status.
- */
 /** Iris never reports a failed attestation; a slow one stays pending. */
 export type IrisAttestationStatus = "pending_confirmations" | "complete";
 
@@ -49,10 +43,10 @@ export type IrisDelayReason =
  * Circle Orbit forwarder lifecycle status. Present only when the burn
  * was triggered with the forwarder hookData.
  *
- * - `PENDING` — relayer is processing.
- * - `CONFIRMED` — relayer submitted the mint, waiting on finality.
- * - `COMPLETE` — mint finalized.
- * - `FAILED` — relayer rejected; fall back to manual mint.
+ * - `PENDING`: relayer is processing.
+ * - `CONFIRMED`: relayer submitted the mint, waiting on finality.
+ * - `COMPLETE`: mint finalized.
+ * - `FAILED`: relayer rejected; fall back to manual mint.
  */
 export type ForwardState = "PENDING" | "CONFIRMED" | "COMPLETE" | "FAILED";
 

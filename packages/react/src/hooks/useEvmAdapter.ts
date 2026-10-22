@@ -12,22 +12,9 @@ import {
 import { toWhiskError, type EvmAdapter } from "@usewhisk/core";
 
 /**
- * Build a Whisk `EvmAdapter` from the surrounding wagmi context.
- *
- * Returns `null` until the user is connected. Once an account is
- * present, the adapter exposes the contract the engine needs:
- *
- *   - `address`        live wagmi account
- *   - `getChainId`     live wagmi chainId
- *   - `switchChain`    wagmi's `switchChain` action
- *   - `sendCalls`      sequential `sendTransaction` per call, reporting
- *                      each hash at once and awaiting its receipt before
- *                      submitting the next
- *   - `waitForReceipt` wagmi's `waitForTransactionReceipt` action
- *
- * Errors from the wallet (rejection, network drift, on-chain revert)
- * are converted to typed `WhiskError`s via `toWhiskError` so the engine
- * surfaces them with stable categories.
+ * The connected wagmi account as an `EvmAdapter`, or `null` when none is
+ * connected. Wallet errors, including rejections and reverts, are thrown as
+ * `WhiskError`s.
  */
 export function useEvmAdapter(): EvmAdapter | null {
   const { address, isConnected } = useAccount();

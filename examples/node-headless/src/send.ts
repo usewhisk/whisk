@@ -1,9 +1,6 @@
 /**
- * Simplest possible headless bridge.
- *
- * Reads PRIVATE_KEY, builds a viem-backed EvmAdapter, quotes a
- * Base Sepolia → Ethereum Sepolia bridge, signs and submits, prints
- * the result.
+ * Bridges USDC from Arc Testnet to Base Sepolia with a private key.
+ * AMOUNT defaults to 1.00.
  *
  * Usage:
  *   PRIVATE_KEY=0x... TO=0xrecipient pnpm send

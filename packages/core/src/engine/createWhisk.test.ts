@@ -1,7 +1,3 @@
-/**
- * Engine smoke tests — exercise `createWhisk` end-to-end on a same-chain
- * Send and a forwarder-driven Bridge.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Keypair } from "@solana/web3.js";
 import { Keypair as StellarKeypair, scValToNative } from "@stellar/stellar-sdk";

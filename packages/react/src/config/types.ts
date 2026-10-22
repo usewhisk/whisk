@@ -15,7 +15,7 @@ export type WalletAdapterFactory =
 
 export type EvmAdapterFactory = {
   kind: "evm";
-  /** Opaque wagmi `Config` — passed to `WagmiProvider`. */
+  /** Opaque wagmi `Config`, passed to `WagmiProvider`. */
   config: unknown;
 };
 
@@ -26,13 +26,13 @@ export type SolanaAdapterFactory = {
 
 export type StellarAdapterFactory = {
   kind: "stellar";
-  /** {@link StellarConfig} — opaque to the type system so the kit dep is lazy. */
+  /** A `StellarConfig`, typed `unknown` so this file does not import the wallet kit. */
   config: unknown;
 };
 
 export type StarknetAdapterFactory = {
   kind: "starknet";
-  /** {@link StarknetConfig} — opaque so the wallet SDK stays lazy. */
+  /** A `StarknetConfig`, typed `unknown` so this file does not import the wallet SDK. */
   config: unknown;
 };
 

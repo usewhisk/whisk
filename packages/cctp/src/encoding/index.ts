@@ -1,6 +1,3 @@
-/**
- * Encoding helpers.
- */
 export {
   InvalidAddressError,
   InvalidBytes32Error,

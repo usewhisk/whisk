@@ -1,22 +1,9 @@
 /**
- * EVM → Stellar bridge executor.
- *
- * Flow:
- *   1. EVM source burns via `depositForBurnWithHook`. CRITICAL: both
- *      `mintRecipient` AND `destinationCaller` MUST be the Stellar
- *      `CctpForwarder` contract — never the user's wallet, or funds are
- *      permanently lost.
- *   2. Iris attests the burn.
- *   3. The recipient's Stellar wallet signs `mint_and_forward(message,
- *      attestation)` on `CctpForwarder`. The Forwarder atomically:
- *        - validates the message
- *        - reads the recipient strkey from hookData
- *        - calls `receive_message` on MessageTransmitter (mints USDC to
- *          itself)
- *        - transfers minted USDC to the recipient
- *
- * Circle does NOT operate a Stellar relayer, so the destinationAdapter
- * is REQUIRED — there's no "auto-forwarder" fallback.
+ * EVM to Stellar bridge. The burn's `mintRecipient` and `destinationCaller`
+ * must both be Stellar's `CctpForwarder` contract, never the user's wallet,
+ * or the funds are lost for good. Once Iris attests, the Stellar wallet signs
+ * `mint_and_forward`, which mints to the forwarder and passes the USDC on to
+ * the recipient named in the hook data. Circle runs no Stellar relayer.
  */
 import { attestationPolling } from "./polling.js";
 import {
@@ -48,7 +35,7 @@ export type ExecuteEvmToStellarInput = {
   network: Network;
   source: EvmChain;
   destination: StellarChain;
-  /** Recipient strkey (G…, M…, or C…) — encoded into hookData. */
+  /** G, M or C strkey, carried in the hook data. */
   recipientAddress: string;
   burnAmount: bigint;
   maxFee: bigint;
@@ -57,7 +44,7 @@ export type ExecuteEvmToStellarInput = {
   tier: BurnFeeTier;
   customFeeCalls?: EvmCall[];
   sourceAdapter: EvmAdapter;
-  /** REQUIRED — signs `mint_and_forward` on Stellar. */
+  /** Signs `mint_and_forward` on Stellar. */
   destinationAdapter: StellarAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
@@ -92,15 +79,15 @@ export async function executeEvmToStellar(
     recipientAddress: input.recipientAddress,
   };
 
-  // The Stellar Forwarder is both the on-chain mintRecipient AND
-  // destinationCaller. Any other value causes permanent loss.
+  // The forwarder must be both mintRecipient and destinationCaller. Any
+  // other value loses the funds.
   const forwarderBytes32 = decodeStrkeyToBytes32(
     input.destination.cctpForwarder,
   );
   const forwarderHex = contractStrkeyToBytes32Hex(
     input.destination.cctpForwarder,
   );
-  // hookData carries the actual recipient (strkey encoded as UTF-8).
+  // The recipient strkey, as UTF-8.
   let hookDataHex: `0x${string}`;
   try {
     hookDataHex = buildStellarForwarderHookData(input.recipientAddress);
@@ -114,8 +101,6 @@ export async function executeEvmToStellar(
     );
   }
 
-  // Build the EVM burn — uses depositForBurnWithHook so the Forwarder
-  // can read the recipient out of hookData.
   let burnCalls: EvmCall[];
   try {
     const intent = buildBurnIntent({
@@ -125,10 +110,9 @@ export async function executeEvmToStellar(
       mintRecipient: forwarderHex,
       destinationCaller: forwarderHex,
       fee: { tier: input.tier, maxFee: input.maxFee },
-      // withForwarder=false avoids adding an Iris-side forwarder fee
-      // (Stellar isn't on Iris's Forwarding Service). customHookData
-      // still routes the call through depositForBurnWithHook so the
-      // Stellar CctpForwarder receives the recipient bytes.
+      // Stellar isn't on Circle's Forwarding Service, so no forwarding fee.
+      // The custom hook data still sends the burn through
+      // depositForBurnWithHook so the forwarder gets the recipient.
       withForwarder: false,
       customHookData: hookDataHex,
     });
@@ -356,7 +340,6 @@ export async function executeEvmToStellar(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Build the Stellar Forwarder invocation.
   const messageBytes = hexToBytes(message.message);
   const attestationBytes = hexToBytes(message.attestation);
 
@@ -464,9 +447,7 @@ export async function executeEvmToStellar(
   };
   listeners?.onStep?.(steps[3]);
 
-  // Reference forwarderBytes32 to avoid unused-import; the value is
-  // intentionally derived even when only the hex form is needed for the
-  // burn (useful for adapter implementers and future tests).
+  // Only the hex form goes into the burn.
   void forwarderBytes32;
 
   return {

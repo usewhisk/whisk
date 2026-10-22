@@ -17,7 +17,7 @@ const DECIMAL_FACTOR =
 /**
  * Convert from Stellar's 7-decimal subunit amount to CCTP's 6-decimal
  * canonical amount. Drops the 7th decimal (rounds toward zero). The
- * "dust" stays on Stellar — it's not lost in the bridge.
+ * dust stays on Stellar; it's not lost in the bridge.
  *
  * @returns 6-decimal subunits (canonical amount for the CCTP message)
  */
@@ -32,7 +32,7 @@ export function stellarSubunitsToCanonical(stellarSubunits: bigint): bigint {
 
 /**
  * Convert from CCTP's 6-decimal canonical amount to Stellar's 7-decimal
- * subunit amount. Scales by 10 — the inbound mint inflates precision.
+ * subunit amount. Scales by 10, as the inbound mint does.
  *
  * @returns 7-decimal subunits (the on-chain amount minted on Stellar)
  */
@@ -46,9 +46,8 @@ export function canonicalToStellarSubunits(canonicalSubunits: bigint): bigint {
 }
 
 /**
- * "Dust" — the fractional 7th decimal that gets dropped on a Stellar →
- * other-chain burn. Useful for UI to display "you'll keep X USDC on
- * Stellar" hints.
+ * The fractional 7th decimal that a burn from Stellar drops and leaves
+ * in the sender's account.
  */
 export function stellarBurnDust(stellarSubunits: bigint): bigint {
   return stellarSubunits % DECIMAL_FACTOR;

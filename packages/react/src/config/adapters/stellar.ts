@@ -1,27 +1,20 @@
-/**
- * Stellar adapter factory.
- *
- * Wraps `@creit.tech/stellar-wallets-kit` for browser wallets (Freighter,
- * Albedo, xBull, Lobstr, Hana, Rabet, …). The factory holds the config
- * the `WhiskProvider` needs to mount the kit once; per-wallet selection
- * happens later via the `ConnectModal`.
- */
+/** Stellar wallets come from `@creit.tech/stellar-wallets-kit`. */
 import type { StellarAdapterFactory } from "../types.js";
 
 export type StellarNetwork = "public" | "testnet";
 
 export type StellarConfig = {
   network: StellarNetwork;
-  /** Stellar network passphrase — derived from `network` if unset. */
+  /** Derived from `network` when not given. */
   networkPassphrase: string;
-  /** Soroban RPC URL — defaults to the network's public endpoint. */
+  /** Soroban RPC URL. Defaults to the network's public endpoint. */
   rpcUrl: string;
-  /** When `true`, the kit reconnects to the previously-selected wallet. */
+  /** Reserved. `WhiskProvider` does not read it. */
   autoConnect: boolean;
 };
 
 export type StellarFactoryOptions = {
-  /** Defaults to `testnet` for previewing; flip to `public` in production. */
+  /** Defaults to `testnet`. */
   network?: StellarNetwork;
   /** Override the Stellar RPC. Defaults to the network's public endpoint. */
   rpcUrl?: string;

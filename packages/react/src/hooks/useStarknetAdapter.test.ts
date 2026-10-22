@@ -9,7 +9,7 @@ const wallet = {} as StarknetWindowObject;
 
 type Receipt = Record<string, unknown> | "missing";
 
-// A node on Starknet RPC 0.10.3, as the public endpoints serve today. It
+// A node on Starknet RPC 0.10.3, the version the public endpoints serve. It
 // answers only at `url` and replays `receipts` in order, then the last one.
 function node(url: string, receipts: Receipt[]) {
   const urls: string[] = [];

@@ -1,16 +1,14 @@
 /**
  * Error hierarchy for `@usewhisk/cctp`.
  *
- * Every public function throws a `CctpError` subclass — never bare
- * `Error`. Each subclass has a stable `code` callers can switch on,
- * plus a machine-readable `name`. Human-readable detail goes in
- * `message`.
+ * Each subclass has a stable `code` callers can switch on, plus a
+ * machine-readable `name`. Human-readable detail goes in `message`.
  *
  * Layers:
- *   - `InvalidInputError`  — caller passed bad data
- *   - `IrisError`          — HTTP / parse failures from Iris
- *   - `ProtocolError`      — CCTP-level invariant violated
- *   - `UnsupportedError`   — feature not in v1
+ *   - `InvalidInputError`: caller passed bad data
+ *   - `IrisError`: HTTP / parse failures from Iris
+ *   - `ProtocolError`: CCTP-level invariant violated
+ *   - `UnsupportedError`: the chain or ecosystem can't serve the call
  */
 
 export type CctpErrorCode =
@@ -101,7 +99,7 @@ export class IrisRateLimitedError extends IrisError {
   }
 }
 
-/** Network failure or fetch aborted. */
+/** Network failure or per-request timeout, after retries. */
 export class IrisNetworkError extends IrisError {
   constructor(message: string, cause?: unknown) {
     super("iris_network", message, cause);
@@ -117,7 +115,7 @@ export class IrisParseError extends IrisError {
   }
 }
 
-/** Caller's AbortSignal fired or per-request timeout elapsed. */
+/** The caller's AbortSignal fired. */
 export class IrisAbortedError extends IrisError {
   constructor(message: string) {
     super("iris_aborted", message);
@@ -133,7 +131,7 @@ export class ProtocolError extends CctpError {
   }
 }
 
-/** Feature isn't in v1. */
+/** The chain or ecosystem can't serve this call. */
 export class UnsupportedError extends CctpError {
   constructor(code: CctpErrorCode, message: string) {
     super(code, message);
@@ -141,11 +139,6 @@ export class UnsupportedError extends CctpError {
   }
 }
 
-/**
- * Narrow `unknown` from a `catch` into a `CctpError`. Use only when
- * wrapping into a typed error makes sense for the caller — most code
- * should let the original error propagate.
- */
 export function isCctpError(value: unknown): value is CctpError {
   return value instanceof CctpError;
 }

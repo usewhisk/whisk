@@ -50,9 +50,9 @@ export type WhiskSendProps = {
    * single-element array to hide the other tab entirely.
    */
   tabs?: ReadonlyArray<"send" | "bridge">;
-  /** Override the rendered title. */
+  /** Defaults to `"Send USDC"`. */
   title?: string;
-  /** Optional copy shown under the title. */
+  /** Shown under the title. */
   description?: ReactNode;
   /**
    * Seed the amount field. The user can still edit it. Use `amount`
@@ -86,16 +86,9 @@ function ecosystemFor(chain: Chain): ChainKind {
 }
 
 /**
- * Whisk's drop-in USDC widget. Two tabs:
- *
- *   Send    — same-chain USDC transfer
- *   Bridge  — CCTP V2 Fast Transfer (cross-chain)
- *
- * Both share recipient + amount inputs. Bridge adds a destination
- * picker. The widget tracks both an EVM adapter (via wagmi) and a
- * Solana adapter (via Wallet Standard) and uses whichever matches the
- * source chain's ecosystem. Cross-ecosystem bridges error cleanly
- * today and land in S5.
+ * Drop-in USDC widget. The Send tab moves USDC on one chain; the Bridge tab
+ * moves it across chains with CCTP. The source chain's ecosystem decides
+ * which connected wallet pays.
  */
 export function WhiskSend({
   tabs = ["send", "bridge"],
@@ -130,7 +123,7 @@ export function WhiskSend({
   );
   const [tab, setTab] = useState<TabKind>(availableTabs[0] ?? "send");
 
-  // Pick defaults from the prop → config → first chain.
+  // The prop wins, then the config, then the first chain.
   const firstChain = config.chains[0];
   const [sourceChainState, setSourceChain] = useState<Chain>(
     defaultSourceChain ??
@@ -154,8 +147,7 @@ export function WhiskSend({
   const [amountState, setAmount] = useState(defaultAmount ?? "");
   const amount = controlledAmount ?? amountState;
 
-  // Controlled inputs shouldn't accept user edits — they'd fail-silent.
-  // Wrap the setters so calls become no-ops when the prop is set.
+  // A locked field ignores edits.
   const onSourceChange = useCallback(
     (v: Chain) => {
       if (controlledSourceChain === undefined) setSourceChain(v);
@@ -204,7 +196,6 @@ export function WhiskSend({
     [sourceChain],
   );
 
-  // Pick the source adapter that matches the source chain's ecosystem.
   const adapter: WhiskAdapter | null =
     sourceEcosystem === "solana"
       ? solanaAdapter
@@ -214,10 +205,8 @@ export function WhiskSend({
           ? starknetAdapter
           : evmAdapter;
 
-  // For cross-ecosystem bridges, the engine also needs a destination
-  // adapter for the manual mint (EVM→Solana, EVM→Stellar, Solana→Stellar,
-  // Stellar→EVM, Stellar→Solana). EVM→EVM and Solana→EVM go through
-  // Iris's Forwarder and don't need one.
+  // A bridge between ecosystems may need the destination wallet to mint.
+  // Routes that go through Iris's Forwarder do not use it.
   const destinationEcosystem = useMemo(
     () => ecosystemFor(destinationForTab),
     [destinationForTab],
@@ -245,8 +234,7 @@ export function WhiskSend({
     );
   }, [config.chains, sourceChain]);
 
-  // If the user flips source between ecosystems, the destination may
-  // no longer be valid. Snap to the first valid candidate.
+  // A new source chain can rule out the current destination.
   useEffect(() => {
     if (
       destinationCandidates.length > 0 &&
@@ -256,9 +244,7 @@ export function WhiskSend({
     }
   }, [destinationCandidates, destinationChain]);
 
-  // Resolve the recipient input — addresses pass through verbatim, ENS
-  // names hit the resolver. Debounced via a small delay so we don't
-  // hammer the RPC on every keystroke.
+  // Debounced so typing an ENS name does not hit the RPC on every key.
   useEffect(() => {
     setResolved(null);
     setRecipientError(null);
@@ -350,8 +336,7 @@ export function WhiskSend({
     setFeeRise(null);
   }, [quoteKey]);
 
-  // Quote the transfer whenever inputs change and we have a resolved
-  // recipient. Same-chain quotes are free; bridge quotes hit Iris.
+  // Same-chain quotes are free; bridge quotes hit Iris.
   useEffect(() => {
     setQuoteError(null);
     if (!resolved || !amount.trim() || !adapter) return;
@@ -402,8 +387,7 @@ export function WhiskSend({
     return () => clearTimeout(id);
   }, [quote, submitting]);
 
-  // Reset the result panel when the user edits any input after a
-  // success / failure — they're starting a new transfer.
+  // Any edit after a result starts a new transfer.
   useEffect(() => {
     setResult(null);
     setSendError(null);

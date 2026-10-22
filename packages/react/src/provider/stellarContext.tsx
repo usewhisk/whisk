@@ -25,7 +25,7 @@ import {
 import type { StellarConfig } from "../config/adapters/stellar.js";
 
 export type StellarWalletState = {
-  /** Connected wallet's G-address. `null` until the user selects + connects. */
+  /** Connected wallet's G-address. `null` until the user connects one. */
   address: string | null;
   /** ID of the currently selected wallet (e.g. `"freighter"`). */
   selectedWalletId: string | null;
@@ -34,7 +34,7 @@ export type StellarWalletState = {
 };
 
 export type StellarWalletContextValue = StellarWalletState & {
-  /** Underlying kit — exposed so the adapter can call `signTransaction`. */
+  /** Exposed so the adapter can call `signTransaction`. */
   kit: StellarWalletsKit;
   /** Effective Stellar config (network passphrase, RPC). */
   config: StellarConfig;
@@ -54,15 +54,8 @@ export type StellarWalletProviderProps = {
 };
 
 /**
- * Stellar wallet provider — instantiates a `StellarWalletsKit` once for
- * the lifetime of the `WhiskProvider`, exposes connection state, and
- * makes wallet picking + signing available to hooks/components below.
- *
- * The kit isn't a React context provider on its own (it's a plain
- * class), so we hold its state in React and surface it through this
- * lightweight wrapper. Modern browser wallets (Freighter, Albedo,
- * xBull, Lobstr, Hana, Rabet, Hot) are registered up front; only those
- * actually installed will appear as available in the picker.
+ * Holds one `StellarWalletsKit` for the life of the provider. The kit is a
+ * plain class with no React state, so connection state lives here.
  */
 export function StellarWalletProvider({
   config,
@@ -94,8 +87,7 @@ export function StellarWalletProvider({
     supportedWallets: [],
   });
 
-  // Populate the supported-wallets list once on mount. Network state is
-  // stable so a single fetch is sufficient.
+  // The network cannot change after mount, so one fetch is enough.
   useEffect(() => {
     let cancelled = false;
     kit
@@ -106,8 +98,7 @@ export function StellarWalletProvider({
         }
       })
       .catch(() => {
-        // Soft-fail — the modal will show an empty list and the user
-        // can retry by reopening.
+        // The modal shows an empty list instead.
       });
     return () => {
       cancelled = true;
@@ -124,12 +115,11 @@ export function StellarWalletProvider({
   );
 
   const disconnect = useCallback(async () => {
-    // Modules with a real disconnect surface should be cleared (e.g.
-    // WalletConnect-style sessions). Most extensions are stateless.
+    // Only session-based modules such as WalletConnect have a disconnect.
     try {
       await (kit as { disconnect?: () => Promise<void> }).disconnect?.();
     } catch {
-      /* ignore */
+      /* the address is cleared below either way */
     }
     setState((prev) => ({ ...prev, address: null, selectedWalletId: null }));
   }, [kit]);
@@ -152,11 +142,7 @@ export function StellarWalletProvider({
   );
 }
 
-/**
- * Read the Stellar wallet context. Returns `null` when `WhiskProvider`
- * wasn't given a `stellar()` factory — useful for ConnectModal to hide
- * the Stellar branch entirely in EVM-only builds.
- */
+/** `null` when `WhiskProvider` was not given a `stellar()` factory. */
 export function useStellarWallet(): StellarWalletContextValue | null {
   return useContext(StellarWalletContext);
 }

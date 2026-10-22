@@ -8,9 +8,9 @@ export type Product = {
   caption: string;
   priceUsdc: number;
   variants: Variant[];
-  /** Product photo. Unsplash CDN — stable URLs, free commercial license. */
+  /** Unsplash CDN URL: stable and free for commercial use. */
   image: string;
-  /** Solid fallback while the image loads, picked to match the photograph. */
+  /** Shown while the image loads; matched to the photo. */
   fallbackColor: string;
   category: "Apparel" | "Home" | "Stationery" | "Accessories";
 };

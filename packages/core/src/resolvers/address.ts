@@ -1,7 +1,7 @@
 import type { Resolver } from "../types/resolver.js";
 import { addressFormat, looksLikeAddress } from "../chains/address.js";
 
-/** Direct raw-address resolver — always first in the default chain. */
+/** Raw-address resolver, used when the config sets no resolver. */
 export const addressResolver: Resolver = {
   name: "address",
   matches: (input) => looksLikeAddress(input.trim()),

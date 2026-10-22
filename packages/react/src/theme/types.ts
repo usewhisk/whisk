@@ -1,15 +1,3 @@
-/**
- * Theme types for the Whisk widget.
- *
- * A {@link WhiskTheme} is a flat record describing the widget's appearance.
- * Each field maps to one or more `--whisk-*` CSS variables on the root
- * `[data-whisk]` element. Optional fields fall back to sensible derivations
- * (e.g. `fgMuted` is computed from `fg` if omitted).
- *
- * `WhiskThemeName` lists the named presets shipped by `@usewhisk/react`.
- * `WhiskThemeInput` is the union the provider accepts.
- */
-
 export type WhiskColorMode = "light" | "dark";
 
 /** Six built-in palettes shipped with `@usewhisk/react`. */
@@ -77,8 +65,6 @@ export type WhiskTheme = {
   destructive: string;
   /** Foreground on top of `destructive`. */
   destructiveFg: string;
-
-  // ── Optional overrides ──────────────────────────────────────────
 
   /**
    * Muted text. Defaults to `color-mix(in srgb, fg 75%, transparent)`. Override

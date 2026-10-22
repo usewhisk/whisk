@@ -156,7 +156,7 @@ describe("computeMaxFee — Fast + Forwarder", () => {
 
 describe("computeMaxFee — zero-bps tier", () => {
   // A Fast tier with `minimumFee: 0` means CCTP charges no protocol
-  // fee for the route — the whole `maxFee` is the forwarder fee.
+  // fee for the route, so the whole `maxFee` is the forwarder fee.
   const zeroBpsTier: BurnFeeTier = {
     finalityThreshold: 1000,
     minimumFee: 0n,

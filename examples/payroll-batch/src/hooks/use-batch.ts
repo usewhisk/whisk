@@ -4,22 +4,18 @@ import { PAYEES, type Payee } from "../data/payees";
 export type BatchStep = "review" | "paying" | "done";
 
 export type BatchSummary = {
-  /** Total of the payees still included in the run. */
   total: number;
-  /** USDC already settled (sum of completed amounts). */
   paid: number;
-  /** Number of dispatches that have settled this run. */
   doneCount: number;
-  /** Position of the active payee (0-indexed) inside `included`. */
+  /** Index into `included`. */
   activeIdx: number;
-  /** 0–100. Progress through the run, inclusive of the in-flight dispatch. */
+  /** Percent from 0 to 100, counting the payment in flight. */
   pct: number;
 };
 
 /**
- * Batch payroll state machine. The run progresses review → paying → done.
- * Excluded payees are dropped from `included` so the dispatch step always
- * walks a clean array. `advance` is what `<WhiskSend onSuccess>` calls.
+ * `<WhiskSend onSuccess>` calls `advance` to move to the next payee.
+ * Excluded payees never enter `included`, so the run only walks payees still in it.
  */
 export function useBatch() {
   const [step, setStep] = useState<BatchStep>("review");

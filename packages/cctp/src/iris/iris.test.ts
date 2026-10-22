@@ -239,7 +239,6 @@ describe("injected fetch", () => {
   });
 });
 
-// helpers
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,

@@ -9,16 +9,15 @@ export type ChainPickerProps = {
   value: Chain;
   onChange: (chain: Chain) => void;
   chains: ReadonlyArray<Chain>;
-  /** Optional accessible label. */
+  /** Accessible label. Defaults to `"Chain"`. */
   ariaLabel?: string;
   disabled?: boolean;
   className?: string;
 };
 
 /**
- * Compact chain dropdown — Radix Select underneath so keyboard nav and
- * focus rings work out of the box. Renders the chain label from
- * `getChain`; visual styling routes through `--whisk-*` tokens.
+ * The list renders into the widget's portal so it keeps the theme, which a
+ * portal on `document.body` would lose.
  */
 export function ChainPicker({
   value,

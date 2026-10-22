@@ -1,8 +1,7 @@
 /**
- * `MessageTransmitterV2` ABI (relevant subset).
- *
- * Only what Whisk calls: receiveMessage (for manual recovery) and the
- * MessageReceived event (for indexing if a caller wants it).
+ * The subset of `MessageTransmitterV2` Whisk uses: `receiveMessage` for
+ * manual recovery, `usedNonces` to check whether a message was minted, and
+ * the `MessageReceived` and `MessageSent` events.
  */
 export const messageTransmitterV2Abi = [
   {

@@ -1,7 +1,6 @@
-// Polyfill Node globals before any other import — @usewhisk/cctp
-// transitively depends on @solana/web3.js and @stellar/stellar-sdk,
-// both of which reach for Buffer at module load. Vite doesn't shim
-// it by default.
+// @usewhisk/cctp pulls in @solana/web3.js and @stellar/stellar-sdk, which
+// read `Buffer` at load time. Vite does not provide it, so set it before
+// any other import.
 import { Buffer } from "buffer";
 if (typeof globalThis.Buffer === "undefined") {
   globalThis.Buffer = Buffer;

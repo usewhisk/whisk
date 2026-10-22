@@ -22,26 +22,22 @@ export type WhiskReceiptProps = {
   sourceTxHash: string | undefined;
   destinationChain: Chain;
   destinationTxHash?: string;
-  /** Force the failed stage — pass when the engine already returned a `SendFailure`. */
+  /** Force the failed stage, such as when the engine already returned a `SendFailure`. */
   hasError?: boolean;
-  /** Optional title shown in the header. */
+  /** Header title. Defaults to `"Transfer status"`. */
   title?: string;
-  /** Optional description shown under the title. */
+  /** Shown under the title. */
   description?: ReactNode;
-  /** Override the Iris poll cadence (ms). Default 3000. */
+  /** Iris poll interval in ms. Default 3000. */
   pollIntervalMs?: number;
   /** Stop polling after this many ms. Default 10 minutes. */
   pollTimeoutMs?: number;
 };
 
 /**
- * Drop-in settlement-status widget. Given a source-chain tx hash and
- * the destination chain, it polls Iris and renders the lifecycle as a
- * stepper plus a status banner.
- *
- * Same-chain transfers settle immediately (the source tx IS the
- * settlement). Cross-chain transfers walk through burn → attestation
- * → mint as Iris reports progress.
+ * Settlement status for a transfer, polled from Iris. A same-chain transfer
+ * is settled as soon as its source tx exists. Inside a `WhiskProvider`, a
+ * cross-chain transfer that has not settled gets a button to finish it.
  */
 export function WhiskReceipt({
   sourceChain,

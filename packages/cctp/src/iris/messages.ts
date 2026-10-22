@@ -28,11 +28,8 @@ export type GetMessagesOptions = FetchJsonOptions & {
 };
 
 /**
- * Single fetch. Returns an empty array when Iris doesn't yet know
- * about the burn (Iris responds with `messages: []` in that case).
- *
- * 404 from Iris is treated the same as an empty result — both mean
- * "not yet observed."
+ * Single fetch. Returns an empty array when Iris doesn't yet know about
+ * the burn, whether it answers `messages: []` or 404.
  */
 export async function getMessages(
   query: GetMessagesQuery,
@@ -55,8 +52,6 @@ export async function getMessages(
     );
     return json.messages ?? [];
   } catch (err) {
-    // 404 = not yet observed. Treat as "empty result" so callers don't
-    // have to branch on it.
     if (err instanceof IrisHttpError && err.status === 404) {
       return [];
     }
@@ -120,12 +115,9 @@ function defaultIsDone(message: IrisMessage): boolean {
 }
 
 /**
- * Poll Iris until the message reaches a terminal state.
- *
- * Returns the latest known message on terminal state or on timeout.
- * Throws if Iris repeatedly fails (network-level), but a slow
- * attestation just times out and returns the most-recent intermediate
- * state.
+ * Returns the message once `isDone` holds, or on timeout the latest one
+ * seen (`null` if none). Throws if Iris keeps failing; a slow attestation
+ * only times out.
  */
 export async function pollMessages(
   query: GetMessagesQuery,

@@ -1,6 +1,4 @@
 /**
- * Adapter contract — type-level shape lock.
- *
  * These tests fail to compile if the public adapter surface drifts.
  */
 import { describe, expect, it } from "vitest";

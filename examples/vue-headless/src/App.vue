@@ -6,7 +6,6 @@ import { useWhiskEngine } from "./composables/useWhiskEngine";
 const { account, state, isConnecting, isReady, connect, quote, send, reset } =
   useWhiskEngine();
 
-// Form inputs — kept local so the composable stays focused on engine state.
 const sourceChain = ref<Chain>("Base_Sepolia");
 const destinationChain = ref<Chain>("Arc_Testnet");
 const amount = ref("1.00");

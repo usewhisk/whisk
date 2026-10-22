@@ -1,9 +1,6 @@
 /**
- * Minimal HTTP server that verifies incoming Whisk webhooks.
- *
- * Listens on PORT (default 4747) and responds to POST /webhook. Reads the
- * raw body BEFORE parsing, verifies via verifyWebhook, branches on the
- * failure reason.
+ * Verifies Whisk webhooks on POST /webhook. PORT defaults to 4747. A failed
+ * check returns 401 with the reason.
  *
  * Usage:
  *   WHISK_WEBHOOK_SECRET=secret-1 pnpm webhook-server
@@ -24,8 +21,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Read the body once, as raw bytes. verifyWebhook needs the EXACT bytes
-  // the sender hashed — don't reach for a JSON parser first.
+  // verifyWebhook needs the exact bytes the sender signed, so read the raw
+  // body. Parsing and re-serializing JSON would break the signature.
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(chunk as Buffer);

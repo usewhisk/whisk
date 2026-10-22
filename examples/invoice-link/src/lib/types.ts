@@ -1,9 +1,8 @@
 import type { Chain } from "@usewhisk/react";
 
 /**
- * Result of parsing the invoice query string. `valid: true` means every
- * required field is present and the chain resolved to a known network —
- * consumers can pass the resolved values straight into `<WhiskSend>`.
+ * `valid: true` means every required field is present and the chain is one
+ * Whisk knows, so the values can go straight into `<WhiskSend>`.
  */
 export type InvoiceQuery =
   | {
@@ -16,7 +15,6 @@ export type InvoiceQuery =
     }
   | {
       valid: false;
-      /** Why the parse failed, useful for surfacing to the merchant. */
       reason: "missing-to" | "missing-amount" | "unknown-chain" | "missing";
     };
 

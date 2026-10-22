@@ -1,15 +1,7 @@
 /**
- * Same-chain USDC transfer on Stellar.
- *
- * Sender and recipient are on the same Stellar network — no CCTP, just
- * a single `transfer(from, to, amount)` invocation on the USDC Stellar
- * Asset Contract (SAC). Amounts are in 7-decimal Stellar USDC subunits;
- * the caller's `parseUsdcAmount` returns 6-decimal so we scale by 10.
- *
- * The recipient must already have a USDC trustline (account-funded) OR
- * be a contract — `transfer` on the SAC will revert with `TrustlineMissing`
- * if a G-account recipient hasn't established the trustline. The engine
- * surfaces this as a clean failure rather than papering over it.
+ * A G-account recipient needs a USDC trustline, or the SAC `transfer`
+ * reverts with `TrustlineMissing`, which surfaces as a failure. Contract
+ * recipients need none.
  */
 import { Address, Contract, nativeToScVal, xdr } from "@stellar/stellar-sdk";
 import {
@@ -28,9 +20,9 @@ import type { SendListeners, SendResult, StellarAdapter } from "../types.js";
 
 export type ExecuteSameChainStellarSendInput = {
   chain: StellarChain;
-  /** Recipient strkey (G…, M…, or C…). */
+  /** G, M or C strkey. */
   recipientAddress: string;
-  /** Amount in 6-decimal canonical subunits. Scaled to 7 decimals on submit. */
+  /** 6-decimal subunits, scaled to Stellar's 7 on submit. */
   amount: bigint;
   adapter: StellarAdapter;
 };
@@ -40,7 +32,7 @@ export async function executeSameChainStellarSend(
   listeners?: SendListeners,
 ): Promise<SendResult> {
   const steps: Step[] = [
-    { name: "approve", state: "noop" }, // Stellar transfers don't need approval
+    { name: "approve", state: "noop" },
     { name: "burn", state: "pending" },
     { name: "fetchAttestation", state: "noop" },
     { name: "mint", state: "noop" },

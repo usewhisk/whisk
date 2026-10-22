@@ -1,10 +1,3 @@
-/**
- * Quote builder.
- *
- * Produces the {@link Quote} the UI renders before the user confirms.
- * Same-chain Send has no fees — the recipient gets exactly what the
- * sender pays. Bridge quotes fetch fees from Iris.
- */
 import {
   getChain,
   isValidStarknetFelt,
@@ -33,7 +26,6 @@ import type { Chain } from "../types/chain.js";
 const SEND_DURATION_MS = 15_000;
 
 export type BuildQuoteOptions = {
-  /** Resolved Whisk config. */
   config: WhiskConfig;
 };
 
@@ -46,11 +38,7 @@ export function rpcUrlsFor(
   return typeof urls === "string" ? [urls] : urls;
 }
 
-/**
- * Build a quote and (for bridges) return the fee inputs the executor
- * needs to encode the burn call. For same-chain Send the executor
- * computes its own call data, so only the Quote is meaningful.
- */
+/** For a bridge, also returns the fee inputs the executor burns with. */
 export async function buildQuote(
   params: QuoteParams,
   options: BuildQuoteOptions,
@@ -58,13 +46,8 @@ export async function buildQuote(
   const route = decideRoute(params.sourceChain, params.destinationChain);
   const token = params.token ?? DEFAULT_TOKEN;
 
-  // Recipient validation runs at quote time so the UI can reject
-  // obviously-bad addresses before the user signs anything. Each
-  // ecosystem has its own format:
-  //   EVM      0x-prefixed 20-byte hex
-  //   Solana   base58 32-byte pubkey
-  //   Stellar  G/M/C strkey
-  //   Starknet 0x-prefixed felt252 (up to 64 hex chars)
+  // Checked at quote time so a bad address is refused before anything is
+  // signed.
   const destination = getChain(params.destinationChain);
   if (destination.ecosystem === "solana") {
     try {

@@ -149,8 +149,7 @@ describe("buildRefundMetadata", () => {
 
   it("merchant metadata cannot shadow the refund keys (they're stamped last)", () => {
     const meta = buildRefundMetadata(TX, "x", {
-      // TypeScript would normally block this — the runtime test catches the
-      // case where a JS caller bypasses the validator and tries anyway.
+      // TypeScript blocks this, but a plain JS caller can still pass it.
       orderId: "user-set",
     } as Record<string, string>);
     expect(meta[REFUND_OF_TX_KEY]).toBe(TX);

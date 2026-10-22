@@ -1,6 +1,5 @@
 /**
- * Sign and POST a webhook payload to the local server in webhook-server.ts
- * (or any HTTPS endpoint).
+ * Signs a sample payload and POSTs it to webhook-server.ts or any endpoint.
  *
  * Usage:
  *   WHISK_WEBHOOK_SECRET=secret-1 \

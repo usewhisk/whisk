@@ -13,9 +13,8 @@ import {
 } from "@usewhisk/react";
 
 /**
- * Every CCTP V2 testnet Whisk supports today — one entry per Circle
- * domain. The playground exposes the full set so the chain picker
- * mirrors what production apps will see.
+ * Every CCTP V2 testnet Whisk supports, so the widget's chain pickers show
+ * the full set a production app could offer.
  */
 const TESTNET_CHAINS: Chain[] = [
   "Arc_Testnet",
@@ -33,23 +32,15 @@ const TESTNET_CHAINS: Chain[] = [
   "World_Chain_Sepolia",
 ];
 
-/** Re-exported so the controls panel can render a chain picker without
- *  duplicating the list. */
 export const PLAYGROUND_CHAINS = TESTNET_CHAINS;
 
 /**
- * Whisk's provider stack. `theme` is reactive — the WhiskProvider
- * only changes one DOM attribute (`data-whisk-theme`) when it flips,
- * so toggling theme from the controls panel does NOT remount wagmi
- * or react-query underneath. Wallet connection survives a theme
- * change.
+ * Changing `theme` only updates the provider's `data-whisk-theme`
+ * attribute, so wagmi stays mounted and the wallet stays connected.
  *
- * `config` is memoized on `feeBearer` — almost every knob lives on
- * `<WhiskSend>` props or the reactive `theme` prop, but `feeBearer` is
- * part of `createWhiskConfig`, which the engine reads once at creation.
- * The `key={feeBearer}` on the provider forces a clean remount when it
- * flips, so a fresh engine picks up the new fee policy. (Toggling it
- * therefore drops the wallet connection — fine for a QA knob.)
+ * `feeBearer` is read once when the engine is created, so
+ * `key={feeBearer}` remounts the provider with a fresh engine when it
+ * changes. That drops the wallet connection, which is fine for a test knob.
  */
 export function PlaygroundProviders({
   theme,
@@ -70,12 +61,12 @@ export function PlaygroundProviders({
             projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
             appName: "Whisk Playground",
           }),
-          // Solana Devnet — factory defaults to devnet.
+          // Defaults to devnet.
           solana(),
-          // Stellar Testnet — mounts the Stellar Wallets Kit context.
+          // Defaults to testnet.
           stellar(),
-          // Starknet Sepolia — mounts get-starknet-core wallet
-          // discovery for Argent X, Braavos, and friends.
+          // Defaults to Sepolia and discovers Argent X, Braavos and other
+          // injected wallets.
           starknet(),
         ],
         chains: TESTNET_CHAINS,

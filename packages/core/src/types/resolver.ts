@@ -8,10 +8,10 @@ export type ResolverContext = {
 export type Resolver = {
   name: string;
 
-  /** Synchronous check. First-match wins; later resolvers never see the input. */
+  /** Synchronous shape check. Only resolvers that match are asked to resolve. */
   matches: (input: string) => boolean;
 
-  /** Return `null` for "tried and gave up". Throw `ResolverError` on unexpected failure. */
+  /** Return `null` to let the next resolver try. Throw `ResolverError` on unexpected failure. */
   resolve: (
     input: string,
     ctx: ResolverContext,

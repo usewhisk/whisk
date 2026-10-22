@@ -1,6 +1,3 @@
-/**
- * Iris API client.
- */
 export { IRIS_MAINNET_URL, IRIS_SANDBOX_URL, irisBaseUrl } from "./urls.js";
 
 export { fetchIrisJson } from "./fetch.js";

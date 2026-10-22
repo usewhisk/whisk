@@ -9,13 +9,12 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      // @usewhisk/cctp transitively imports Buffer via @solana/web3.js
-      // + @stellar/stellar-sdk. Point `buffer` to the browser-friendly
-      // npm package so Vite doesn't tag it as an external.
+      // @usewhisk/cctp pulls in Buffer through @solana/web3.js and
+      // @stellar/stellar-sdk. Use the npm polyfill so Vite does not treat
+      // it as external.
       buffer: resolve(__dirname, "node_modules/buffer/index.js"),
-      // Same idea for `crypto` — cctp uses @noble/hashes so it's
-      // technically Buffer-free, but transitive deps still reach for
-      // it. Point at an empty stub.
+      // cctp hashes with @noble/hashes, but some dependencies still import
+      // Node's `crypto`. Nothing calls it in the browser.
       crypto: resolve(__dirname, "src/stub-empty.ts"),
       "@react-native-async-storage/async-storage": "/src/stub-empty.ts",
       "pino-pretty": "/src/stub-empty.ts",

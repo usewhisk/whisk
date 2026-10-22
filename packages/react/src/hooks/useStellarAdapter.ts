@@ -10,27 +10,10 @@ import { toWhiskError, type StellarAdapter } from "@usewhisk/core";
 import { useStellarWallet } from "../provider/stellarContext.js";
 
 /**
- * Build a Whisk `StellarAdapter` from the surrounding Stellar Wallets Kit
- * context (mounted by `WhiskProvider` when a `stellar()` factory is in
- * `config.wallets`).
- *
- * Returns `null` until the user picks + connects a wallet via the
- * `ConnectModal`. Once connected, the adapter:
- *
- *   - `address`             → connected wallet's G-address
- *   - `getNetwork`          → `"public"` / `"testnet"` from the factory
- *   - `submitInvocation`    → for each Soroban invocation: builds a tx,
- *                              simulates, assembles, asks the kit to
- *                              sign, then submits via Stellar RPC.
- *                              Sequential — approve→burn ordering is
- *                              preserved.
- *   - `confirmTransaction`  → polls Stellar RPC until SUCCESS / FAILED
- *   - `getLatestLedger`     → current ledger sequence (the engine uses
- *                              it to compute `expiration_ledger` for
- *                              USDC SAC `approve`)
- *
- * Errors are routed through `toWhiskError` so the engine surfaces them
- * with stable categories.
+ * The connected Stellar wallet as a `StellarAdapter`, or `null` when none is
+ * connected or `config.wallets` has no `stellar()` factory. Invocations are
+ * simulated, signed and submitted one at a time, each waiting for the last
+ * to land. Errors are thrown as `WhiskError`s.
  */
 export function useStellarAdapter(): StellarAdapter | null {
   const stellar = useStellarWallet();
@@ -101,8 +84,7 @@ export function useStellarAdapter(): StellarAdapter | null {
             }
             hashes.push(sendResponse.hash);
 
-            // Wait for this tx to land before submitting the next one —
-            // approve must land before burn can use the allowance.
+            // The burn can only spend the allowance once the approve lands.
             const deadline = Date.now() + 60_000;
             let landed = false;
             while (Date.now() < deadline) {
@@ -139,9 +121,8 @@ export function useStellarAdapter(): StellarAdapter | null {
 
       async confirmTransaction(hash) {
         try {
-          // Submitted txs are awaited inline in submitInvocation, so by
-          // the time this fires the tx is usually already on chain.
-          // Keep a short poll for callers that confirm out-of-band.
+          // `submitInvocation` already waits for each tx, so this poll is
+          // for hashes that came from elsewhere.
           const deadline = Date.now() + 60_000;
           while (Date.now() < deadline) {
             const status = await rpcServer.getTransaction(hash);
