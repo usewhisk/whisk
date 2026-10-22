@@ -552,3 +552,85 @@ describe("Starknet source", () => {
     expect(again.burns).toEqual([]);
   });
 });
+
+describe("into Solana, the recipient is checked before the burn", () => {
+  // receive_message cannot create the USDC account, so a burn to a recipient
+  // without one would sit unminted.
+  const sources = [
+    {
+      source: "Base" as const,
+      domain: Base.cctpDomain,
+      wallet: () => {
+        const wallet = baseWallet();
+        return { adapter: wallet.adapter, burned: () => wallet.batches };
+      },
+    },
+    {
+      source: "Stellar" as const,
+      domain: Stellar.cctpDomain,
+      wallet: () => {
+        const wallet = createFakeStellarWallet(Stellar);
+        return { adapter: wallet.adapter, burned: () => wallet.burns };
+      },
+    },
+    {
+      source: "Starknet" as const,
+      domain: Starknet.cctpDomain,
+      wallet: () => {
+        const wallet = createFakeStarknetWallet(Starknet);
+        return { adapter: wallet.adapter, burned: () => wallet.burns };
+      },
+    },
+  ];
+
+  it.each(sources)(
+    "$source to Solana: no USDC account for the recipient burns nothing",
+    async ({ source, domain, wallet }) => {
+      const sender = wallet();
+      const solana = createFakeSolanaWallet(Solana);
+      solana.missing.add(
+        getAssociatedTokenAddressSync(
+          new PublicKey(Solana.usdc),
+          new PublicKey(solana.address),
+        ).toBase58(),
+      );
+      const { result } = await send({
+        source,
+        destination: "Solana",
+        recipient: solana.address,
+        sourceAdapter: sender.adapter,
+        destinationAdapter: solana.adapter,
+        message: attested(domain, Solana.cctpDomain),
+      });
+      expect(result.kind).toBe("failure");
+      expect(result.kind === "failure" && result.error).toMatchObject({
+        code: "ROUTE_UNAVAILABLE",
+        reason: "recipient_account_missing",
+      });
+      expect(sender.burned()).toEqual([]);
+      expect(solana.mints).toEqual([]);
+    },
+  );
+
+  it.each(sources)(
+    "$source to Solana: a Solana wallet on the wrong cluster burns nothing",
+    async ({ source, domain, wallet }) => {
+      const sender = wallet();
+      const solana = createFakeSolanaWallet(Solana);
+      const { result } = await send({
+        source,
+        destination: "Solana",
+        recipient: solana.address,
+        sourceAdapter: sender.adapter,
+        destinationAdapter: {
+          ...solana.adapter,
+          getCluster: async () => "devnet",
+        },
+        message: attested(domain, Solana.cctpDomain),
+      });
+      expect(result.kind).toBe("failure");
+      expect(sender.burned()).toEqual([]);
+      expect(solana.mints).toEqual([]);
+    },
+  );
+});

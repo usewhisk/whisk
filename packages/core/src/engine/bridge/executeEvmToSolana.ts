@@ -4,6 +4,7 @@
  * account must already exist.
  */
 import { attestationPolling } from "./polling.js";
+import { solanaRecipientProblem } from "./solanaRecipient.js";
 import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
 import {
   buildSolanaReceiveIntent,
@@ -128,6 +129,15 @@ export async function executeEvmToSolana(
       "Failed to build burn intent.",
       snapshot,
     );
+  }
+
+  const problem = await solanaRecipientProblem(
+    input.destination,
+    input.destinationAdapter,
+    recipientUsdcAta,
+  );
+  if (problem) {
+    return fail(steps, "approve", problem, problem.message, snapshot);
   }
 
   const customFeeCalls = input.customFeeCalls ?? [];

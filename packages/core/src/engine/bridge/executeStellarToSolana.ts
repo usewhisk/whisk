@@ -4,6 +4,7 @@
  * account must already exist; the executor fails with a clear error if not.
  */
 import { attestationPolling } from "./polling.js";
+import { solanaRecipientProblem } from "./solanaRecipient.js";
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import {
@@ -122,6 +123,15 @@ export async function executeStellarToSolana(
       "Failed to build Stellar burn intent.",
       snapshot,
     );
+  }
+
+  const problem = await solanaRecipientProblem(
+    input.destination,
+    input.destinationAdapter,
+    recipientUsdcAta,
+  );
+  if (problem) {
+    return fail(steps, "burn", problem, problem.message, snapshot);
   }
 
   try {
