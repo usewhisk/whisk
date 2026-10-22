@@ -44,7 +44,7 @@ export type WhiskClientConfig = {
   token?: Token;
   resolver?: Resolver;
   feePolicy?: FeePolicy;
-  /** Who pays bridge fees. Default `"receiver"`. Set `"sender"` so the recipient receives the full amount. */
+  /** Who pays bridge fees. Default `"sender"`, so the recipient receives the full amount. */
   feeBearer?: FeeBearer;
   rpcUrls?: Partial<Record<Chain, string | string[]>>;
   useForwarder?: boolean;

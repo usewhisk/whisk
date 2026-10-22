@@ -17,6 +17,14 @@ export type ResolvedTheme = {
   vars: Record<string, string>;
 };
 
+// `styles.css` already holds these palettes. Writing them inline would beat
+// every host rule on `[data-whisk]`, so only the colour mode is set.
+const STYLESHEET_PRESETS = new Set<WhiskThemeName>(["light", "dark"]);
+
+function presetVars(name: WhiskThemeName): Record<string, string> {
+  return STYLESHEET_PRESETS.has(name) ? {} : themeToCssVars(themePresets[name]);
+}
+
 /**
  * Returns `null` for `undefined` or `"auto"`, which leaves everything to
  * `prefers-color-scheme` in `styles.css`. For `{ preset, tokens }` the tokens
@@ -29,7 +37,7 @@ export function resolveTheme(
   if (typeof input === "string") {
     const preset = themePresets[input];
     return preset
-      ? { colorMode: preset.colorMode, vars: themeToCssVars(preset) }
+      ? { colorMode: preset.colorMode, vars: presetVars(input) }
       : null;
   }
   if ("preset" in input) {
@@ -38,7 +46,7 @@ export function resolveTheme(
     return {
       ...(base && { colorMode: base.colorMode }),
       vars: {
-        ...(base && themeToCssVars(base)),
+        ...(input.preset !== "auto" && presetVars(input.preset)),
         ...tokensToCssVars(input.tokens),
       },
     };

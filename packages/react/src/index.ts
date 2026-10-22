@@ -162,6 +162,8 @@ export {
   NetworkMismatchError,
   NoAdapterError,
   OnchainRevertError,
+  QuoteChangedError,
+  QuoteExpiredError,
   ResolverError,
   RouteUnavailableError,
   toWhiskError,

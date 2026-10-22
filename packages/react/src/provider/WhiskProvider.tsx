@@ -134,7 +134,10 @@ export function WhiskProvider({
   const [portal, setPortal] = useState<HTMLElement | null>(null);
   const resolved = resolveTheme(theme);
   const themeAttr = resolved?.colorMode;
-  const inlineStyle = resolved?.vars as CSSProperties | undefined;
+  const inlineStyle =
+    resolved && Object.keys(resolved.vars).length > 0
+      ? (resolved.vars as CSSProperties)
+      : undefined;
 
   let inner: ReactNode = (
     <div
