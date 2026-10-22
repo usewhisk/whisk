@@ -1,17 +1,17 @@
 {
   "name": "@usewhisk/react",
   "version": "0.1.0",
-  "description": "Whisk React — embeddable USDC send & bridge widget. Talks to CCTP V2 directly. EVM only in v1; non-EVM on roadmap.",
+  "description": "Embeddable Whisk widget for React: send and bridge USDC over Circle CCTP V2 across EVM, Solana, Stellar and Starknet.",
   "license": "MIT",
   "author": "SignorDev (https://github.com/Signor1)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Signor1/whisk.git",
+    "url": "git+https://github.com/usewhisk/whisk.git",
     "directory": "packages/react"
   },
-  "homepage": "https://github.com/Signor1/whisk#readme",
+  "homepage": "https://github.com/usewhisk/whisk/tree/main/packages/react#readme",
   "bugs": {
-    "url": "https://github.com/Signor1/whisk/issues"
+    "url": "https://github.com/usewhisk/whisk/issues"
   },
   "keywords": [
     "whisk",
@@ -88,7 +88,7 @@
     "@solana/web3.js": "^1.95.0",
     "@starknet-io/get-starknet-core": "^4.0.0",
     "@stellar/stellar-sdk": "^14.1.1",
-    "@usewhisk/core": "workspace:*",
+    "@usewhisk/core": "workspace:^",
     "@wagmi/core": "^2.16.3",
     "@web3icons/react": "^4.1.17",
     "clsx": "^2.1.1",

@@ -1,17 +1,17 @@
 {
   "name": "@usewhisk/cctp",
-  "version": "0.1.0",
-  "description": "CCTP V2 protocol layer for Whisk. Direct contracts + Iris API integration.",
+  "version": "0.0.0",
+  "description": "Circle CCTP V2 protocol layer for Whisk: chain registry, burn and mint builders, fee maths and the Iris client.",
   "license": "MIT",
   "author": "SignorDev (https://github.com/Signor1)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Signor1/whisk.git",
+    "url": "git+https://github.com/usewhisk/whisk.git",
     "directory": "packages/cctp"
   },
-  "homepage": "https://github.com/Signor1/whisk#readme",
+  "homepage": "https://github.com/usewhisk/whisk/tree/main/packages/cctp#readme",
   "bugs": {
-    "url": "https://github.com/Signor1/whisk/issues"
+    "url": "https://github.com/usewhisk/whisk/issues"
   },
   "keywords": [
     "whisk",

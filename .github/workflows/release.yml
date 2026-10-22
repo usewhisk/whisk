@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     # Push events from forks don't carry the secrets needed to publish; skip
     # them to avoid a noisy red status on community PRs.
-    if: github.repository_owner == 'Signor1'
+    if: github.repository_owner == 'usewhisk'
     permissions:
       contents: write
       pull-requests: write
@@ -41,7 +41,9 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "22"
-          cache: pnpm
+          # No dependency cache in the job that publishes, so a poisoned cache
+          # cannot reach the registry.
+          package-manager-cache: false
           registry-url: "https://registry.npmjs.org"
 
       # Node 22 ships with npm 10.x, which can generate provenance attestations
