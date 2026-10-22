@@ -239,6 +239,25 @@ describe("injected fetch", () => {
   });
 });
 
+describe("getMessages baseUrl", () => {
+  it("sends the request to the base URL it was given", async () => {
+    const injected = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ messages: [] }),
+    );
+    await getMessages(
+      { sourceDomain: 6, transactionHash: "0xabc" },
+      {
+        network: "testnet",
+        baseUrl: "https://iris.proxy.example/circle/",
+        fetch: injected,
+      },
+    );
+    expect(String(injected.mock.calls[0]?.[0])).toBe(
+      "https://iris.proxy.example/circle/v2/messages/6?transactionHash=0xabc",
+    );
+  });
+});
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
