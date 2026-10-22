@@ -67,7 +67,9 @@ jobs:
       # has a built-in `version` subcommand that just prints diagnostics; the
       # `run` prefix forces it to invoke our npm script (`changeset version`).
       - name: Create release PR or publish
-        uses: changesets/action@v2
+        # v2 needs Changesets CLI v3 and renames these inputs. Stay on v1
+        # until the repo moves to CLI v3.
+        uses: changesets/action@v1.9.0
         with:
           version: pnpm run version
           publish: pnpm release

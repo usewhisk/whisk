@@ -21,6 +21,10 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+    ignore:
+      # changesets/action 2 needs @changesets/cli 3; take both together.
+      - dependency-name: "changesets/action"
+        update-types: ["version-update:semver-major"]
     groups:
       actions:
         patterns: ["*"]
