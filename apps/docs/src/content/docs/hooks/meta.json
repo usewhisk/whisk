@@ -3,7 +3,6 @@
   "pages": [
     "use-whisk",
     "use-whisk-account",
-    "use-whisk-swap",
     "use-chain-balance",
     "use-manual-mint",
     "use-preflight",

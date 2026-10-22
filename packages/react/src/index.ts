@@ -1,171 +1,273 @@
 /**
- * `@usewhisk/react` — embeddable USDC send & bridge widget.
- *
- * The drop-in entry point. Most apps:
- *
- * ```tsx
- * import {
- *   WhiskProvider,
- *   WhiskSend,
- *   createWhiskConfig,
- *   evm,
- * } from "@usewhisk/react";
- * import "@usewhisk/react/styles.css";
- *
- * const config = createWhiskConfig({
- *   wallets: [evm({ projectId: process.env.WALLETCONNECT_PROJECT_ID })],
- *   chains: ["Arc_Testnet", "Base_Sepolia"],
- * });
- *
- * <WhiskProvider config={config}><WhiskSend /></WhiskProvider>
- * ```
- *
- * For headless control (custom UI on top of the engine + state machine),
- * import from `@usewhisk/react/headless`.
+ * `@usewhisk/react`: an embeddable USDC send and bridge widget, with its
+ * hooks and config builders.
  */
 
-// Provider
 export { WhiskProvider } from "./provider/WhiskProvider.js";
+export { createBrowserInflightStore } from "./lib/inflightStore.js";
 export type { WhiskProviderProps } from "./provider/WhiskProvider.js";
 
-// Config
-export { createWhiskConfig, evm, solana } from "./config/index.js";
+export { createWhiskConfig } from "./config/index.js";
+export { evm } from "./config/adapters/evm.js";
+export { solana } from "./config/adapters/solana.js";
+export { stellar } from "./config/adapters/stellar.js";
+export { starknet } from "./config/adapters/starknet.js";
 export type {
   CreateWhiskConfigOptions,
-  WhiskClientConfig,
-  WhiskMode,
-  WalletAdapterFactory,
   EvmAdapterFactory,
-  SolanaAdapterFactory,
   EvmFactoryOptions,
+  SolanaAdapterFactory,
+  SolanaConfig,
   SolanaFactoryOptions,
+  SolanaNetwork,
+  StarknetAdapterFactory,
+  StarknetConfig,
+  StarknetFactoryOptions,
+  StarknetNetwork,
+  StellarAdapterFactory,
+  StellarConfig,
+  StellarFactoryOptions,
+  StellarNetwork,
+  WalletAdapterFactory,
+  WhiskClientConfig,
 } from "./config/index.js";
 
-// Components
+export { ResumeList, WhiskReceipt, WhiskSend } from "./components/index.js";
+export type { WhiskReceiptProps, WhiskSendProps } from "./components/index.js";
+
+// `PoweredByWhisk` is here so widgets built from these parts still show
+// the attribution badge.
 export {
-  WhiskSend,
-  SwapTab,
-  Button,
-  Input,
-  Field,
-  FieldBox,
-  FieldBoxSelect,
-  Card,
-  Badge,
-  ChainPicker,
-  ChainIcon,
-  TokenIcon,
-  TokenPicker,
-  StepRail,
-  AccountChip,
-  NetworkPill,
   Banner,
-  BalanceLine,
+  Button,
+  Card,
+  ChainPicker,
   ConnectModal,
+  FieldBox,
+  PoweredByWhisk,
+  StepRail,
 } from "./components/index.js";
 export type {
-  WhiskSendProps,
-  WhiskSendTab,
-  SwapTabProps,
-  ButtonProps,
-  ButtonVariant,
-  ButtonSize,
-  InputProps,
-  FieldProps,
-  FieldBoxProps,
-  FieldBoxSelectProps,
-  BadgeProps,
-  ChainPickerProps,
-  ChainIconProps,
-  TokenIconProps,
-  TokenPickerProps,
-  StepRailProps,
   BannerProps,
-  BalanceLineProps,
+  BannerVariant,
+  ButtonProps,
+  ButtonSize,
+  ButtonVariant,
+  ChainPickerProps,
   ConnectModalProps,
+  FieldBoxProps,
+  StepRailProps,
 } from "./components/index.js";
 
-// Resolvers — the default chain (address + ENS) is mounted automatically
-// by `WhiskProvider` when the dev doesn't pass a custom `resolver`. The
-// individual factories are exposed here so consumers can compose their
-// own chain (Lens, Unstoppable, custom email-resolver, etc.).
 export {
-  ensResolver,
-  sepoliaEnsResolver,
+  createWagmiEvmAdapter,
+  useAdapterFor,
+  useEvmAdapter,
+  useReceipt,
+  useRefund,
+  useSolanaAdapter,
+  useStarknetAdapter,
+  useStellarAdapter,
+  useWhisk,
+  useWhiskContext,
+  useWhiskEngine,
+} from "./hooks/index.js";
+export type {
+  UseReceiptInput,
+  UseReceiptResult,
+  UseRefundResult,
+  UseRefundVariables,
+  UseWhiskResult,
+} from "./hooks/index.js";
+
+export {
+  getThemePreset,
+  listThemeNames,
+  resolveTheme,
+  themePresets,
+  themeToCssVars,
+  tokensToCssVars,
+} from "./theme/index.js";
+export type {
+  ResolvedTheme,
+  WhiskColorMode,
+  WhiskTheme,
+  WhiskThemeInput,
+  WhiskThemeName,
+  WhiskThemeOverrides,
+  WhiskThemeTokens,
+} from "./theme/index.js";
+
+export { addressResolver, composeResolvers } from "@usewhisk/core";
+export {
+  createDefaultResolver,
+  createEnsResolver,
   DEFAULT_ENS_RPC_URLS,
   DEFAULT_ENS_SEPOLIA_RPC_URLS,
-  createEnsResolver,
   defaultResolver,
-  createDefaultResolver,
+  ensResolver,
+  sepoliaEnsResolver,
 } from "./resolvers/index.js";
 export type {
+  CreateDefaultResolverOptions,
   EnsResolverChain,
   EnsResolverOptions,
-  CreateDefaultResolverOptions,
 } from "./resolvers/index.js";
-// Re-export core's address resolver and `composeResolvers` helper so
-// host apps don't need a second import to wire a custom chain.
-export { addressResolver, composeResolvers } from "@usewhisk/core";
 
-// Chain registry helpers — same reason: avoid forcing apps to depend
-// on `@usewhisk/core` for routine lookups.
-export {
-  allChains,
-  chainInfo,
-  chainsByNetwork,
-  chainsByKind,
-  chainByEvmId,
-  supportedTokensFor,
-  tokenAddressFor,
-} from "@usewhisk/core";
-export type { ChainInfo, SupportedTokenAlias } from "@usewhisk/core";
-
-// Hooks (also exposed in /headless for tree-shake-friendly imports)
-export {
-  useWhisk,
-  useWhiskAdapter,
-  useWhiskAccount,
-  useWhiskContext,
-  useChainBalance,
-  useWhiskSwap,
-  useManualMint,
-  usePreflight,
-  useTabLock,
-} from "./hooks/index.js";
 export type {
-  UseWhiskResult,
-  WhiskActions,
-  UseWhiskAccountResult,
-  ChainBalance,
-  UseWhiskSwapResult,
-  SwapState,
-  SwapInput,
-  ManualMintInput,
-  ManualMintResult,
-  UseManualMintResult,
-  PreflightCheck,
-  PreflightCheckId,
-  PreflightStatus,
-  PreflightResult,
-  TabLock,
-  TabLockOptions,
-} from "./hooks/index.js";
+  CallReceipt,
+  EvmAdapter,
+  EvmCall,
+  QuoteParams,
+  RefundParams,
+  RefundResult,
+  MaxSendable,
+  ResumeFromTxParams,
+  ResumeOptions,
+  SendCallsOptions,
+  SendCallsResult,
+  SendFailure,
+  SendListeners,
+  SendParams,
+  SendResult,
+  SendStepListener,
+  SendSuccess,
+  WhiskAdapter,
+  WhiskEngine,
+} from "@usewhisk/core";
 
-// Convenience re-exports of the most common core types so consumers don't
-// need a second import for things like `Chain` or `Quote`.
+export {
+  buildRefundMetadata,
+  REFUND_OF_TX_KEY,
+  REFUND_REASON_KEY,
+  validateRefundInput,
+} from "@usewhisk/core";
+export type { RefundInput, RefundPlan } from "@usewhisk/core";
+
+export {
+  METADATA_MAX_BYTES,
+  METADATA_RESERVED_PREFIX,
+  mergeMetadata,
+  validateMetadata,
+} from "@usewhisk/core";
+export type { WhiskMetadata } from "@usewhisk/core";
+
+export {
+  BridgeStepError,
+  cleanErrorMessage,
+  ConfigError,
+  InsufficientBalanceError,
+  InvalidAddressError,
+  NetworkError,
+  NetworkMismatchError,
+  NoAdapterError,
+  OnchainRevertError,
+  QuoteChangedError,
+  QuoteExpiredError,
+  ResolverError,
+  RouteUnavailableError,
+  toWhiskError,
+  UserRejectedError,
+  WalletCapabilityError,
+  WhiskError,
+  WrongChainError,
+} from "@usewhisk/core";
+export type {
+  RouteUnavailableReason,
+  WhiskErrorCategory,
+  WhiskErrorCode,
+  WhiskErrorOptions,
+} from "@usewhisk/core";
+
 export type {
   Chain,
   ChainKind,
   ChainNetwork,
-  Token,
-  Route,
-  Step,
-  Quote,
-  ResolvedRecipient,
-  FeePolicy,
   FeeBearer,
   FeeBreakdown,
+  FeeEntry,
+  FeeEntryKind,
+  FeePolicy,
+  Quote,
   Resolver,
+  ResolvedRecipient,
+  Route,
+  RouteMint,
+  RoutePlan,
+  Step,
+  StepName,
+  StepState,
+  Token,
+  WhiskConfig,
   WhiskState,
-  WhiskError,
+  WhiskStateKind,
+} from "@usewhisk/core";
+export {
+  DEFAULT_FEE_BEARER,
+  DEFAULT_TOKEN,
+  isBridgeRoute,
+  isSendRoute,
+  planRoute,
+} from "@usewhisk/core";
+
+// The treasury address is exported so its share of a custom fee can be
+// audited.
+export {
+  BPS_DENOMINATOR,
+  buildCustomFeeEntries,
+  splitCustomFee,
+  sumFees,
+  sumForwarderFees,
+  sumProtocolFees,
+  WHISK_TREASURY_ADDRESS,
+  WHISK_TREASURY_BPS,
+} from "@usewhisk/core";
+export type { CustomFeeSplit } from "@usewhisk/core";
+
+export {
+  CHAINS,
+  addressFormat,
+  chainByDomain,
+  chainByEvmChainId,
+  chainsByNetwork,
+  explorerAddressUrl,
+  explorerTxUrl,
+  getChain,
+  isChainId,
+  tryChainByEvmChainId,
+} from "@usewhisk/core";
+export type { AddressFormat, CctpChain } from "@usewhisk/core";
+
+export {
+  buildReceiveMessageCall,
+  deriveReceiptView,
+  describeReceiptChains,
+  EVM_MAINNET_MESSAGE_TRANSMITTER,
+  EVM_TESTNET_MESSAGE_TRANSMITTER,
+  fetchAttestationOnce,
+  getIrisBaseUrl,
+  IRIS_MAINNET_URL,
+  IRIS_SANDBOX_URL,
+  manualMintExplorerUrl,
+  messageTransmitterAddress,
+  pollAttestation,
+  RECEIPT_STAGE_HELP,
+  RECEIPT_STAGE_LABELS,
+  RECEIVE_MESSAGE_ABI,
+} from "@usewhisk/core";
+export type {
+  FetchAttestationOptions,
+  IrisMessage,
+  IrisStatus,
+  PollAttestationOptions,
+  ReceiptInput,
+  ReceiptStage,
+  ReceiptView,
+  ReceiveMessageCall,
+} from "@usewhisk/core";
+
+export {
+  formatUsdcAmount,
+  parseUsdcAmount,
+  USDC_DECIMALS,
 } from "@usewhisk/core";

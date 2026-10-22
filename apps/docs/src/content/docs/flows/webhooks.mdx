@@ -1,0 +1,169 @@
+---
+title: Signed webhooks
+description: Sign outgoing notifications with HMAC-SHA256 and verify incoming ones in constant time. Runtime-agnostic Web Crypto under the hood.
+---
+
+`@usewhisk/core` ships two server-side primitives,
+`signWebhook` and `verifyWebhook`, that implement the
+HMAC-SHA256 webhook pattern correctly. They use Web Crypto so
+the same code runs on Node 18+, Deno, Bun, Cloudflare Workers,
+and Vercel Edge / Fluid Compute without an extra dependency.
+
+## When to use this (and when not to)
+
+| Direction                                                 | Use HMAC?                                                                                                   |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Server → server (your backend → another internal service) | ✅ Yes.                                                                                                     |
+| Whisk Cloud → your backend (future)                       | ✅ Yes — same primitives, same shape.                                                                       |
+| Browser → server                                          | ❌ No. The browser can't hold the secret. See [Checkout](/docs/flows/checkout) for the order-nonce pattern. |
+
+If a secret would need to live in client-side JavaScript, you
+don't have a secret. Pick a different trust model.
+
+## Signing
+
+```ts title="server/notify.ts"
+import { signWebhook } from "@usewhisk/core";
+
+export async function notifyDownstream(payload: unknown) {
+  const { body, headers } = await signWebhook(
+    payload,
+    process.env.WHISK_WEBHOOK_SECRET!,
+  );
+
+  await fetch("https://downstream.example.com/whisk-events", {
+    method: "POST",
+    headers,
+    body,
+  });
+}
+```
+
+`signWebhook` returns the serialized body, the hex signature,
+the timestamp, and a `headers` object with `content-type`,
+`x-whisk-signature`, and `x-whisk-timestamp` already set.
+Spread it into your fetch call and you're done.
+
+The signature is HMAC-SHA256 over `${timestamp}.${body}` —
+the Stripe-style canonical string. Including the timestamp in
+the signed material closes the same-body replay window.
+
+## Verifying
+
+```ts title="app/api/webhook/route.ts"
+import { verifyWebhook } from "@usewhisk/core";
+
+export async function POST(req: Request) {
+  // Read the raw body BEFORE parsing — verify needs the exact bytes
+  // the sender hashed.
+  const rawBody = await req.text();
+
+  // Convert Headers to a plain object once; verifyWebhook handles
+  // case-insensitive lookup and array-shaped values.
+  const headers: Record<string, string> = {};
+  req.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+
+  const result = await verifyWebhook<{
+    txHash: string;
+    amount: string;
+  }>(rawBody, headers, process.env.WHISK_WEBHOOK_SECRET!);
+
+  if (!result.ok) {
+    // result.reason narrows to a string union — see the table below.
+    return Response.json({ error: result.reason }, { status: 401 });
+  }
+
+  // result.payload is typed by the generic you passed.
+  await processTransfer(result.payload.txHash);
+  return Response.json({ ok: true });
+}
+```
+
+Read the request body **once**, as bytes, before any JSON
+parsing. If your framework auto-parses, ask for the raw form
+(`req.text()` in Next route handlers, `bodyParser: false` in
+classic Express).
+
+## Failure reasons
+
+`verifyWebhook` never throws on a bad request; it returns
+`{ ok: false, reason }` so your handler can branch cleanly:
+
+| Reason                   | Meaning                                                                   | Likely fix                                      |
+| ------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------- |
+| `missing_signature`      | `x-whisk-signature` header absent.                                        | Sender misconfigured.                           |
+| `missing_timestamp`      | `x-whisk-timestamp` header absent or non-numeric.                         | Sender misconfigured.                           |
+| `malformed_body`         | Body wasn't valid JSON.                                                   | Body was mangled in transit / parsed too early. |
+| `malformed_envelope`     | JSON parsed, but didn't have the `{ version, timestamp, payload }` shape. | Sender on the wrong scheme.                     |
+| `unsupported_version`    | Envelope `version` isn't the expected `"v1"`.                             | Sender on a newer/older Whisk.                  |
+| `timestamp_out_of_range` | Header timestamp older or newer than the tolerance window.                | Clock skew on either side, or replay attempt.   |
+| `signature_mismatch`     | HMAC didn't match.                                                        | Wrong secret, or body tampered in transit.      |
+
+Default tolerance is five minutes either side. Pass
+`toleranceMs` to tighten it for high-security flows, or widen
+it for environments with known clock drift:
+
+```ts
+verifyWebhook(rawBody, headers, secret, {
+  toleranceMs: 30_000, // 30 seconds
+});
+```
+
+## Constant-time comparison
+
+The signature comparison is constant-time. A forged signature
+can't be discovered through timing attacks by an attacker who
+sends thousands of probes — every comparison takes the same
+amount of work regardless of where the first byte diverges.
+You don't need to wrap the call in `Buffer.compare` or
+`timingSafeEqual` yourself.
+
+## Replay protection
+
+Two layers:
+
+1. **Timestamp tolerance** — anything outside the window is
+   rejected before the HMAC check runs.
+2. **Envelope timestamp invariant** — `verifyWebhook` asserts
+   that the envelope's `timestamp` field equals the
+   `x-whisk-timestamp` header. A forwarder that strips and
+   replaces the header without re-signing the body would
+   fail this check.
+
+If your downstream service needs exactly-once semantics
+beyond what HMAC + tolerance gives you, add an idempotency
+key to the payload (`{ idempotencyKey: "evt_abc123", ... }`)
+and deduplicate at the receiver. Whisk doesn't impose a
+specific key field.
+
+## Secret hygiene
+
+- Use a different secret per receiving service. Compromise of
+  one downstream service shouldn't expose your other webhook
+  endpoints.
+- Store secrets in your platform's secret manager (Vercel
+  Environment Variables, AWS Secrets Manager, Doppler, 1Password
+  Connect, whatever). Never check them into the repo.
+- Rotate on a schedule. The dual-secret pattern is:
+  - publish the new key as `WHISK_WEBHOOK_SECRET_NEXT`
+  - have receivers try the new key first, fall back to the
+    current one
+  - flip senders to the new key
+  - remove the old key after a cooldown
+
+## Runtime support
+
+| Runtime               | Supported |
+| --------------------- | --------- |
+| Node 18+              | ✅        |
+| Deno                  | ✅        |
+| Bun                   | ✅        |
+| Cloudflare Workers    | ✅        |
+| Vercel Edge / Fluid   | ✅        |
+| AWS Lambda (Node 18+) | ✅        |
+
+The only requirement is `globalThis.crypto.subtle`. If that's
+absent, `signWebhook` and `verifyWebhook` throw a clear
+`ConfigError` at call time rather than failing silently.

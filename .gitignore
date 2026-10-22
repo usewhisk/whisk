@@ -38,3 +38,6 @@ entity-secret*
 # Locally installed agent skills (install globally instead)
 .agents
 skills-lock.json
+
+# Transfers the testnet matrix burned and has not finished.
+.testnet-inflight.json

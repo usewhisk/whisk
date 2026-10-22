@@ -1,9 +1,5 @@
 @import "tailwindcss";
 
-/* ============================================================
-   OpenForest — design tokens for a reforestation NGO.
-   ============================================================ */
-
 @theme {
   --color-canopy: #0f2a1d;
   --color-canopy-2: #1a3b2a;
@@ -54,40 +50,30 @@ body {
   min-height: 100dvh;
 }
 
-/* Widget palette overrides inside .of-widget */
-/* ============================================================
-   Widget theme — overrides every `--whisk-*` token to the OpenForest
-   palette. The selector is `[data-whisk]` (not `.of-widget [data-whisk]`)
-   because `<WhiskProvider>` puts the `data-whisk` attribute on the
-   outer app wrapper — it's an ancestor of every recipe surface, and
-   CSS variables cascade through portals via WhiskScope.
-   ============================================================ */
+/* `<WhiskProvider>` sets `data-whisk` on the wrapper that holds the widget
+   and its portal, so tokens set here reach popovers too. This file loads
+   after the widget's stylesheet, so it wins at equal specificity. */
 [data-whisk] {
-  /* surfaces */
   --whisk-bg: var(--color-paper);
   --whisk-card: var(--color-paper);
   --whisk-card-fg: var(--color-ink);
   --whisk-fg: var(--color-ink);
   --whisk-fg-muted: color-mix(in srgb, var(--color-ink) 65%, transparent);
-  /* lines */
   --whisk-border: var(--color-line);
   --whisk-input: var(--color-line);
   --whisk-border-w: 1px;
-  /* accent */
   --whisk-primary: var(--color-moss);
   --whisk-primary-fg: var(--color-paper);
   --whisk-ring: var(--color-fern);
-  /* semantic */
   --whisk-success: var(--color-moss);
   --whisk-warning: var(--color-sun);
   --whisk-destructive: var(--color-bark);
   --whisk-destructive-fg: var(--color-paper);
-  /* radii */
   --whisk-radius: 12px;
   --whisk-radius-sm: 8px;
   --whisk-radius-md: 12px;
   --whisk-radius-lg: 16px;
-  /* fonts — inherit the recipe's stack so the widget reads native */
+  /* Reuse the page's fonts so the widget looks native. */
   --whisk-font: var(--font-sans);
   --whisk-font-display: var(--font-display);
   --whisk-font-mono: var(--font-mono);

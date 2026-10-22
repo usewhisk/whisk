@@ -4,11 +4,6 @@ import { useInvoiceLink } from "../../hooks/use-invoice-link";
 import { InvoiceForm } from "../../components/invoice-form";
 import { LinkPreview } from "../../components/link-preview";
 
-/**
- * Merchant composer — top-level composition. All field state, URL building,
- * and copy-to-clipboard live inside `useInvoiceLink`; this view forwards the
- * draft into the form and the derived URL into the preview.
- */
 export function CreateForm() {
   const link = useInvoiceLink();
 

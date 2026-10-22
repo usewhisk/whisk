@@ -4,8 +4,9 @@ description: The styled send + bridge widget. The fastest way to ship a USDC pay
 ---
 
 `<WhiskSend>` is the default Whisk surface. It walks the user
-through connect → input → review → send → success, and renders the
-swap tab next to it when a `kitKey` is supplied.
+through connect → input → review → send → success, with two tabs:
+**Send** for same-chain transfers and **Bridge** for cross-chain
+CCTP V2 bridges.
 
 ```tsx
 import { WhiskSend } from "@usewhisk/react";
@@ -23,16 +24,14 @@ opt-in.
 
 ## Lifecycle callbacks
 
-| Prop            | Type                                                       |
-| --------------- | ---------------------------------------------------------- |
-| `onSuccess`     | `(result: { quote: Quote; finalTxHash?: string }) => void` |
-| `onError`       | `(error: Error) => void`                                   |
-| `onStateChange` | `(state: WhiskState) => void`                              |
+| Prop        | Type                            |
+| ----------- | ------------------------------- |
+| `onSuccess` | `(result: SendSuccess) => void` |
+| `onFailure` | `(result: SendFailure) => void` |
 
-`onSuccess` fires once per completed flow. `onError` fires on
-terminal failures. `onStateChange` fires on every transition,
-including the noisy ones (`resolving`, `quoting`) — filter inside
-the callback if you only care about a subset.
+`onSuccess` fires when a transfer settles cleanly. `onFailure` fires
+when the engine returns a failure result — the `steps` array on the
+payload tells you which step tripped it.
 
 ## Controlled inputs (locked)
 
@@ -45,33 +44,28 @@ the callback if you only care about a subset.
 
 ## Default inputs (seeded but editable)
 
-| Prop               | Type     |
-| ------------------ | -------- |
-| `defaultAmount`    | `string` |
-| `defaultRecipient` | `string` |
+| Prop                      | Type     |
+| ------------------------- | -------- |
+| `defaultAmount`           | `string` |
+| `defaultRecipient`        | `string` |
+| `defaultSourceChain`      | `Chain`  |
+| `defaultDestinationChain` | `Chain`  |
 
-## Change callbacks
+## Tabs
 
-`onAmountChange`, `onRecipientChange`, `onSourceChainChange`,
-`onDestinationChainChange`. Each receives the new value.
+| Prop   | Type                                | Default              |
+| ------ | ----------------------------------- | -------------------- |
+| `tabs` | `ReadonlyArray<"send" \| "bridge">` | `["send", "bridge"]` |
 
-## Tabs & Swap
-
-| Prop                  | Type             | Default                                                               |
-| --------------------- | ---------------- | --------------------------------------------------------------------- |
-| `tabs`                | `WhiskSendTab[]` | `["transfer", "swap"]` when `kitKey` is supplied, else `["transfer"]` |
-| `defaultTab`          | `WhiskSendTab`   | `"transfer"`                                                          |
-| `kitKey`              | `string`         | required for swap                                                     |
-| `swapDefaultChain`    | `Chain`          | —                                                                     |
-| `swapDefaultTokenIn`  | `Token`          | —                                                                     |
-| `swapDefaultTokenOut` | `Token`          | —                                                                     |
+Pass a single-element array to hide the other tab entirely (e.g.,
+bridge-only or send-only surfaces).
 
 ## Layout
 
-| Prop           | Type      | Notes                                                        |
-| -------------- | --------- | ------------------------------------------------------------ |
-| `showWordmark` | `boolean` | Show the "powered by Whisk" footer wordmark. Off by default. |
-| `className`    | `string`  | Forwarded to the outer card. Use to tweak width or spacing.  |
+| Prop          | Type        | Notes                                               |
+| ------------- | ----------- | --------------------------------------------------- |
+| `title`       | `string`    | Override the card title. Defaults to `"Send USDC"`. |
+| `description` | `ReactNode` | Optional copy shown under the title.                |
 
 ## A checkout
 
@@ -79,7 +73,8 @@ the callback if you only care about a subset.
 <WhiskSend
   amount="49.99"
   recipient="0xMerchantTreasury…"
-  destinationChain="Base"
+  destinationChain="Base_Sepolia"
+  tabs={["bridge"]}
   onSuccess={({ finalTxHash }) => {
     router.push(`/order/confirmed?tx=${finalTxHash}`);
   }}
@@ -93,15 +88,5 @@ the callback if you only care about a subset.
   recipient="0xDAOTreasury…"
   defaultAmount="10"
   onSuccess={() => analytics.track("donation.complete")}
-/>
-```
-
-## Transfer + swap, side by side
-
-```tsx
-<WhiskSend
-  kitKey={process.env.NEXT_PUBLIC_CIRCLE_KIT_KEY!}
-  tabs={["transfer", "swap"]}
-  defaultTab="transfer"
 />
 ```

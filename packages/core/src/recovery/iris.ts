@@ -1,15 +1,26 @@
+/**
+ * Wraps the `@usewhisk/cctp` Iris client in a smaller `IrisMessage` shape,
+ * with a `"not_found"` status for a burn Iris has not seen yet.
+ */
+import {
+  getChain,
+  getMessages,
+  irisBaseUrl as cctpIrisBaseUrl,
+  IRIS_MAINNET_URL as CCTP_IRIS_MAINNET_URL,
+  IRIS_SANDBOX_URL as CCTP_IRIS_SANDBOX_URL,
+  type IrisMessage as CctpIrisMessage,
+} from "@usewhisk/cctp";
 import type { Chain } from "../types/chain.js";
-import { cctpDomainFor } from "../chains/cctpDomain.js";
-import { chainInfo } from "../chains/registry.js";
 
-export const IRIS_MAINNET_URL = "https://iris-api.circle.com";
-export const IRIS_SANDBOX_URL = "https://iris-api-sandbox.circle.com";
+/** Re-exported so callers can pass one as `baseUrl`. */
+export const IRIS_MAINNET_URL = CCTP_IRIS_MAINNET_URL;
+export const IRIS_SANDBOX_URL = CCTP_IRIS_SANDBOX_URL;
 
-export type IrisStatus =
-  | "pending_confirmations"
-  | "complete"
-  | "failed"
-  | "not_found";
+/**
+ * Iris returns an empty list, not a status, for a burn it has not seen yet;
+ * that becomes `"not_found"`.
+ */
+export type IrisStatus = "pending_confirmations" | "complete" | "not_found";
 
 export type IrisMessage = {
   status: IrisStatus;
@@ -19,67 +30,51 @@ export type IrisMessage = {
 };
 
 export type FetchAttestationOptions = {
+  /** Defaults to the Iris URL for the source chain's network. */
   baseUrl?: string;
   signal?: AbortSignal;
+  /** Defaults to the global `fetch`. */
+  fetch?: typeof fetch;
 };
 
 export type PollAttestationOptions = FetchAttestationOptions & {
+  /** Total polling deadline in ms. Default 10 minutes. */
   timeout?: number;
+  /** Interval between polls in ms. Default 3 s. */
   pollingInterval?: number;
   onUpdate?: (msg: IrisMessage) => void;
 };
 
 export function getIrisBaseUrl(chain: Chain): string {
-  return chainInfo(chain).network === "mainnet"
-    ? IRIS_MAINNET_URL
-    : IRIS_SANDBOX_URL;
+  return cctpIrisBaseUrl(getChain(chain).network);
 }
 
-/** Single-shot attestation lookup against Iris. */
+/** One lookup. Returns `"not_found"` until Iris sees the burn. */
 export async function fetchAttestationOnce(
   sourceChain: Chain,
   burnTxHash: string,
   options: FetchAttestationOptions = {},
 ): Promise<IrisMessage> {
-  const domain = cctpDomainFor(sourceChain);
-  if (domain === undefined) {
-    return { status: "not_found" };
-  }
-  const base = options.baseUrl ?? getIrisBaseUrl(sourceChain);
-  const url = `${base}/v2/messages/${domain}/${burnTxHash}`;
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    signal: options.signal,
-  });
-
-  if (response.status === 404) {
-    return { status: "not_found" };
-  }
-  if (!response.ok) {
-    throw new Error(
-      `Iris responded ${response.status} ${response.statusText} for ${burnTxHash}`,
-    );
-  }
-
-  const data = (await response.json()) as { messages?: unknown[] };
-  const entry = Array.isArray(data.messages) ? data.messages[0] : undefined;
-  if (!entry || typeof entry !== "object") {
-    return { status: "not_found" };
-  }
-  const e = entry as Record<string, unknown>;
-  const status =
-    typeof e.status === "string" ? (e.status as IrisStatus) : "not_found";
-  return {
-    status,
-    message: typeof e.message === "string" ? e.message : undefined,
-    attestation: typeof e.attestation === "string" ? e.attestation : undefined,
-    eventNonce: typeof e.eventNonce === "string" ? e.eventNonce : undefined,
+  const source = getChain(sourceChain);
+  const fetchOpts: Parameters<typeof getMessages>[1] = {
+    network: source.network,
+    ...(options.signal && { signal: options.signal }),
+    ...(options.baseUrl && { baseUrl: options.baseUrl }),
+    ...(options.fetch && { fetch: options.fetch }),
   };
+  const messages = await getMessages(
+    { sourceDomain: source.cctpDomain, transactionHash: burnTxHash },
+    fetchOpts,
+  );
+  const first = messages[0];
+  if (!first) return { status: "not_found" };
+  return toIrisMessage(first);
 }
 
-/** Poll Iris until the attestation is terminal or the timeout elapses. */
+/**
+ * Polls until the attestation is `complete` or the timeout passes, then
+ * returns the latest status. Every response also goes to `onUpdate`.
+ */
 export async function pollAttestation(
   sourceChain: Chain,
   burnTxHash: string,
@@ -91,9 +86,7 @@ export async function pollAttestation(
 
   let latest = await fetchAttestationOnce(sourceChain, burnTxHash, options);
   options.onUpdate?.(latest);
-  if (latest.status === "complete" || latest.status === "failed") {
-    return latest;
-  }
+  if (latest.status === "complete") return latest;
 
   while (Date.now() < deadline) {
     if (options.signal?.aborted) {
@@ -102,11 +95,20 @@ export async function pollAttestation(
     await sleep(interval, options.signal);
     latest = await fetchAttestationOnce(sourceChain, burnTxHash, options);
     options.onUpdate?.(latest);
-    if (latest.status === "complete" || latest.status === "failed") {
-      return latest;
-    }
+    if (latest.status === "complete") return latest;
   }
   return latest;
+}
+
+function toIrisMessage(raw: CctpIrisMessage): IrisMessage {
+  // Iris sends only these two; anything else has not finished attesting.
+  const out: IrisMessage = {
+    status: raw.status === "complete" ? "complete" : "pending_confirmations",
+  };
+  if (raw.message) out.message = raw.message;
+  if (raw.attestation) out.attestation = raw.attestation;
+  if (raw.eventNonce) out.eventNonce = raw.eventNonce;
+  return out;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

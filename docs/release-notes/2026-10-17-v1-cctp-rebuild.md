@@ -1,0 +1,342 @@
+---
+date: 2026-10-17
+feature: Whisk v1, rebuilt on direct CCTP V2
+scope: feat
+scenario-impact: needs_automation
+---
+
+# Whisk v1 on direct CCTP V2
+
+Whisk moves USDC by calling Circle's CCTP V2 contracts directly, through the new
+`@usewhisk/cctp` package, instead of going through App Kit. Payers can send from and
+to Stellar and Starknet as well as EVM chains and Solana. The widget gains receipts,
+refunds, webhooks and theming, and new headless examples show the engine without the
+widget.
+
+Removed: App Kit, the swap tab and user-controlled wallets.
+
+Technical shape, per
+[ADR-2026-10-16-phase-1-foundation](../adr/ADR-2026-10-16-phase-1-foundation.md):
+
+- Layering is `cctp`, then `core`, then `react`, then the examples.
+- The packages need no app ID. `appId` and `cloudBaseUrl` are gone from
+  `createWhiskConfig`, along with `useWhiskCloud` and the Whisk protocol-fee row in
+  `WhiskSend`. A handshake that verifies its token returns in Phase 2.
+- The hosted console is not part of this repo. It moves to `usewhisk/platform`.
+- `createWhisk` takes an optional `fetch`, used for every Iris request, and the Iris
+  functions in `@usewhisk/cctp` take one too. Pass one to route Iris through a proxy
+  or to stub Circle in tests.
+- One chain registry, in `@usewhisk/cctp`. It covers 25 EVM chains plus Solana,
+  Stellar and Starknet, each on mainnet and testnet, with Arc among them. Chain ids
+  are Circle App Kit `Blockchain` strings (`Base_Sepolia`, `Arc_Testnet`), and core's
+  `Chain` type is the union of those ids. Each entry carries its native currency,
+  USDC decimals and Circle's capability flags (`fastSource`,
+  `forwardingDestination`, `upfrontFeeSource`).
+- Core's lookups are replaced by the registry's: `chainInfo` by `getChain`,
+  `chainByEvmId` by `chainByEvmChainId` and `tryChainByEvmChainId`, `allChains` by
+  `CHAINS`, and an entry's `kind` by its `ecosystem`. `addressFormat(chain)` gives
+  the input pattern and hint. `cctpDomainFor`, `chainForCctpDomain`, `chainsByKind`,
+  `supportedTokensFor` and `tokenAddressFor` are removed; every chain now has a
+  domain (`getChain(chain).cctpDomain`).
+- Receipts and recovery now find Stellar (domain 27) and Starknet (domain 25) burns
+  on Iris.
+- Core's old table pointed Ink and Plume at Stargate's bridged `USDC.e` and Codex at
+  an address with no contract. The registry uses Circle's native USDC on all three.
+- `pnpm --filter @usewhisk/cctp check:registry` reads every EVM entry back from
+  its public RPCs and fails on any mismatch. It runs nightly in `registry.yml`.
+- Fee maths is exact and rounds up. `parseFeeBps` reads Iris's `minimumFee` from its
+  decimal text into hundredths of a basis point (`1.3` is `130n`), and
+  `computeBurnFee(amount, feeCentiBps)` takes that bigint and rounds the fee up, as
+  does the forwarder buffer. Before, `maxFee` could come out one subunit short, which
+  turns a Fast transfer into a Standard one.
+- `BurnFeeTier.minimumFee` and the `forwardFee` levels are bigints.
+  `sumProtocolFees` and `sumForwarderFees` return bigint subunits, and quote totals
+  are summed in bigints.
+- A test fails the build if `parseFloat`, `Number(`, `toFixed(` or `Math.ceil`,
+  `floor` or `round` appears in a `fees`, `engine` or `quote` source path.
+- A transfer's network comes from its source chain. `mode` is gone from
+  `createWhisk` and `createWhiskConfig`, along with `inferMode`, `resolveMode` and
+  `WhiskMode`, so a config may list mainnet and testnet chains together. A source and
+  destination on different networks throw `NetworkMismatchError` before Iris is
+  called, and the widget offers only destinations on the source chain's network.
+- `planRoute` decides each bridge before anything is signed: its network, whether
+  Circle forwards the mint or a connected wallet signs it, and which wallets that
+  needs. `quote` and `send` both go through it. A missing wallet throws
+  `RouteUnavailableError` with `reason: "destination_adapter_required"` and the
+  ecosystem to connect. `QuoteParams` takes `destinationAdapter`, so a quote can
+  check it too.
+- Circle forwards only to EVM chains flagged `forwardingDestination`, and only for
+  burns from EVM and Solana. Elsewhere the mint is signed by a wallet. Before, a
+  transfer to Morph, Injective, Pharos, Cronos, Plasma or X Layer was burned with
+  forwarding hook data that Circle ignores, and stalled until someone minted it.
+- Solana to EVM with forwarding off mints with the connected EVM wallet. Before, it
+  burned and then failed.
+- Chains without Fast Transfer bridge as Standard instead of being refused: Arc,
+  Avalanche, Polygon, Sonic, Monad, Sei, XDC, HyperEVM, Injective, Pharos, Cronos,
+  Plasma and Stellar. On these chains Standard attests in about half a second to
+  ten seconds. `RoutePlan` carries `speed` and `etaSeconds`, Circle's published
+  attestation time for the source, and bridge quotes carry their `plan`.
+  `attestationSeconds(chain, speed)` in `@usewhisk/cctp` returns that table.
+- `getBurnFees` keeps Iris's Standard row, and `pickFeeTier(tiers, speed)` takes
+  the speed. Every burn builder takes its finality threshold from the fee tier:
+  `minFinalityThreshold` is required on the Solana, Stellar and Starknet builders,
+  and the EVM builder refuses a Fast tier on a chain without Fast.
+- A quote is what the payer signs
+  ([ADR-2026-10-18-bound-quotes-and-fees](../adr/ADR-2026-10-18-bound-quotes-and-fees.md)).
+  - `Quote` has an `id`, `issuedAt`, `expiresAt` (60 seconds), `feeMode` and
+    bigint `subunits`.
+  - `send({ quote, adapter, destinationAdapter?, metadata? })` reads the chains,
+    recipient and amount from the quote, and burns with exactly
+    `quote.subunits.maxFee` and `burnAmount`. Before, `send` fetched fees again
+    and could sign a different `maxFee` from the one shown (#87).
+  - An expired quote throws `QuoteExpiredError` (`QUOTE_EXPIRED`). If fresh Iris
+    fees no longer fit under the quote's `maxFee`, `send` throws
+    `QuoteChangedError` (`QUOTE_CHANGED`) carrying the fresh quote. Both happen
+    before anything is signed.
+  - `WhiskSend` fetches a new quote before the old one expires. When fees rise,
+    it shows the old and new totals and asks the payer to confirm again.
+  - `buildBurnIntent` takes `fee.maxFee` and burns with it as given.
+- Fast burns carry a 10% buffer on the protocol fee in `maxFee`. Circle takes
+  only the fee it executes, and the quote's protocol line shows the most it can
+  be. Before, a small fee rise could quietly turn a Fast transfer into a Standard
+  one.
+- Circle's forwarding fee defaults to the `high` level, or `med` into Ethereum,
+  where `high` costs about 0.30 USDC more. `createWhisk({ forwarderFeeLevel })`
+  overrides it.
+- Registry entries carry `standardFeeSwitch`, true where TokenMessengerV2 has
+  `getMinFeeAmount` (14 mainnets and their testnets, plus Sonic Testnet). A
+  Standard quote from those chains reads it with `getStandardMinFee` and never
+  charges less. `check:registry` checks the flag nightly.
+- On the 18 chains with Circle's `TokenMessengerWithFees`, a transfer whose sender
+  pays the fees pays them upfront from Circle's signed quote, and the recipient
+  gets exactly the amount sent. The quote's `feeMode` is `upfront`.
+  - The quote shows the most the fee can be: the Fast fee plus 10% and the
+    forwarding fee at the configured level.
+  - At send time the engine fetches Circle's signed quote, priced in USDC. If
+    the signed fee is above the shown fee, `send` throws `QuoteChangedError`.
+    An expired signed quote is fetched once more before `QuoteExpiredError`.
+  - The burn is `depositForBurnWithFees`, approved for the amount plus the
+    shown fee.
+  - Receiver-pays transfers, Stellar destinations, and Standard burns that owe
+    an on-chain minimum stay on `maxFee`.
+- `@usewhisk/cctp` adds:
+  - `getSignedBurnQuote`, `getFastBurnAllowance` and `getBlockNumber`;
+  - `buildBurnWithFeesIntent` and `tokenMessengerWithFeesAbi`;
+  - `tokenMessengerWithFees` on each `upfrontFeeSource` registry entry, which
+    `check:registry` reads back nightly.
+- A Fast route whose amount exceeds Circle's remaining Fast allowance is
+  planned as Standard, with the Standard ETA, at quote time and again at send.
+- `reattest(nonce)` sends `POST /v2/reattest/{nonce}` and returns Circle's
+  acknowledgement, `{ nonce }`. Before, it sent `GET`, which Iris does not
+  serve (#66).
+- Every Iris request goes through one rate limiter per process, at 30 requests
+  a second per host, under Circle's 35.
+  - A 429 makes that host stand down for five minutes, as Circle blocks the IP
+    for that long. Calls in the meantime throw `IrisRateLimitedError` with
+    `retryAt` instead of asking again.
+  - `pollMessages` waits a stand-down out without counting it against its
+    timeout, and reports it through `onRateLimited`.
+  - `createIrisLimiter` makes a separate limiter, passed as `limiter`.
+- Attestation polling is sized to the route's expected time:
+  - every 2 seconds when Circle's time is a minute or less, every 10 seconds up
+    to 30 minutes, every 30 seconds beyond that;
+  - for twice the expected time plus five minutes.
+
+  Before, every route polled every 3 seconds and gave up at 15 minutes, which
+  is shorter than a Standard transfer from Ethereum, Linea or Starknet.
+  `pollBudget(eta)` returns the numbers.
+- A relayed mint counts as done once Iris reports it `CONFIRMED` or `COMPLETE`
+  with its `forwardTxHash` (`isForwardDone`). Before, `send` waited for
+  `COMPLETE` alone.
+- Iris's message types match what it sends. `status` is `complete` or
+  `pending_confirmations`, as Iris never reports a failed attestation, and
+  `delayReason` is one of `insufficient_fee`, `amount_above_max` or
+  `insufficient_allowance_available`: reasons a message is slow, not failures.
+- Every bridge is kept in an `InflightStore` from before the wallet signs until
+  the mint (#86).
+  - `createWhisk({ inflightStore })` takes the store. Core's default is
+    memory, `createStorageInflightStore(storage)` keeps records under
+    `whisk:inflight:<id>` in any Web Storage object, and `WhiskProvider` uses
+    `localStorage` by default (`createBrowserInflightStore`).
+  - A record is written as `signing` before the wallet is asked, `burned` with
+    the burn hash the moment the wallet returns it, then `attested` and
+    `minted`. A transfer that never burned leaves no record. Burned records
+    never expire.
+  - `SendListeners.onBurnSubmitted(txHash)` reports the burn hash before any
+    receipt wait. Before, an EVM source reported it only after the approve
+    receipt, so a tab closed in between lost a burned transfer.
+- `engine.inflight()` lists the records. `engine.resume(record, {
+  destinationAdapter })` finishes one without signing the burn again.
+  - It checks the burn did not revert, waits for the attestation, and checks
+    that the attestation's destination matches.
+  - For a forwarded transfer it waits for Circle's relayer, and mints itself
+    only if the relayer failed.
+  - Before minting it reads `usedNonces` on the destination, so a transfer
+    that was already received is marked minted without a second mint.
+  - An expired attestation is re-attested by `POST`, then re-read by nonce.
+    On Arbitrum, EDGE and Plume, which count expiry in L1 blocks, the mint is
+    tried first and re-attested only if it reverts.
+  - It resumes into Solana, Stellar and Starknet as well, minting with the
+    destination wallet. Before minting it checks the destination has not
+    received the message: the `used_nonce` account on Solana, and
+    `is_nonce_used` on Stellar and Starknet. An expired attestation is
+    re-attested if the mint reverts, since those chains count expiry in slots
+    and ledgers the wallets do not report alike.
+  - Before any mint, the attested bytes are checked against the record: the
+    destination domain and the amount burned.
+- `engine.resumeFromTx({ sourceChain, txHash, destinationAdapter })` does the
+  same from the burn's tx hash alone, building the record from what Iris
+  decoded.
+- `@usewhisk/cctp` adds `isNonceUsed`, `isStellarNonceUsed`,
+  `isStarknetNonceUsed` and `getTransactionStatus`, and `decodeBurnMessage`,
+  which reads a CCTP V2 burn message's fields from its bytes.
+- Core's receipt client (`fetchAttestationOnce`, `pollAttestation`,
+  `IrisStatus`) and `useReceipt` drop the `failed` status Iris never sends; a
+  status other than `complete` is still pending.
+- Removed: `engine.retry`, which only threw "not implemented", and
+  `RetryParams`. Also removed are the browser snapshot helpers
+  (`saveInflight`, `loadInflight`, `clearInflight`, `listInflightSnapshots`,
+  `serializeError`, `deserializeError`, `INFLIGHT_TTL_MS`, `STORAGE_PREFIX`,
+  `InflightSnapshot`, `WalletKind`), which nothing called and which expired
+  burned transfers after 48 hours.
+- Arc rules (#71):
+  - Every EVM call the engine sends on Arc carries `maxFeePerGas`, a quarter
+    above Arc's `eth_gasPrice` and never under its 20 gwei floor, plus a 1 gwei
+    `maxPriorityFeePerGas`. Arc drops an offer under the floor, which left the
+    payer waiting on a transaction that would never mine. Other chains leave
+    fees to the wallet.
+  - `EvmCall` has optional `maxFeePerGas` and `maxPriorityFeePerGas`, which
+    adapters pass to the wallet when set.
+  - JSON-RPC reads retry `-32014`, which Arc's load-balanced endpoint returns
+    from a backend behind the head.
+  - `WhiskProvider`'s wagmi config uses viem's `arc` and `arcTestnet`, adding
+    Arc mainnet. Before, Arc Testnet pointed at `rpc.testnet.arc.network`,
+    which no longer resolves.
+  - Arc is the default chain in the examples.
+  - The Next examples load Inter, Familjen Grotesk and JetBrains Mono from
+    `woff2` files in the repo, with each font's OFL licence, through
+    `next/font/local`. `next/font/google` fetched them during `next build` and
+    failed CI whenever Google's reply did not parse.
+- `viem` is a peer dependency of `@usewhisk/core` and `@usewhisk/react`, at
+  `>=2.57.5 <3`, and a dependency of `@usewhisk/cctp` in the same range. 2.57.5
+  is the first release whose Arc chains carry Arc's current RPCs.
+- `EvmAdapter.sendCalls(calls, { onSubmitted })` reports each hash as the
+  wallet returns it, before any receipt wait. The engine saves the burn hash
+  from it (#86). `useEvmAdapter` reports them, and waits for a second
+  confirmation before a call that depends on the one before, so a
+  load-balanced RPC one block behind cannot estimate a burn against the
+  allowance from before its approve. `createWagmiEvmAdapter(config, address)`
+  is the same adapter outside a hook.
+- The default resolver picks Sepolia or mainnet ENS from the destination chain's
+  network.
+- `addressResolver` accepts an address of any ecosystem it knows: EVM, Solana
+  base58, Stellar `G`, `M` and `C` strkeys, and Starknet felts. Before, it
+  matched only EVM and Solana, so the widget refused a Stellar or Starknet
+  recipient (#65). `looksLikeAddress` exposes the check.
+- Widget errors are visible (#89).
+  - A send that throws shows its message in the form, with its code in
+    `data-whisk-error`, instead of becoming an unhandled rejection.
+  - A wallet that fails to disconnect is reported in the connect dialog,
+    which stays open. Before, the error was dropped and the dialog closed.
+- The chain picker's list and the connect dialog render into a container
+  inside `[data-whisk]`, which `WhiskProvider` mounts, so they keep the
+  widget's styles and theme. Before, they rendered unstyled at the end of
+  `body` (#69).
+- Theme presets (#73). `WhiskProvider`'s `theme` takes:
+  - `"light"`, which is the default;
+  - `"dark"`;
+  - `"auto"`, which follows `prefers-color-scheme` in CSS alone;
+  - the named palettes;
+  - a full `WhiskTheme`;
+  - `{ preset, tokens }`, which replaces some tokens of a preset or of
+    `"auto"` without pinning its colour scheme.
+
+  `"system"` is renamed `"auto"`, and the default changes from following the
+  OS to light, so a light host page no longer gets a dark widget on a dark OS.
+  `tokensToCssVars` maps any set of tokens to `--whisk-*` variables.
+- Transfers can be finished from the widget.
+  - `WhiskSend` lists the transfers in `engine.inflight()` above the form: the
+    amount, the route and where it stands. Each has Resume, which calls
+    `engine.resume` with the connected wallet for the destination chain, and
+    Dismiss, which calls the new `engine.dismiss(id)`. A resume that cannot
+    finish says why. `ResumeList` is exported on its own too.
+  - `WhiskReceipt` has a Finish transfer button for a cross-chain transfer
+    that has not settled, which calls `engine.resumeFromTx` from the burn's
+    hash. Outside a `WhiskProvider` the receipt shows status only.
+  - `useAdapterFor()` returns the connected wallet for a chain.
+- Balance and Max (#71).
+  - `engine.balance({ chain, address })` reads the payer's USDC on EVM chains
+    (`null` on Solana, Stellar and Starknet for now).
+  - `engine.maxSendable(params)` returns the largest amount the payer can
+    send on the route: the balance, less the fees the payer covers and, on
+    Arc, a reserve for gas paid from the same USDC (100,000 gas for a send,
+    400,000 for a bridge, at Arc's fee setting).
+  - `send` refuses with `InsufficientBalanceError` before any signature when
+    the balance cannot cover what the quote debits plus that reserve.
+  - `WhiskSend` shows the balance under the amount, with a Max button.
+  - `@usewhisk/cctp` adds `getUsdcBalance`.
+- The widget has DOM tests (Testing Library on jsdom) that mount the real
+  components, and a test fails on an unhandled rejection.
+- Every bridge route has a wiring test through `createWhisk().send` (#90),
+  with in-memory Solana, Stellar and Starknet wallets beside the EVM one. Each
+  decodes the burn as its contract reads it (domain, mint recipient,
+  destination caller, max fee, hook) and checks the mint on the destination.
+  Each route also proves a send that fails its checks burns nothing.
+- `pnpm test:testnet` runs the six-pair testnet matrix from Decision 10.4 with
+  funded keys, checking each recipient's balance on the destination. It also
+  covers Max on Arc and a transfer burned in one process and resumed in
+  another. A nightly `Testnet` workflow runs it, outside `quality`. It replaces
+  the old `test:live` sweep, and core's `lint` now typechecks the scripts.
+- Starknet confirmations work against current nodes. Public Starknet RPCs now
+  serve spec 0.10, which starknet.js 7 refuses, and the widget's default RPC was
+  Blast, which has shut down.
+  - `getStarknetTransactionStatus` (cctp, re-exported by core) reads the receipt
+    over plain JSON-RPC, so a node on a newer spec version cannot break it.
+  - The widget's Starknet adapter confirms through it, trying the integrator's
+    `rpcUrl` first and the registry's endpoints after, and fails after 10
+    minutes instead of waiting forever.
+  - `starknet()` defaults its `rpcUrl` to the registry's endpoint.
+  - starknet.js moves to `^10.8.0` in cctp, core and react.
+- Transfers into Solana check the recipient before the burn. Solana's
+  `receive_message` cannot create the recipient's USDC account, and the check
+  used to run after the attestation, so a recipient without one left the USDC
+  burned and unminted. EVM, Stellar and Starknet to Solana now fail first with
+  `RouteUnavailableError` reason `recipient_account_missing`, or with
+  `WrongChainError` when the Solana wallet is on the other cluster, and nothing
+  is sent.
+- Comments in the packages and examples follow Directive 6 (#92). Banners,
+  narration and history are gone, and comments that no longer matched the code
+  were corrected, among them the `createWhisk` header, the Iris timeout and 429
+  behaviour in cctp, the `rpcUrls` and `FeePolicy.bps` docs, and the example
+  providers' chain lists. No code changed.
+- Pre-release fixes to the widget.
+  - Host stylesheet rules on `[data-whisk]` win again with the `light`
+    (default) and `dark` themes. Both palettes live in `styles.css`, so the
+    provider sets only the colour mode for them; the other presets and
+    `tokens` are still written inline. `resolveTheme("light")` and
+    `resolveTheme("dark")` return no variables.
+  - `fonts.css` loads Inter, Familjen Grotesk and Geist Mono from Fontsource
+    packages pinned on jsDelivr. The Familjen Grotesk file it named returned
+    404 and the Geist Mono URL returned an HTML page.
+  - `@usewhisk/react` and `/headless` export `QuoteExpiredError` and
+    `QuoteChangedError`.
+  - cctp's `buildMintIntent` names the right builder for a Solana, Stellar or
+    Starknet destination.
+- Release (#74).
+  - Changesets publish `@usewhisk/cctp@0.1.0`, `@usewhisk/core@0.2.0` and
+    `@usewhisk/react@0.2.0`. Core and react depend on each other with a `^`
+    range.
+  - `docs/migration/0.1-to-0.2.mdx` covers every breaking change from the App Kit
+    `0.1.0`, ready for the `usewhisk/docs` site.
+  - The release workflow runs for the `usewhisk` organization, publishes
+    through Trusted Publishing with provenance, and skips the dependency cache.
+  - Package metadata points to `usewhisk/whisk`, cctp ships its LICENSE, and
+    the four READMEs match the 0.2 API.
+- Recovery's `baseUrl` reaches Iris again (#115). cctp's `getMessages` and
+  `pollMessages` take a `baseUrl`, and core's `fetchAttestationOnce` and
+  `pollAttestation` pass theirs through instead of always calling Circle's host.
+- `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
+  secrets in tests, which gitleaks reads as generic API keys.
+
+This note is updated as each Phase 1 step lands on the branch. Step 10 was verified
+on 2026-10-22: all six pairs of the testnet matrix passed.

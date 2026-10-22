@@ -1,45 +1,90 @@
+/**
+ * The engine owns no chain knowledge. It asks `@usewhisk/cctp` for the burn
+ * and mint calls and hands them to the caller's adapters to sign. `send`
+ * picks an executor from the source and destination ecosystems (EVM, Solana,
+ * Stellar, Starknet). A route whose mint Circle does not forward needs a
+ * `destinationAdapter` for the destination wallet.
+ */
+
 import {
-  AppKit,
-  type BridgeParams,
-  type BridgeResult,
-  type BridgeStep,
-  type EstimateResult,
-  type SendParams as AppKitSendParams,
-  type SwapParams as AppKitSwapParams,
-  type SwapResult as AppKitSwapResult,
-} from "@circle-fin/app-kit";
+  getBlockNumber,
+  getChain,
+  getSignedBurnQuote,
+  getUsdcBalance,
+  type CctpChain,
+  type SignedQuoteExpiry,
+  type UpfrontFeeType,
+  type EvmChain,
+  type SolanaChain,
+  type StarknetChain,
+  type StellarChain,
+} from "@usewhisk/cctp";
 import type { WhiskConfig } from "../types/config.js";
 import type { ResolvedRecipient } from "../types/recipient.js";
 import type { Quote } from "../types/quote.js";
-import type { Step, StepName } from "../types/step.js";
-import { DEFAULT_TOKEN } from "../types/token.js";
-import { decideRoute } from "../routing/decide.js";
-import { resolveMode } from "../chains/mode.js";
-import { addressResolver } from "../resolvers/address.js";
-import {
-  type AppKitEstimateFee,
-  buildCustomFeeEntries,
-  fromAppKitFees,
-  sumFees,
-  sumForwarderFees,
-  sumProtocolFees,
-} from "../fees/calculate.js";
-import { chainInfo, explorerTxUrl } from "../chains/registry.js";
+import type { Chain } from "../types/chain.js";
 import {
   ConfigError,
-  InvalidAddressError,
-  toWhiskError,
-  WhiskError,
+  InsufficientBalanceError,
+  QuoteChangedError,
+  QuoteExpiredError,
 } from "../errors/errors.js";
+import { addressResolver } from "../resolvers/address.js";
+import { decideRoute } from "../routing/decide.js";
+import {
+  connectedEcosystems,
+  planRoute,
+  type RoutePlan,
+} from "../routing/plan.js";
+import { mergeMetadata, validateMetadata } from "../metadata/validate.js";
+import type { WhiskMetadata } from "../metadata/types.js";
+import { isBridgeRoute, isSendRoute } from "../types/route.js";
+import { DEFAULT_FEE_BEARER } from "../types/fee.js";
+import { formatUsdcAmount } from "./amount.js";
+import { fitFastAllowance } from "../routing/allowance.js";
+import type { UpfrontFee } from "./bridge/upfront.js";
+import {
+  gasReserve,
+  withChainRules,
+  type ChainRulesContext,
+} from "./chainRules.js";
+import { createMemoryInflightStore } from "../inflight/stores.js";
+import type { InflightRecord } from "../inflight/types.js";
+import { recordFromTx, resumeTransfer, type ResumeContext } from "./resume.js";
+import { buildQuote, rpcUrlsFor } from "./quote.js";
+import { computeBridgeFees, fetchFeeTier } from "./bridge/quote.js";
+import { executeBridge } from "./bridge/execute.js";
+import { executeSolanaToEvm } from "./bridge/executeSolanaToEvm.js";
+import { executeEvmToSolana } from "./bridge/executeEvmToSolana.js";
+import { executeEvmToStellar } from "./bridge/executeEvmToStellar.js";
+import { executeStellarToEvm } from "./bridge/executeStellarToEvm.js";
+import { executeSolanaToStellar } from "./bridge/executeSolanaToStellar.js";
+import { executeStellarToSolana } from "./bridge/executeStellarToSolana.js";
+import { executeSameChainSend } from "./send/sameChain.js";
+import { executeSameChainSolanaSend } from "./send/sameChainSolana.js";
+import { executeSameChainStarknetSend } from "./send/sameChainStarknet.js";
+import { executeSameChainStellarSend } from "./send/sameChainStellar.js";
+import { executeEvmToStarknet } from "./bridge/executeEvmToStarknet.js";
+import { executeStarknetToEvm } from "./bridge/executeStarknetToEvm.js";
+import { executeSolanaToStarknet } from "./bridge/executeSolanaToStarknet.js";
+import { executeStarknetToSolana } from "./bridge/executeStarknetToSolana.js";
+import { executeStellarToStarknet } from "./bridge/executeStellarToStarknet.js";
+import { executeStarknetToStellar } from "./bridge/executeStarknetToStellar.js";
+import { buildCustomFee } from "./customFee.js";
+import { buildRefundMetadata, validateRefundInput } from "../refund/index.js";
 import type {
+  EvmAdapter,
   QuoteParams,
-  RetryParams,
+  RefundParams,
+  RefundResult,
   SendListeners,
   SendParams,
   SendResult,
-  SwapEstimate,
-  SwapParams,
-  SwapResult,
+  SolanaAdapter,
+  StarknetAdapter,
+  StellarAdapter,
+  WhiskAdapter,
+  ResumeOptions,
   WhiskEngine,
 } from "./types.js";
 
@@ -47,456 +92,1058 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
   if (!config.chains || config.chains.length === 0) {
     throw new ConfigError("createWhisk: at least one chain is required.");
   }
+  if (config.defaultMetadata !== undefined) {
+    validateMetadata(config.defaultMetadata);
+  }
 
-  const resolvedMode = resolveMode(config.mode, config.chains);
-  const resolvedConfig: WhiskConfig = { ...config, mode: resolvedMode };
-
-  // Opt out of App Kit 1.5.0's default-on error telemetry POSTs.
-  const kit = new AppKit({ disableErrorReporting: true });
-  const defaultToken = resolvedConfig.token ?? DEFAULT_TOKEN;
+  const resolvedConfig: WhiskConfig = {
+    ...config,
+    feeBearer: config.feeBearer ?? DEFAULT_FEE_BEARER,
+    useForwarder: config.useForwarder ?? true,
+  };
   const resolver = resolvedConfig.resolver ?? addressResolver;
+  const store = resolvedConfig.inflightStore ?? createMemoryInflightStore();
+  const resumeContext: ResumeContext = {
+    store,
+    ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+    rpcUrls: (chain) => rpcUrlsFor(resolvedConfig, chain),
+  };
+  const useForwarder = resolvedConfig.useForwarder ?? true;
+  const chainRules: ChainRulesContext = {
+    ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+    rpcUrls: (chain) => rpcUrlsFor(resolvedConfig, chain),
+  };
+  function ruled<A extends WhiskAdapter | undefined>(adapter: A): A {
+    return (
+      adapter?.kind === "evm" ? withChainRules(adapter, chainRules) : adapter
+    ) as A;
+  }
+  function ruledOptions(options: ResumeOptions): ResumeOptions {
+    return options.destinationAdapter
+      ? { ...options, destinationAdapter: ruled(options.destinationAdapter) }
+      : options;
+  }
 
   const engine: WhiskEngine = {
     config: resolvedConfig,
 
     async resolve(input, chain): Promise<ResolvedRecipient> {
       const trimmed = input.trim();
-      if (!trimmed) throw new InvalidAddressError(input);
-      if (!resolver.matches(trimmed)) throw new InvalidAddressError(trimmed);
-      try {
-        const result = await resolver.resolve(trimmed, { chain });
-        if (!result) throw new InvalidAddressError(trimmed);
-        return result;
-      } catch (err) {
-        if (err instanceof WhiskError) throw err;
-        throw toWhiskError(err, "Resolution failed");
+      if (!resolver.matches(trimmed)) {
+        throw new ConfigError(`resolve: "${trimmed}" is not a valid input.`);
       }
+      const result = await resolver.resolve(trimmed, { chain });
+      if (!result) {
+        throw new ConfigError(`resolve: could not resolve "${trimmed}".`);
+      }
+      return result;
     },
 
     async quote(params: QuoteParams): Promise<Quote> {
-      const route = decideRoute(params.sourceChain, params.destinationChain);
-      const adapter = params.adapter.appKitAdapter;
-      // Bridge is USDC-only; same-chain sends honour the user's token choice.
-      const requested = params.token ?? defaultToken;
-      const effectiveToken = route.kind === "bridge" ? "USDC" : requested;
-      const customFees = buildCustomFeeEntries(
-        config.feePolicy,
-        effectiveToken,
+      const { quote } = await buildQuote(params, { config: resolvedConfig });
+      return quote;
+    },
+
+    async send(
+      params: SendParams,
+      listeners?: SendListeners,
+    ): Promise<SendResult> {
+      if (params.metadata !== undefined) validateMetadata(params.metadata);
+      const metadata = mergeMetadata(
+        resolvedConfig.defaultMetadata,
+        params.metadata,
       );
-      const amountIn = addCustomFee(params.amount, config.feePolicy?.value);
+      if (Date.now() > params.quote.expiresAt) {
+        throw new QuoteExpiredError(params.quote);
+      }
+      await assertCanPay(params.quote, params.adapter);
+      const result = await tracked(params.quote, listeners, (tracking) =>
+        runRoute(
+          {
+            quote: params.quote,
+            adapter: params.adapter,
+            ...(params.destinationAdapter && {
+              destinationAdapter: params.destinationAdapter,
+            }),
+          },
+          tracking,
+        ),
+      );
+      return attachMetadata(result, metadata);
+    },
 
-      try {
-        if (route.kind === "send") {
-          const appKitParams: AppKitSendParams = {
-            from: { adapter, chain: route.chain },
-            to: params.recipient.address,
-            amount: params.amount,
-            token: effectiveToken,
-          };
-          await kit.estimateSend(appKitParams);
-          const breakdown = sumFees([...customFees], effectiveToken);
-          // Same-chain sends don't deduct USDC fees (only native gas), so the
-          // recipient already nets the full amount — feeBearer is a no-op here.
-          return {
-            route,
-            recipient: params.recipient,
-            amountIn,
-            amountOut: params.amount,
-            amountBurned: params.amount,
-            token: effectiveToken,
-            fees: breakdown,
-            estimatedDurationMs: 15_000,
-          };
-        }
+    async balance({ chain, address }) {
+      const source = getChain(chain);
+      if (source.ecosystem !== "evm") return null;
+      const rpcUrls = rpcUrlsFor(resolvedConfig, chain);
+      return getUsdcBalance(source, address as `0x${string}`, {
+        ...(rpcUrls && { rpcUrls }),
+        ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+      });
+    },
 
-        const appKitParams = buildBridgeParams(
-          adapter,
-          route.sourceChain,
-          route.destinationChain,
-          params.recipient.address,
-          params.amount,
-          config.useForwarder ?? true,
+    async maxSendable(params) {
+      if (params.adapter.kind !== "evm") return null;
+      const balance = await engine.balance({
+        chain: params.sourceChain,
+        address: params.adapter.address,
+      });
+      if (balance === null) return null;
+      const reserve = await gasReserve(
+        getChain(params.sourceChain),
+        params.sourceChain === params.destinationChain ? "send" : "bridge",
+        chainRules,
+      );
+      const available = balance - reserve;
+      const none = { amount: "0", balance, gasReserve: reserve };
+      if (available <= 0n) return none;
+      // Fees grow with the amount, so quote, move the amount by however much
+      // the total misses the available USDC, and keep the largest that fits.
+      let amount = available;
+      let best = 0n;
+      for (let i = 0; i < 6 && amount > 0n; i++) {
+        const { quote } = await buildQuote(
+          { ...params, amount: formatUsdcAmount(amount) },
+          { config: resolvedConfig },
         );
-        const estimate: EstimateResult = await kit.estimateBridge(appKitParams);
-        const protocolFees = fromAppKitFees(
-          estimate.fees as ReadonlyArray<AppKitEstimateFee>,
-          effectiveToken,
-        );
-        const breakdown = sumFees(
-          [...customFees, ...protocolFees],
-          effectiveToken,
-        );
-
-        // "sender" grosses the burn up by the fees so the recipient nets the
-        // full amount; "receiver" lets the fees reduce the transfer instead.
-        const feeBearer = config.feeBearer ?? "receiver";
-        if (feeBearer === "sender") {
-          const protocolFeeTotal = sumProtocolFees(
-            protocolFees,
-            effectiveToken,
-          );
-          // Forwarder fee is re-priced from gas at mint time, so pad just that
-          // portion so the recipient nets at least `amount` despite drift.
-          const forwarderFee = sumForwarderFees(protocolFees, effectiveToken);
-          const base = parseFloat(params.amount) || 0;
-          const amountBurned = fmtUsdc(
-            base + protocolFeeTotal + forwarderFee * FORWARDER_FEE_CUSHION,
-          );
-          return {
-            route,
-            recipient: params.recipient,
-            amountIn: addCustomFee(amountBurned, config.feePolicy?.value),
-            amountOut: params.amount,
-            amountBurned,
-            token: effectiveToken,
-            fees: breakdown,
-            estimatedDurationMs: 30_000,
-          };
-        }
-
-        return {
-          route,
-          recipient: params.recipient,
-          amountIn,
-          amountOut: params.amount,
-          amountBurned: params.amount,
-          token: effectiveToken,
-          fees: breakdown,
-          estimatedDurationMs: 30_000,
-        };
-      } catch (err) {
-        throw toWhiskError(err, "Quote failed");
+        const left = available - quote.subunits.amountIn;
+        if (left >= 0n && amount > best) best = amount;
+        if (left === 0n) break;
+        amount += left;
       }
+      return best > 0n
+        ? { amount: formatUsdcAmount(best), balance, gasReserve: reserve }
+        : none;
     },
 
-    async send(params: SendParams, listeners?: SendListeners) {
-      return runSend(kit, resolvedConfig, params, listeners);
+    inflight() {
+      return store.list();
     },
 
-    async retry(params: RetryParams, listeners?: SendListeners) {
-      try {
-        const raw = params.failed.raw as BridgeResult | undefined;
-        if (!raw) {
-          throw new ConfigError(
-            "retry: cannot resume — original bridge result was not preserved.",
-          );
-        }
-        const adapter = params.adapter.appKitAdapter;
-        const result = await kit.retryBridge(raw, {
-          from: adapter,
-          to: adapter,
-        });
-        return mapAppKitBridgeResult(result, listeners);
-      } catch (err) {
-        return {
-          kind: "failure" as const,
-          error: toWhiskError(err, "Retry failed"),
-          steps: params.failed.steps,
-        };
-      }
+    dismiss(id) {
+      return store.remove(id);
     },
 
-    async estimateSwap(params: SwapParams): Promise<SwapEstimate> {
-      try {
-        const appKitParams = buildAppKitSwapParams(params);
-        const estimate = await kit.estimateSwap(appKitParams);
-        return mapAppKitSwapEstimate(estimate, params);
-      } catch (err) {
-        throw toWhiskError(err, "Swap estimate failed");
-      }
+    resume(record, options = {}, listeners) {
+      return resumeTransfer(
+        record,
+        ruledOptions(options),
+        resumeContext,
+        listeners,
+      );
     },
 
-    async swap(params: SwapParams): Promise<SwapResult> {
-      try {
-        const appKitParams = buildAppKitSwapParams(params);
-        const result = (await kit.swap(appKitParams)) as AppKitSwapResult;
-        return {
-          kind: "success",
-          txHash: result.txHash,
-          explorerUrl: result.explorerUrl,
-          amountOut: result.amountOut,
-        };
-      } catch (err) {
-        return {
-          kind: "failure",
-          error: toWhiskError(err, "Swap failed"),
-        };
-      }
+    async resumeFromTx(params, listeners) {
+      const known = (await store.list()).find(
+        (r) =>
+          r.sourceChain === params.sourceChain &&
+          r.sourceTxHash?.toLowerCase() === params.txHash.toLowerCase(),
+      );
+      const record =
+        known ??
+        (await recordFromTx(
+          params.sourceChain,
+          params.txHash,
+          resolvedConfig.fetch,
+        ));
+      if (!known) await store.put(record);
+      return resumeTransfer(
+        record,
+        ruledOptions({
+          ...(params.destinationAdapter && {
+            destinationAdapter: params.destinationAdapter,
+          }),
+        }),
+        resumeContext,
+        listeners,
+      );
+    },
+
+    async refund(
+      params: RefundParams,
+      listeners?: SendListeners,
+    ): Promise<RefundResult> {
+      const plan = validateRefundInput(params);
+      const refundMetadata = buildRefundMetadata(
+        plan.originalTxHash,
+        plan.reason,
+        mergeMetadata(resolvedConfig.defaultMetadata, plan.metadata),
+      );
+      const recipient: ResolvedRecipient = {
+        address: plan.originalSenderAddress,
+        chain: plan.refundDestinationChain,
+      };
+      const adapters = {
+        adapter: params.merchantAdapter,
+        ...(params.destinationAdapter && {
+          destinationAdapter: params.destinationAdapter,
+        }),
+      };
+      const { quote } = await buildQuote(
+        {
+          sourceChain: plan.originalDestinationChain,
+          destinationChain: plan.refundDestinationChain,
+          recipient,
+          amount: plan.amount,
+          ...adapters,
+        },
+        { config: resolvedConfig },
+      );
+      const result = await tracked(quote, listeners, (tracking) =>
+        runRoute({ quote, ...adapters }, tracking),
+      );
+      return attachMetadata(result, refundMetadata);
     },
   };
+
+  /**
+   * Keeps a bridge's record in the store: `signing` before anything runs,
+   * `burned` with the hash the moment the wallet returns it, `minted` at the
+   * end. A transfer that never burned leaves nothing behind.
+   */
+  async function tracked(
+    quote: Quote,
+    listeners: SendListeners | undefined,
+    run: (listeners: SendListeners) => Promise<SendResult>,
+  ): Promise<SendResult> {
+    const plan = quote.plan;
+    if (quote.route.kind !== "bridge" || !plan) return run(listeners ?? {});
+    const now = Date.now();
+    let record: InflightRecord = {
+      version: 2,
+      id: quote.id,
+      network: plan.network,
+      sourceChain: quote.route.sourceChain,
+      destinationChain: quote.route.destinationChain,
+      mint: plan.mint.kind,
+      speed: plan.speed,
+      amountBurned: quote.subunits.burnAmount.toString(),
+      recipient: quote.recipient.address,
+      step: "signing",
+      createdAt: now,
+      updatedAt: now,
+    };
+    await store.put(record);
+
+    let writes = Promise.resolve();
+    const save = (patch: Partial<InflightRecord>) => {
+      record = { ...record, ...patch, updatedAt: Date.now() };
+      const snapshot = record;
+      writes = writes.then(() => store.put(snapshot));
+    };
+    const tracking: SendListeners = {
+      onBurnSubmitted: (txHash) => {
+        save({ step: "burned", sourceTxHash: txHash });
+        listeners?.onBurnSubmitted?.(txHash);
+      },
+      onStep: (step) => {
+        if (step.name === "fetchAttestation" && step.state === "success") {
+          save({ step: "attested" });
+        }
+        listeners?.onStep?.(step);
+      },
+    };
+
+    let result: SendResult;
+    try {
+      result = await run(tracking);
+    } catch (err) {
+      await writes;
+      if (!record.sourceTxHash) await store.remove(record.id);
+      throw err;
+    }
+    await writes;
+    if (result.kind === "success") {
+      save({
+        step: "minted",
+        ...(result.finalTxHash && { mintTxHash: result.finalTxHash }),
+      });
+      await writes;
+    } else if (!record.sourceTxHash) {
+      await store.remove(record.id);
+    }
+    return result;
+  }
+
+  /**
+   * Refuses before any signature when the payer's USDC cannot cover what the
+   * quote debits and, on Arc, the gas paid from the same balance. Balances
+   * that cannot be read yet are left to the wallet.
+   */
+  async function assertCanPay(quote: Quote, adapter: WhiskAdapter) {
+    if (adapter.kind !== "evm") return;
+    const chain =
+      quote.route.kind === "bridge"
+        ? quote.route.sourceChain
+        : quote.route.chain;
+    const balance = await engine.balance({ chain, address: adapter.address });
+    if (balance === null) return;
+    const required =
+      quote.subunits.amountIn +
+      (await gasReserve(
+        getChain(chain),
+        quote.route.kind === "bridge" ? "bridge" : "send",
+        chainRules,
+      ));
+    if (balance < required) {
+      throw new InsufficientBalanceError(
+        formatUsdcAmount(required),
+        formatUsdcAmount(balance),
+        "USDC",
+      );
+    }
+  }
+
+  type Adapters = { adapter: WhiskAdapter; destinationAdapter?: WhiskAdapter };
+
+  function quoteParams(quote: Quote, adapters: Adapters): QuoteParams {
+    const route = quote.route;
+    return {
+      sourceChain: route.kind === "bridge" ? route.sourceChain : route.chain,
+      destinationChain:
+        route.kind === "bridge" ? route.destinationChain : route.chain,
+      recipient: quote.recipient,
+      amount: formatUsdcAmount(quote.subunits.requested),
+      token: quote.token,
+      ...adapters,
+    };
+  }
+
+  async function changed(
+    quote: Quote,
+    adapters: Adapters,
+  ): Promise<QuoteChangedError> {
+    const fresh = await buildQuote(quoteParams(quote, adapters), {
+      config: resolvedConfig,
+    });
+    return new QuoteChangedError(quote, fresh.quote);
+  }
+
+  /**
+   * Holds `send` to the confirmed quote. Fresh Iris fees must still fit under
+   * `quote.maxFee`; the burn then uses the quote's amounts, never fresh ones.
+   */
+  async function bindBridgeQuote(
+    quote: Quote,
+    plan: RoutePlan,
+    adapters: Adapters,
+  ) {
+    const forwarded = plan.mint.kind === "forwarder";
+    if (
+      quote.plan?.speed !== plan.speed ||
+      quote.plan.mint.kind !== plan.mint.kind
+    ) {
+      throw await changed(quote, adapters);
+    }
+    const tier = await fetchFeeTier({
+      network: plan.network,
+      source: plan.source,
+      destination: plan.destination,
+      plan,
+      useForwarder: forwarded,
+      ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+    });
+    const rpcUrls = rpcUrlsFor(resolvedConfig, plan.source.id as Chain);
+    const held = {
+      tier,
+      burnAmount: quote.subunits.burnAmount,
+      burnFee: quote.subunits.burnFee,
+      forwarderFee: quote.subunits.forwarderFee,
+      maxFee: quote.subunits.maxFee,
+    };
+    if (quote.feeMode === "upfront") {
+      return {
+        ...held,
+        upfront: await signUpfrontFee(quote, plan, adapters, rpcUrls),
+      };
+    }
+    // What Circle charges now: the unbuffered protocol fee and the `med`
+    // forwarding fee, Circle's recommended floor.
+    const required = await computeBridgeFees(
+      {
+        source: plan.source,
+        plan,
+        tier,
+        forwarderLevel: "med",
+        useForwarder: forwarded,
+        ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+        ...(rpcUrls && { rpcUrls }),
+      },
+      quote.subunits.burnAmount,
+      { buffered: false },
+    );
+    if (required.maxFee > quote.subunits.maxFee) {
+      throw await changed(quote, adapters);
+    }
+    return { ...held, upfront: undefined };
+  }
+
+  /**
+   * Fetched at send time because Circle's quote lasts about two minutes. A
+   * signed fee above the shown one goes back to the payer; an expired quote
+   * is fetched once more before giving up.
+   */
+  async function signUpfrontFee(
+    quote: Quote,
+    plan: RoutePlan,
+    adapters: Adapters,
+    rpcUrls: readonly string[] | undefined,
+  ): Promise<UpfrontFee> {
+    const source = plan.source as EvmChain;
+    const requests: UpfrontFeeType[] = [];
+    if (plan.mint.kind === "forwarder") requests.push("FORWARD");
+    if (plan.speed === "fast") requests.push("PRE_FINALITY");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const signed = await getSignedBurnQuote(
+        plan.network,
+        source.cctpDomain,
+        plan.destination.cctpDomain,
+        {
+          amount: quote.subunits.burnAmount,
+          feeToken: source.usdc,
+          requests,
+        },
+        resolvedConfig.fetch ? { fetch: resolvedConfig.fetch } : {},
+      );
+      if (signed.feeTotalAmount > quote.subunits.maxFee) {
+        throw await changed(quote, adapters);
+      }
+      if (!(await hasExpired(signed.expiry, source, rpcUrls))) {
+        return {
+          signedQuote: signed.signedQuote,
+          fee: signed.feeTotalAmount,
+          approveAmount: quote.subunits.burnAmount + quote.subunits.maxFee,
+        };
+      }
+    }
+    throw new QuoteExpiredError(quote);
+  }
+
+  async function hasExpired(
+    expiry: SignedQuoteExpiry,
+    source: EvmChain,
+    rpcUrls: readonly string[] | undefined,
+  ): Promise<boolean> {
+    if (expiry.mode === "TIMESTAMP") {
+      return Date.now() >= expiry.expiresAt * 1000;
+    }
+    const block = await getBlockNumber(source, {
+      ...(rpcUrls && { rpcUrls }),
+      ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+    });
+    return block >= expiry.expiresAtBlock;
+  }
+
+  async function runRoute(
+    given: Adapters & { quote: Quote },
+    listeners?: SendListeners,
+  ): Promise<SendResult> {
+    const input = {
+      ...given,
+      adapter: ruled(given.adapter),
+      ...(given.destinationAdapter && {
+        destinationAdapter: ruled(given.destinationAdapter),
+      }),
+    };
+    const { sourceChain, destinationChain } = quoteParams(input.quote, input);
+    const recipient = input.quote.recipient;
+    const amount = input.quote.subunits.requested;
+    const route = decideRoute(sourceChain, destinationChain);
+
+    if (isSendRoute(route)) {
+      const cctpChain = getChain(route.chain);
+
+      if (cctpChain.ecosystem === "solana") {
+        const adapter = expectSolanaAdapter(input.adapter, cctpChain);
+        return executeSameChainSolanaSend(
+          {
+            chain: cctpChain,
+            recipientAddress: recipient.address,
+            amount,
+            adapter,
+          },
+          listeners,
+        );
+      }
+
+      if (cctpChain.ecosystem === "stellar") {
+        const adapter = expectStellarAdapter(input.adapter, cctpChain);
+        return executeSameChainStellarSend(
+          {
+            chain: cctpChain,
+            recipientAddress: recipient.address,
+            amount,
+            adapter,
+          },
+          listeners,
+        );
+      }
+
+      if (cctpChain.ecosystem === "starknet") {
+        const adapter = expectStarknetAdapter(input.adapter, cctpChain);
+        return executeSameChainStarknetSend(
+          {
+            chain: cctpChain,
+            recipientAddress: recipient.address,
+            amount,
+            adapter,
+          },
+          listeners,
+        );
+      }
+
+      const evmSendChain = cctpChain as EvmChain;
+      const adapter = expectEvmAdapter(input.adapter, evmSendChain);
+      const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSendChain);
+      return executeSameChainSend(
+        {
+          chain: evmSendChain,
+          recipientAddress: recipient.address,
+          amount,
+          adapter,
+          ...(customFee && { customFeeCalls: customFee.calls }),
+        },
+        listeners,
+      );
+    }
+
+    if (isBridgeRoute(route)) {
+      const plan = await fitFastAllowance(
+        planRoute({
+          source: route.sourceChain,
+          destination: route.destinationChain,
+          connected: connectedEcosystems(
+            input.adapter,
+            input.destinationAdapter,
+          ),
+          useForwarder,
+        }),
+        input.quote.subunits.burnAmount,
+        resolvedConfig.fetch,
+      );
+      const { source, destination, network } = plan;
+      const forwarded = plan.mint.kind === "forwarder";
+      const bridge = await bindBridgeQuote(input.quote, plan, input);
+
+      if (source.ecosystem === "evm" && destination.ecosystem === "evm") {
+        const evmSource = source as EvmChain;
+        const evmDestination = destination as EvmChain;
+        const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
+        const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
+        return executeBridge(
+          {
+            ...(bridge.upfront && { upfront: bridge.upfront }),
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: evmSource,
+            destination: evmDestination,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            useForwarder: forwarded,
+            sourceAdapter: evmAdapter,
+            ...(customFee && { customFeeCalls: customFee.calls }),
+          },
+          listeners,
+        );
+      }
+
+      if (source.ecosystem === "solana" && destination.ecosystem === "evm") {
+        const solSource = source as SolanaChain;
+        const evmDestination = destination as EvmChain;
+        const solanaAdapter = expectSolanaAdapter(input.adapter, solSource);
+        const destAdapter =
+          !forwarded && input.destinationAdapter
+            ? expectEvmAdapter(input.destinationAdapter, evmDestination)
+            : undefined;
+        return executeSolanaToEvm(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: solSource,
+            destination: evmDestination,
+            recipientAddress: recipient.address as `0x${string}`,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            useForwarder: forwarded,
+            sourceAdapter: solanaAdapter,
+            ...(destAdapter && { destinationAdapter: destAdapter }),
+          },
+          listeners,
+        );
+      }
+
+      if (source.ecosystem === "evm" && destination.ecosystem === "starknet") {
+        const evmSource = source as EvmChain;
+        const starknetDest = destination as StarknetChain;
+        const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "EVM → Starknet bridge requires a destinationAdapter (the Starknet wallet that signs receive_message).",
+          );
+        }
+        const destAdapter = expectStarknetAdapter(
+          input.destinationAdapter,
+          starknetDest,
+        );
+        const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
+        return executeEvmToStarknet(
+          {
+            ...(bridge.upfront && { upfront: bridge.upfront }),
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: evmSource,
+            destination: starknetDest,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: evmAdapter,
+            destinationAdapter: destAdapter,
+            ...(customFee && { customFeeCalls: customFee.calls }),
+          },
+          listeners,
+        );
+      }
+
+      if (source.ecosystem === "starknet" && destination.ecosystem === "evm") {
+        const starknetSource = source as StarknetChain;
+        const evmDestination = destination as EvmChain;
+        const starknetAdapter = expectStarknetAdapter(
+          input.adapter,
+          starknetSource,
+        );
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "Starknet → EVM bridge requires a destinationAdapter (the EVM wallet that signs receiveMessage).",
+          );
+        }
+        const destAdapter = expectEvmAdapter(
+          input.destinationAdapter,
+          evmDestination,
+        );
+        return executeStarknetToEvm(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: starknetSource,
+            destination: evmDestination,
+            recipientAddress: recipient.address as `0x${string}`,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: starknetAdapter,
+            destinationAdapter: destAdapter,
+          },
+          listeners,
+        );
+      }
+
+      if (source.ecosystem === "evm" && destination.ecosystem === "stellar") {
+        const evmSource = source as EvmChain;
+        const stellarDest = destination as StellarChain;
+        const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "EVM → Stellar bridge requires a destinationAdapter (the Stellar wallet that signs mint_and_forward).",
+          );
+        }
+        const destAdapter = expectStellarAdapter(
+          input.destinationAdapter,
+          stellarDest,
+        );
+        const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
+        return executeEvmToStellar(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: evmSource,
+            destination: stellarDest,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: evmAdapter,
+            destinationAdapter: destAdapter,
+            ...(customFee && { customFeeCalls: customFee.calls }),
+          },
+          listeners,
+        );
+      }
+
+      // Iris's auto-forwarder doesn't relay Stellar-source burns, so the
+      // destination EVM wallet must sign receiveMessage manually.
+      if (source.ecosystem === "stellar" && destination.ecosystem === "evm") {
+        const stellarSource = source as StellarChain;
+        const evmDestination = destination as EvmChain;
+        const stellarAdapter = expectStellarAdapter(
+          input.adapter,
+          stellarSource,
+        );
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "Stellar → EVM bridge requires a destinationAdapter (the EVM wallet that signs receiveMessage).",
+          );
+        }
+        const destAdapter = expectEvmAdapter(
+          input.destinationAdapter,
+          evmDestination,
+        );
+        return executeStellarToEvm(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: stellarSource,
+            destination: evmDestination,
+            recipientAddress: recipient.address as `0x${string}`,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: stellarAdapter,
+            destinationAdapter: destAdapter,
+          },
+          listeners,
+        );
+      }
+
+      if (
+        source.ecosystem === "solana" &&
+        destination.ecosystem === "starknet"
+      ) {
+        const solSource = source as SolanaChain;
+        const starknetDest = destination as StarknetChain;
+        const solanaAdapter = expectSolanaAdapter(input.adapter, solSource);
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "Solana → Starknet bridge requires a destinationAdapter (Starknet wallet).",
+          );
+        }
+        const destAdapter = expectStarknetAdapter(
+          input.destinationAdapter,
+          starknetDest,
+        );
+        return executeSolanaToStarknet(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: solSource,
+            destination: starknetDest,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: solanaAdapter,
+            destinationAdapter: destAdapter,
+          },
+          listeners,
+        );
+      }
+
+      if (
+        source.ecosystem === "starknet" &&
+        destination.ecosystem === "solana"
+      ) {
+        const starknetSource = source as StarknetChain;
+        const solDestination = destination as SolanaChain;
+        const starknetAdapter = expectStarknetAdapter(
+          input.adapter,
+          starknetSource,
+        );
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "Starknet → Solana bridge requires a destinationAdapter (Solana wallet).",
+          );
+        }
+        const destAdapter = expectSolanaAdapter(
+          input.destinationAdapter,
+          solDestination,
+        );
+        return executeStarknetToSolana(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: starknetSource,
+            destination: solDestination,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: starknetAdapter,
+            destinationAdapter: destAdapter,
+          },
+          listeners,
+        );
+      }
+
+      if (
+        source.ecosystem === "stellar" &&
+        destination.ecosystem === "starknet"
+      ) {
+        const stellarSource = source as StellarChain;
+        const starknetDest = destination as StarknetChain;
+        const stellarAdapter = expectStellarAdapter(
+          input.adapter,
+          stellarSource,
+        );
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "Stellar → Starknet bridge requires a destinationAdapter (Starknet wallet).",
+          );
+        }
+        const destAdapter = expectStarknetAdapter(
+          input.destinationAdapter,
+          starknetDest,
+        );
+        return executeStellarToStarknet(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: stellarSource,
+            destination: starknetDest,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: stellarAdapter,
+            destinationAdapter: destAdapter,
+          },
+          listeners,
+        );
+      }
+
+      if (
+        source.ecosystem === "starknet" &&
+        destination.ecosystem === "stellar"
+      ) {
+        const starknetSource = source as StarknetChain;
+        const stellarDest = destination as StellarChain;
+        const starknetAdapter = expectStarknetAdapter(
+          input.adapter,
+          starknetSource,
+        );
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "Starknet → Stellar bridge requires a destinationAdapter (Stellar wallet).",
+          );
+        }
+        const destAdapter = expectStellarAdapter(
+          input.destinationAdapter,
+          stellarDest,
+        );
+        return executeStarknetToStellar(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: starknetSource,
+            destination: stellarDest,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: starknetAdapter,
+            destinationAdapter: destAdapter,
+          },
+          listeners,
+        );
+      }
+
+      if (
+        source.ecosystem === "solana" &&
+        destination.ecosystem === "stellar"
+      ) {
+        const solSource = source as SolanaChain;
+        const stellarDest = destination as StellarChain;
+        const solanaAdapter = expectSolanaAdapter(input.adapter, solSource);
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "Solana → Stellar bridge requires a destinationAdapter (the Stellar wallet that signs mint_and_forward).",
+          );
+        }
+        const destAdapter = expectStellarAdapter(
+          input.destinationAdapter,
+          stellarDest,
+        );
+        return executeSolanaToStellar(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: solSource,
+            destination: stellarDest,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: solanaAdapter,
+            destinationAdapter: destAdapter,
+          },
+          listeners,
+        );
+      }
+
+      if (
+        source.ecosystem === "stellar" &&
+        destination.ecosystem === "solana"
+      ) {
+        const stellarSource = source as StellarChain;
+        const solDestination = destination as SolanaChain;
+        const stellarAdapter = expectStellarAdapter(
+          input.adapter,
+          stellarSource,
+        );
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "Stellar → Solana bridge requires a destinationAdapter (the Solana wallet that signs receive_message).",
+          );
+        }
+        const destAdapter = expectSolanaAdapter(
+          input.destinationAdapter,
+          solDestination,
+        );
+        return executeStellarToSolana(
+          {
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: stellarSource,
+            destination: solDestination,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: stellarAdapter,
+            destinationAdapter: destAdapter,
+          },
+          listeners,
+        );
+      }
+
+      if (source.ecosystem === "evm" && destination.ecosystem === "solana") {
+        const evmSource = source as EvmChain;
+        const solDestination = destination as SolanaChain;
+        const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
+        if (!input.destinationAdapter) {
+          throw new ConfigError(
+            "EVM → Solana bridge requires a destinationAdapter (the Solana wallet that signs receive_message).",
+          );
+        }
+        const destAdapter = expectSolanaAdapter(
+          input.destinationAdapter,
+          solDestination,
+        );
+        const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
+        return executeEvmToSolana(
+          {
+            ...(bridge.upfront && { upfront: bridge.upfront }),
+            network,
+            ...(resolvedConfig.fetch && { fetch: resolvedConfig.fetch }),
+            source: evmSource,
+            destination: solDestination,
+            recipientAddress: recipient.address,
+            burnAmount: bridge.burnAmount,
+            maxFee: bridge.maxFee,
+            burnFee: bridge.burnFee,
+            forwarderFee: bridge.forwarderFee,
+            tier: bridge.tier,
+            sourceAdapter: evmAdapter,
+            destinationAdapter: destAdapter,
+            ...(customFee && { customFeeCalls: customFee.calls }),
+          },
+          listeners,
+        );
+      }
+
+      throw new ConfigError(
+        `Unsupported bridge route: ${source.ecosystem} → ${destination.ecosystem}.`,
+      );
+    }
+
+    throw new ConfigError("Unsupported route kind.");
+  }
 
   return engine;
 }
 
-// App Kit adapters are ecosystem-scoped (Viem rejects Solana chains and vice versa).
-// Cross-ecosystem hops must use the forwarder; same-ecosystem hops can opt in via config.
-function buildBridgeParams(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  adapter: any,
-  sourceChain: ReturnType<typeof chainInfo>["chain"],
-  destinationChain: ReturnType<typeof chainInfo>["chain"],
-  recipientAddress: string,
-  amount: string,
-  preferForwarder: boolean,
-): BridgeParams {
-  const sameEcosystem =
-    chainInfo(sourceChain).kind === chainInfo(destinationChain).kind;
-  const useForwarder = sameEcosystem ? preferForwarder : true;
-
-  if (sameEcosystem && !useForwarder) {
-    return {
-      from: { adapter, chain: sourceChain },
-      to: { adapter, chain: destinationChain, recipientAddress },
-      amount,
-    } as BridgeParams;
-  }
-
-  return {
-    from: { adapter, chain: sourceChain },
-    to: { chain: destinationChain, recipientAddress, useForwarder: true },
-    amount,
-  } as BridgeParams;
-}
-
-function buildAppKitSwapParams(p: SwapParams): AppKitSwapParams {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cfg: any = { kitKey: p.kitKey };
-  if (p.slippageBps !== undefined) cfg.slippageBps = p.slippageBps;
-  if (p.stopLimit !== undefined) cfg.stopLimit = p.stopLimit;
-  return {
-    from: { adapter: p.adapter.appKitAdapter, chain: p.chain },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tokenIn: p.tokenIn as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tokenOut: p.tokenOut as any,
-    amountIn: p.amountIn,
-    config: cfg,
-  } as AppKitSwapParams;
-}
-
-function mapAppKitSwapEstimate(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  estimate: any,
-  params: SwapParams,
-): SwapEstimate {
-  const fees = Array.isArray(estimate?.fees) ? estimate.fees : [];
-  const entries = fees.map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (f: any) => ({
-      kind: typeof f.type === "string" ? f.type : "provider",
-      amount: typeof f.amount === "string" ? f.amount : "0",
-      token: typeof f.token === "string" ? f.token : params.tokenIn,
-    }),
-  );
-  const total = entries
-    .filter((e: { token: string }) => e.token === params.tokenIn)
-    .reduce(
-      (acc: number, e: { amount: string }) =>
-        acc +
-        (Number.isFinite(parseFloat(e.amount)) ? parseFloat(e.amount) : 0),
-      0,
+function expectEvmAdapter(adapter: WhiskAdapter, chain: CctpChain): EvmAdapter {
+  if (adapter.kind !== "evm") {
+    throw new ConfigError(
+      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.id}" (ecosystem=evm). Connect an EVM wallet.`,
     );
-  return {
-    amountIn: estimate?.amountIn ?? params.amountIn,
-    amountOut: estimate?.estimatedOutput?.amount ?? "0",
-    minOutput:
-      estimate?.stopLimit?.amount ?? estimate?.estimatedOutput?.amount ?? "0",
-    tokenIn: params.tokenIn,
-    tokenOut: params.tokenOut,
-    fees: { total: total.toString(), entries },
-  };
-}
-
-function addCustomFee(amount: string, customFee?: string): string {
-  if (!customFee) return amount;
-  const a = parseFloat(amount);
-  const c = parseFloat(customFee);
-  if (Number.isNaN(a) || Number.isNaN(c)) return amount;
-  const sum = a + c;
-  return sum.toFixed(6).replace(/\.?0+$/, "") || "0";
-}
-
-/** Headroom on the forwarder fee in a `"sender"` gross-up. 2% absorbs normal
- *  gas drift between quote and mint while keeping overage sub-cent on L2s. */
-const FORWARDER_FEE_CUSHION = 0.02;
-
-/** Format a number as a USDC amount (6 dp, trailing zeros stripped). */
-function fmtUsdc(n: number): string {
-  return n.toFixed(6).replace(/\.?0+$/, "") || "0";
-}
-
-type BridgeAction = "approve" | "burn" | "fetchAttestation" | "mint";
-const BRIDGE_ACTIONS: ReadonlyArray<BridgeAction> = [
-  "approve",
-  "burn",
-  "fetchAttestation",
-  "mint",
-];
-
-async function runSend(
-  kit: AppKit,
-  config: WhiskConfig,
-  params: SendParams,
-  listeners?: SendListeners,
-): Promise<SendResult> {
-  const route = params.quote.route;
-  const token =
-    route.kind === "bridge"
-      ? "USDC"
-      : (params.token ?? params.quote.token ?? config.token ?? DEFAULT_TOKEN);
-  const adapter = params.adapter.appKitAdapter;
-  const onStep = listeners?.onStep;
-
-  const detach: Array<() => void> = [];
-
-  if (route.kind === "bridge" && onStep) {
-    for (const action of BRIDGE_ACTIONS) {
-      const handler = (payload: unknown) => {
-        onStep(translateAppKitEvent(action, payload));
-      };
-      kit.on(`bridge.${action}`, handler);
-      detach.push(() => kit.off(`bridge.${action}`, handler));
-    }
   }
+  return adapter;
+}
 
-  try {
-    if (route.kind === "send") {
-      onStep?.({ name: "transfer", state: "pending" });
-      const appKitParams: AppKitSendParams = {
-        from: { adapter, chain: route.chain },
-        to: params.recipient.address,
-        amount: params.amount,
-        token,
-      };
-      const result: BridgeStep = await kit.send(appKitParams);
-      const transferStep: Step = {
-        name: "transfer",
-        state: result.state,
-        txHash: result.txHash,
-        explorerUrl:
-          result.explorerUrl ??
-          (result.txHash
-            ? explorerTxUrl(route.chain, result.txHash)
-            : undefined),
-        errorMessage: result.errorMessage,
-        forwarded: result.forwarded,
-      };
-      onStep?.(transferStep);
-      if (result.state === "error") {
-        return {
-          kind: "failure",
-          error: toWhiskError(result.errorMessage ?? "Send failed."),
-          steps: [transferStep],
-        };
-      }
-      return {
-        kind: "success",
-        finalTxHash: result.txHash,
-        steps: [transferStep],
-      };
-    }
-
-    const appKitParams = buildBridgeParams(
-      adapter,
-      route.sourceChain,
-      route.destinationChain,
-      params.recipient.address,
-      params.amount,
-      config.useForwarder ?? true,
+function expectSolanaAdapter(
+  adapter: WhiskAdapter,
+  chain: SolanaChain,
+): SolanaAdapter {
+  if (adapter.kind !== "solana") {
+    throw new ConfigError(
+      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.id}" (ecosystem=solana). Connect a Solana wallet.`,
     );
-    const result = await kit.bridge(appKitParams);
-    return mapAppKitBridgeResult(result, listeners);
-  } catch (err) {
-    return {
-      kind: "failure",
-      error: toWhiskError(err, "Send failed"),
-      steps: [],
-    };
-  } finally {
-    for (const off of detach) off();
   }
+  return adapter;
 }
 
-// Events fire once the step lands — read state off `payload.values` (never default to pending).
-type AppKitBridgeEventPayload = {
-  protocol?: string;
-  version?: string;
-  traceId?: string;
-  method?: string;
-  values?: {
-    name?: string;
-    state?: Step["state"];
-    txHash?: string;
-    explorerUrl?: string;
-    forwarded?: boolean;
-    errorMessage?: string;
-    errorCategory?: Step["errorCategory"];
-    error?: { message?: string };
-  };
-};
-
-function translateAppKitEvent(name: BridgeAction, payload: unknown): Step {
-  const p = (payload ?? {}) as AppKitBridgeEventPayload;
-  const v = p.values ?? {};
-  return {
-    name: name as StepName,
-    state: v.state ?? "success",
-    txHash: v.txHash,
-    explorerUrl: v.explorerUrl,
-    errorMessage: v.errorMessage ?? v.error?.message,
-    errorCategory: v.errorCategory,
-    forwarded: v.forwarded,
-  };
+function expectStellarAdapter(
+  adapter: WhiskAdapter,
+  chain: StellarChain,
+): StellarAdapter {
+  if (adapter.kind !== "stellar") {
+    throw new ConfigError(
+      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.id}" (ecosystem=stellar). Connect a Stellar wallet.`,
+    );
+  }
+  return adapter;
 }
 
-function mapAppKitBridgeResult(
-  raw: BridgeResult,
-  listeners?: SendListeners,
+function expectStarknetAdapter(
+  adapter: WhiskAdapter,
+  chain: StarknetChain,
+): StarknetAdapter {
+  if (adapter.kind !== "starknet") {
+    throw new ConfigError(
+      `Adapter kind "${adapter.kind}" doesn't match chain "${chain.id}" (ecosystem=starknet). Connect a Starknet wallet.`,
+    );
+  }
+  return adapter;
+}
+
+/**
+ * Stamp the merged metadata onto a `SendResult`. Both success and
+ * failure carry it through so receipts and webhook deliveries can
+ * correlate either outcome back to the same request.
+ */
+function attachMetadata(
+  result: SendResult,
+  metadata: WhiskMetadata | undefined,
 ): SendResult {
-  const steps: Step[] = (raw.steps ?? []).map((s: BridgeStep) =>
-    stepFromBridgeStep(s),
-  );
-  const onStep = listeners?.onStep;
-  if (onStep) for (const s of steps) onStep(s);
-
-  if (raw.state === "success") {
-    return {
-      kind: "success",
-      finalTxHash: steps.find((s) => s.name === "mint")?.txHash,
-      steps,
-    };
-  }
-
-  const errorStep = steps.find((s) => s.state === "error");
-  const message =
-    errorStep?.errorMessage ?? "Bridge failed without a step error.";
-  return {
-    kind: "failure",
-    error: toWhiskError(message, undefined, errorStep?.errorCategory),
-    steps,
-    raw,
-  };
+  if (!metadata || Object.keys(metadata).length === 0) return result;
+  return { ...result, metadata };
 }
 
-function stepFromBridgeStep(s: BridgeStep): Step {
-  const dataExplorer =
-    s.data &&
-    typeof s.data === "object" &&
-    "explorerUrl" in (s.data as object) &&
-    typeof (s.data as { explorerUrl?: unknown }).explorerUrl === "string"
-      ? (s.data as { explorerUrl: string }).explorerUrl
-      : undefined;
-  // Read errorCategory loosely to decouple from App Kit's SDK version.
-  const rawCategory = (
-    s as unknown as { errorCategory?: Step["errorCategory"] }
-  ).errorCategory;
-  return {
-    name: s.name as StepName,
-    state: s.state,
-    txHash: s.txHash,
-    explorerUrl: s.explorerUrl ?? dataExplorer,
-    errorMessage: s.errorMessage,
-    errorCategory: rawCategory,
-    forwarded: s.forwarded,
-  };
-}
+export type { Chain };

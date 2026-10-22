@@ -1,22 +1,8 @@
-/* ============================================================
-   Whisk playground — page chrome + control panel + event log
-   ============================================================
-   The widget's own styles come from `@usewhisk/react/styles.css`
-   (imported in layout.tsx); everything here paints the surfaces
-   AROUND the widget.
-
-   The palette tracks the widget's earth-tone brand so the playground
-   doesn't fight the surface it's framing — same cream / wine /
-   terracotta family, just darker on the chrome and lighter on the
-   widget's own card.
-*/
-
 :root {
   color-scheme: light dark;
   --pg-bg: #f5f3e8;
   --pg-fg: #2a1d21;
-  /* Derive muted from fg at 75% so it tracks any palette change AND
-     matches the marketing site's text-foreground/75 body convention. */
+  /* Derived from fg so it follows any palette change. */
   --pg-fg-muted: color-mix(in srgb, var(--pg-fg) 75%, transparent);
   --pg-border: #ca9b8f;
   --pg-card: #fbf8ee;
@@ -27,7 +13,6 @@
   --pg-info: #6e8aa8;
   --pg-shadow:
     0 1px 2px 0 rgba(42, 29, 33, 0.04), 0 8px 24px -8px rgba(42, 29, 33, 0.08);
-  /* Atmospheric body wash. Per-palette overrides below retint these. */
   --pg-wash-top: rgba(214, 92, 60, 0.08);
   --pg-wash-bottom: rgba(110, 77, 84, 0.06);
 }
@@ -80,10 +65,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
-/* ============================================================
-   Page shell
-   ============================================================ */
 
 .pg-shell {
   min-height: 100dvh;
@@ -159,10 +140,6 @@ body {
   text-underline-offset: 2px;
 }
 
-/* ============================================================
-   Layout — controls | stage, with log below
-   ============================================================ */
-
 .pg-layout {
   display: grid;
   grid-template-areas:
@@ -209,10 +186,6 @@ body {
   place-items: center;
   padding: 2rem 0;
 }
-
-/* ============================================================
-   Controls — sections, presets, inputs, toggles, address book
-   ============================================================ */
 
 .pg-section {
   display: flex;
@@ -436,10 +409,6 @@ body {
   text-underline-offset: 2px;
 }
 
-/* ============================================================
-   Event log — bottom strip
-   ============================================================ */
-
 .pg-log {
   grid-area: log;
   background: var(--pg-card);
@@ -573,10 +542,6 @@ body {
   text-align: right;
 }
 
-/* ============================================================
-   Palette swatches (Wine / Indigo / Emerald / Amber)
-   ============================================================ */
-
 .pg-palette-row {
   display: inline-flex;
   gap: 0.5rem;
@@ -612,18 +577,8 @@ body {
   transform: scale(1.08);
 }
 
-/* ============================================================
-   Palette overrides — retune both --pg-* (chrome) and --whisk-*
-   (widget) when a palette is active on <html>. Wine is the default
-   already declared in :root above, so it has no block here.
-
-   The [data-palette="X"] [data-whisk] selector is (0,2,0), one
-   step more specific than the widget's own [data-whisk] (0,1,0),
-   so palette vars win on the widget element itself.
-   ============================================================ */
-
-/* ─── Indigo ─────────────────────────────────────────────────── */
-
+/* Wine is the default in :root. `[data-palette] [data-whisk]` is one step
+   more specific than the widget's own `[data-whisk]`, so these win. */
 [data-palette="indigo"] {
   --pg-bg: #eef0fa;
   --pg-fg: #1e1b4b;
@@ -688,8 +643,6 @@ body {
   }
 }
 
-/* ─── Emerald ────────────────────────────────────────────────── */
-
 [data-palette="emerald"] {
   --pg-bg: #ecfaf2;
   --pg-fg: #064e3b;
@@ -753,8 +706,6 @@ body {
     --whisk-primary: #34d399;
   }
 }
-
-/* ─── Amber ──────────────────────────────────────────────────── */
 
 [data-palette="amber"] {
   --pg-bg: #fef7e6;

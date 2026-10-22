@@ -7,51 +7,66 @@ For a React app, install one package:
 
 <InstallCommand packages={["@usewhisk/react"]} />
 
-That is enough for most integrations. `@usewhisk/react` bundles the
-core engine as a regular dependency and re-exports the helpers and
-types you will actually touch (`Chain`, `Token`, `Quote`, `FeeBearer`,
-`chainInfo`, `addressResolver`, `composeResolvers`, and more), so every
-import in your app comes from `@usewhisk/react`. You never need to
-write `@usewhisk/core` in an import path.
+That is enough for most integrations. `@usewhisk/react` bundles both
+`@usewhisk/core` (the engine) and `@usewhisk/cctp` (the protocol
+layer) as regular dependencies and re-exports the helpers and types
+you will actually touch (`Chain`, `Quote`, `FeeBearer`, `chainInfo`,
+`addressResolver`, `composeResolvers`, and more). Every import in
+your app comes from `@usewhisk/react`; you never need to write
+`@usewhisk/core` or `@usewhisk/cctp` in an import path.
 
 ## The one required peer
 
-`@usewhisk/react` uses `wagmi` internally, which needs
-`@tanstack/react-query` as a peer. If your app does not have it yet,
-add it:
+`@usewhisk/react` uses `wagmi` internally for the EVM path, which
+needs `@tanstack/react-query` as a peer. If your app doesn't have it
+yet, add it:
 
 <InstallCommand packages={["@tanstack/react-query"]} />
 
-`wagmi` and `viem` themselves are bundled (regular dependencies of
-`@usewhisk/react`), so they are already in your `node_modules` after the
-first install. Add them to your own `package.json` only if you also call
-`wagmi`/`viem` APIs directly in your own code and want to pin a version.
+`wagmi` and `viem` themselves are bundled (regular dependencies), so
+they land in `node_modules` after the first install. Add them to
+your own `package.json` only if you also call `wagmi`/`viem` APIs
+directly in your own code and want to pin a version.
 
-## Solana support (optional)
+## Per-ecosystem wallet packages
 
-Add these only if your widget should accept sends from a Solana wallet
-(Phantom, Solflare, Backpack). EVM-only apps can skip this:
+Whisk enables four ecosystems via matching wallet factories in
+`config.wallets`. If you only need EVM, skip the rest. Peer packages:
 
-<InstallCommand
-  packages={["@solana/wallet-adapter-react", "@solana/wallet-adapter-base"]}
-/>
+- **Solana** (Phantom, Solflare, Backpack, …):
+
+  <InstallCommand
+    packages={["@solana/wallet-adapter-react", "@solana/wallet-adapter-base"]}
+  />
+
+- **Stellar** (Freighter, xBull, LOBSTR, …):
+
+  <InstallCommand packages={["@creit.tech/stellar-wallets-kit"]} />
+
+- **Starknet** (Argent X, Braavos, …):
+
+  <InstallCommand packages={["@starknet-io/get-starknet-core", "starknet"]} />
+
+All three are optional. Only install the ones matching the
+ecosystems you enable in `config.wallets`.
 
 ## Going headless or framework-agnostic
 
-There is exactly one situation that calls for installing `@usewhisk/core`
-on its own: you want to run the engine **outside React**, for example
-in a Node script, a Vue or Svelte app, or a server-side flow.
+There is exactly one situation that calls for installing
+`@usewhisk/core` on its own: you want to run the engine **outside
+React**, for example in a Node script, a Vue or Svelte app, or a
+server-side flow.
 
-<InstallCommand packages={["@usewhisk/core"]} />
+<InstallCommand packages={["@usewhisk/core", "@usewhisk/cctp"]} />
 
 `@usewhisk/core` is framework-agnostic. It exposes `createWhisk()`
-plus the chain registry, fee logic, resolvers, error classes, and the
-state-machine reducer. No DOM, no React, no wallet imports.
+plus the chain registry, fee logic, resolvers, error classes, and
+the state-machine reducer. No DOM, no React, no wallet imports.
 
 <Callout type="info">
-  If you are using React, you do **not** need to install `@usewhisk/core`
-  directly. The React package already includes it, and every type and helper you
-  need is re-exported from `@usewhisk/react`.
+  If you're using React, you do **not** need to install `@usewhisk/core`
+  directly. The React package already includes it and re-exports every type and
+  helper.
 </Callout>
 
 ## Import the stylesheet once
@@ -82,23 +97,22 @@ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your-project-id
 ```
 
 <Callout type="info">
-  Solana wallets discover themselves through the standard wallet adapter
-  protocol. No project ID needed on that side.
+  Non-EVM wallets discover themselves through their own standards (Wallet
+  Standard on Solana, Stellar Wallets Kit's registry, `get-starknet-core`). No
+  project ID needed on those sides.
 </Callout>
 
 ## Vite + Solana: polyfill `Buffer`
 
-Skip this unless you're on **Vite** _and_ using Solana. Next.js polyfills
-Node globals for you, so App Router and Pages Router apps need nothing here.
+Skip this unless you're on **Vite** _and_ using Solana. Next.js
+polyfills Node globals for you, so App Router and Pages Router apps
+need nothing here.
 
-`@solana/web3.js` reaches for Node's `Buffer` global (base58 encoding,
-transaction serialization). The browser has no `Buffer`, and Vite doesn't
-shim it, so the first Solana operation — connecting a Solana wallet, or a
-CCTP bridge that crosses the Solana/EVM boundary — throws
-`Buffer is not defined`.
+`@solana/web3.js` reaches for Node's `Buffer` global. The browser
+has no `Buffer` and Vite doesn't shim it, so the first Solana
+operation throws `Buffer is not defined`.
 
-Add the polyfill once, at the very top of your entry file, before any other
-import so it's in place before wallet code loads:
+Add the polyfill once, at the very top of your entry file:
 
 ```tsx title="src/main.tsx"
 import { Buffer } from "buffer";
@@ -113,17 +127,9 @@ import { App } from "./App";
 // …
 ```
 
-The `buffer` package ships as a transitive dependency of the Solana SDK, but
-some package managers won't surface it to your app's `node_modules`. If the
-import doesn't resolve, install it directly:
+If the `buffer` import doesn't resolve, install it directly:
 
 <InstallCommand packages={["buffer"]} />
-
-<Callout type="info">
-  Prefer a plugin? `vite-plugin-node-polyfills` handles `Buffer` (plus `process`
-  and `crypto`) for you. The three-line shim above is lighter if Buffer is all
-  you need.
-</Callout>
 
 ## Verify the install
 

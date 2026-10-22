@@ -1,6 +1,7 @@
 import { createContext } from "react";
 import type { WhiskEngine } from "@usewhisk/core";
 import type { WhiskClientConfig } from "../config/types.js";
+import type { WhiskThemeInput } from "../theme/types.js";
 
 /**
  * Internal context for every Whisk component and hook. Read through
@@ -10,8 +11,8 @@ import type { WhiskClientConfig } from "../config/types.js";
 export type WhiskContextValue = {
   engine: WhiskEngine;
   config: WhiskClientConfig;
-  /** The theme prop passed to `<WhiskProvider>`. Used by portal scopes. */
-  theme: "light" | "dark" | "system";
+  /** The theme prop passed to `<WhiskProvider>`. */
+  theme: WhiskThemeInput | undefined;
 };
 
 export const WhiskContext = createContext<WhiskContextValue | null>(null);

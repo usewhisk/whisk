@@ -6,9 +6,8 @@ export type Payee = {
   role: string;
   address: string;
   amount: number;
-  /** Display label for the chain. */
   chain: string;
-  /** Typed Whisk chain identifier for `<WhiskSend destinationChain>`. */
+  /** Passed to `<WhiskSend destinationChain>`. */
   chainCode: Chain;
   status: "pending" | "approved" | "sent" | "settled";
   initials: string;

@@ -1,37 +1,51 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../../lib/cn.js";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "outline";
-export type ButtonSize = "default" | "sm";
+export type ButtonSize = "sm" | "md";
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** Rendered before `children`. */
+  iconStart?: ReactNode;
+  /** Rendered after `children`. */
+  iconEnd?: ReactNode;
 };
 
-/**
- * Whisk's button primitive. Maps to the `.whisk-button` rules in
- * `styles.css`; theme overrides flow through CSS variables.
- */
+/** Defaults to `type="button"` so it never submits a surrounding form. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
-    { variant = "primary", size = "default", className, type, ...props },
+    {
+      variant = "primary",
+      size = "md",
+      iconStart,
+      iconEnd,
+      className,
+      children,
+      type = "button",
+      ...rest
+    },
     ref,
   ) {
     return (
       <button
         ref={ref}
-        type={type ?? "button"}
+        type={type}
         className={cn(
           "whisk-button",
           `whisk-button--${variant}`,
           size === "sm" && "whisk-button--sm",
           className,
         )}
-        {...props}
-      />
+        {...rest}
+      >
+        {iconStart}
+        {children}
+        {iconEnd}
+      </button>
     );
   },
 );

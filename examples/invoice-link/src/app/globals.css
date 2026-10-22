@@ -1,9 +1,5 @@
 @import "tailwindcss";
 
-/* ============================================================
-   Studio Hibiscus — freelance design studio (coral/sage/cream).
-   ============================================================ */
-
 @theme {
   --color-coral: #e85a3d;
   --color-coral-deep: #b8421e;
@@ -53,35 +49,29 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Widget theme — set on the provider's `[data-whisk]` so the cascade
-   reaches portals. Loads after @usewhisk/react/styles.css → wins at
-   equal specificity. */
+/* `[data-whisk]` is the provider's wrapper, so these tokens reach the
+   widget's portal too. This file loads after @usewhisk/react/styles.css,
+   so it wins at equal specificity. */
 [data-whisk] {
-  /* surfaces */
   --whisk-bg: var(--color-paper);
   --whisk-card: var(--color-paper);
   --whisk-card-fg: var(--color-ink);
   --whisk-fg: var(--color-ink);
   --whisk-fg-muted: var(--color-ink-muted);
-  /* lines */
   --whisk-border: var(--color-line);
   --whisk-input: var(--color-line);
   --whisk-border-w: 1px;
-  /* accent */
   --whisk-primary: var(--color-coral);
   --whisk-primary-fg: var(--color-paper);
   --whisk-ring: var(--color-coral-deep);
-  /* semantic */
   --whisk-success: var(--color-sage-deep);
   --whisk-warning: var(--color-sunset);
   --whisk-destructive: var(--color-coral-deep);
   --whisk-destructive-fg: var(--color-paper);
-  /* radii */
   --whisk-radius: 10px;
   --whisk-radius-sm: 6px;
   --whisk-radius-md: 10px;
   --whisk-radius-lg: 14px;
-  /* fonts */
   --whisk-font: var(--font-sans);
   --whisk-font-display: var(--font-display);
   --whisk-font-mono: var(--font-mono);

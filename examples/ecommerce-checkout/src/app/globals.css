@@ -1,11 +1,5 @@
 @import "tailwindcss";
 
-/* ============================================================
-   Atelier Hibiscus — design tokens.
-   Tailwind v4 reads `@theme` and emits matching utility classes,
-   so `bg-sand`, `text-charcoal`, `border-line` etc. just work.
-   ============================================================ */
-
 @theme {
   --color-sand: #f4ede1;
   --color-sand-2: #ece2cf;
@@ -28,8 +22,6 @@
   --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Page wash — two warm radials over the sand base so the page reads
-   warmer at the top and bottom edges. */
 html,
 body {
   margin: 0;
@@ -44,40 +36,30 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Whisk widget retune — inherits the store palette so the embedded
-   widget reads as native to the store, not as a pasted-in card.
-   Scoped to .ah-widget so other surfaces using <WhiskSend> (if any)
-   stay on the widget's own brand. */
-/* Widget theme — selector is `[data-whisk]` (set on the provider's outer
-   wrapper) so the cascade reaches every widget element including portals.
-   The host CSS loads after @usewhisk/react/styles.css in main entry, so
-   these rules win at equal specificity. */
+/* `<WhiskProvider>` sets `data-whisk` on the wrapper that holds the widget
+   and its portal, so these tokens reach popovers too. layout.tsx imports
+   this file after @usewhisk/react/styles.css, so it wins at equal
+   specificity. */
 [data-whisk] {
-  /* surfaces */
   --whisk-bg: var(--color-sand);
   --whisk-card: var(--color-paper);
   --whisk-card-fg: var(--color-charcoal);
   --whisk-fg: var(--color-charcoal);
   --whisk-fg-muted: color-mix(in srgb, var(--color-charcoal) 70%, transparent);
-  /* lines */
   --whisk-border: var(--color-line);
   --whisk-input: var(--color-line);
   --whisk-border-w: 1px;
-  /* accent */
   --whisk-primary: var(--color-charcoal);
   --whisk-primary-fg: var(--color-sand);
   --whisk-ring: var(--color-tobacco);
-  /* semantic */
   --whisk-success: var(--color-leaf);
   --whisk-warning: var(--color-tobacco);
   --whisk-destructive: var(--color-tobacco-deep);
   --whisk-destructive-fg: var(--color-sand);
-  /* radii */
   --whisk-radius: 10px;
   --whisk-radius-sm: 6px;
   --whisk-radius-md: 10px;
   --whisk-radius-lg: 14px;
-  /* fonts — serif display matches the editorial brand */
   --whisk-font: var(--font-sans);
   --whisk-font-display: var(--font-display);
   --whisk-font-mono: var(--font-mono);

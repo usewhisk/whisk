@@ -55,3 +55,30 @@ describe("addressResolver — resolve()", () => {
     expect(result).toBeNull();
   });
 });
+
+describe("addressResolver on every ecosystem (#65)", () => {
+  const STELLAR_G = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
+  const STARKNET_FELT =
+    "0x4db7926c64f1f32a840f3fa95cb551f3801a3600bae87af87807a54dce12fe8";
+  const STARKNET_SHORT = "0x1234";
+
+  it("matches Stellar strkeys and Starknet felts as well as EVM and Solana", () => {
+    expect(addressResolver.matches(STELLAR_G)).toBe(true);
+    expect(addressResolver.matches(STARKNET_FELT)).toBe(true);
+    expect(addressResolver.matches(STARKNET_SHORT)).toBe(true);
+  });
+
+  it("resolves them on their own chains", async () => {
+    await expect(
+      addressResolver.resolve(STELLAR_G, { chain: "Stellar" }),
+    ).resolves.toEqual({ address: STELLAR_G, chain: "Stellar" });
+    await expect(
+      addressResolver.resolve(STARKNET_SHORT, { chain: "Starknet" }),
+    ).resolves.toEqual({ address: STARKNET_SHORT, chain: "Starknet" });
+  });
+
+  it("does not match text that is no address at all", () => {
+    expect(addressResolver.matches("alice.eth")).toBe(false);
+    expect(addressResolver.matches("not an address")).toBe(false);
+  });
+});

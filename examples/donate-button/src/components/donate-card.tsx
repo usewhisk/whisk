@@ -67,8 +67,8 @@ function WidgetSurface({
           recipient={TREASURY_ADDRESS}
           destinationChain="Optimism_Sepolia"
           amount={widgetAmount}
-          onSuccess={({ quote, finalTxHash }) =>
-            onPaid({ amount: quote.amountIn, txHash: finalTxHash })
+          onSuccess={({ finalTxHash }) =>
+            onPaid({ amount: widgetAmount, txHash: finalTxHash })
           }
         />
       </div>

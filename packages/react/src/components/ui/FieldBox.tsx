@@ -2,98 +2,72 @@
 
 import {
   forwardRef,
+  useId,
   type InputHTMLAttributes,
   type ReactNode,
-  type SelectHTMLAttributes,
 } from "react";
 import { cn } from "../../lib/cn.js";
 
-type CommonProps = {
+export type FieldBoxProps = Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "size"
+> & {
   label: ReactNode;
-  /** Right-aligned suffix shown next to the value (e.g. `USDC`). */
+  /** Rendered after the input, such as a token picker or paste button. */
   suffix?: ReactNode;
-  /** Render the value at amount-input scale (1.375rem). */
-  amount?: boolean;
-  /** Render the value in monospace (addresses, hashes). */
-  mono?: boolean;
-  /** Apply the invalid border + colour state. */
-  invalid?: boolean;
-  className?: string;
+  /** Helper text shown below the field. */
+  help?: ReactNode;
+  /** When set, the field renders as invalid and the message replaces `help`. */
+  error?: ReactNode;
+  /** `"amount"` enlarges the input; `"mono"` uses the monospace font. */
+  variant?: "default" | "amount" | "mono";
 };
 
-export type FieldBoxProps = CommonProps &
-  Omit<InputHTMLAttributes<HTMLInputElement>, "size">;
-
-/**
- * Stripe-style inset-label field for `<input>`. The label sits inside
- * the bordered box above the value. Replaces the older "label above +
- * input below" Field pattern in higher-density widget surfaces (amount,
- * recipient).
- *
- * The wrapping `<label>` makes the whole box click-target the inner
- * control — the affordance users expect.
- */
+/** Labelled input with a suffix slot, help text, and an error state. */
 export const FieldBox = forwardRef<HTMLInputElement, FieldBoxProps>(
   function FieldBox(
-    { label, suffix, amount, mono, invalid, className, ...rest },
+    { label, suffix, help, error, variant = "default", className, ...rest },
     ref,
   ) {
+    const inputId = useId();
+    const helpId = useId();
+    const invalid = !!error;
+    const hint = error ?? help;
     return (
-      <label
+      <div
         className={cn(
           "whisk-fieldbox",
-          amount && "whisk-fieldbox--amount",
-          mono && "whisk-fieldbox--mono",
+          variant === "amount" && "whisk-fieldbox--amount",
+          variant === "mono" && "whisk-fieldbox--mono",
           invalid && "whisk-fieldbox--invalid",
           className,
         )}
       >
-        <span className="whisk-fieldbox__label">{label}</span>
-        <span className="whisk-fieldbox__control">
-          <input ref={ref} {...rest} />
+        <label className="whisk-fieldbox__label" htmlFor={inputId}>
+          {label}
+        </label>
+        <div className="whisk-fieldbox__control">
+          <input
+            ref={ref}
+            id={inputId}
+            aria-invalid={invalid || undefined}
+            aria-describedby={hint ? helpId : undefined}
+            {...rest}
+          />
           {suffix ? (
-            <span className="whisk-fieldbox__suffix">{suffix}</span>
+            <div className="whisk-fieldbox__suffix">{suffix}</div>
           ) : null}
-        </span>
-      </label>
+        </div>
+        {hint ? (
+          <p
+            id={helpId}
+            className={cn("whisk-help", invalid && "whisk-help--error")}
+            role={invalid ? "alert" : undefined}
+          >
+            {hint}
+          </p>
+        ) : null}
+      </div>
     );
   },
 );
-
-export type FieldBoxSelectProps = CommonProps &
-  SelectHTMLAttributes<HTMLSelectElement> & {
-    children?: ReactNode;
-  };
-
-/**
- * Inset-label `<select>` companion to `FieldBox`. Same visual structure
- * — label inside the box, native picker below — used for chain pickers.
- */
-export const FieldBoxSelect = forwardRef<
-  HTMLSelectElement,
-  FieldBoxSelectProps
->(function FieldBoxSelect(
-  { label, suffix, mono, invalid, className, children, ...rest },
-  ref,
-) {
-  return (
-    <label
-      className={cn(
-        "whisk-fieldbox",
-        mono && "whisk-fieldbox--mono",
-        invalid && "whisk-fieldbox--invalid",
-        className,
-      )}
-    >
-      <span className="whisk-fieldbox__label">{label}</span>
-      <span className="whisk-fieldbox__control">
-        <select ref={ref} {...rest}>
-          {children}
-        </select>
-        {suffix ? (
-          <span className="whisk-fieldbox__suffix">{suffix}</span>
-        ) : null}
-      </span>
-    </label>
-  );
-});

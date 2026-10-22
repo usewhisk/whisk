@@ -2,6 +2,11 @@ export { createWhisk } from "./createWhisk.js";
 export type {
   WhiskEngine,
   WhiskAdapter,
+  EvmAdapter,
+  EvmCall,
+  SendCallsOptions,
+  SendCallsResult,
+  CallReceipt,
   QuoteParams,
   SendParams,
   SendListeners,
@@ -9,5 +14,9 @@ export type {
   SendResult,
   SendSuccess,
   SendFailure,
-  RetryParams,
+  MaxSendable,
+  ResumeFromTxParams,
+  ResumeOptions,
+  RefundParams,
+  RefundResult,
 } from "./types.js";

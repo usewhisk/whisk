@@ -1,7 +1,6 @@
 /**
- * Stub for transitive deps that wagmi pulls but never executes in the
- * browser. Re-exported as `{}` so any property access yields undefined
- * cleanly without throwing.
+ * Stands in for wagmi dependencies that are imported but never run in the
+ * browser. Property access on `{}` returns undefined instead of throwing.
  */
 export default {};
 export const noop = () => {};

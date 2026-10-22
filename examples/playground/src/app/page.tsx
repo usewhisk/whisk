@@ -1,11 +1,5 @@
 import { ClientGate } from "./client-gate";
 
-/**
- * Server component for the page chrome. The playground itself ships
- * through `<ClientGate />`, which is the client boundary that
- * dynamically loads the full wagmi + Whisk + controls + log stack
- * with `ssr: false`.
- */
 export default function Page() {
   return (
     <div className="pg-shell">

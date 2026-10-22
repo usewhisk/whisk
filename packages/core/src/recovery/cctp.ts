@@ -1,28 +1,33 @@
+/**
+ * When the Forwarder reports `FAILED`, or the forwarder is turned off, someone
+ * has to call `receiveMessage` on the destination chain. These descriptors go
+ * straight into viem's `writeContract` or wagmi's `useWriteContract`. For raw
+ * calldata, such as an EIP-5792 batch, use `buildMintIntent` from
+ * `@usewhisk/cctp`.
+ */
+import {
+  getChain,
+  MESSAGE_TRANSMITTER_V2_EVM_MAINNET,
+  MESSAGE_TRANSMITTER_V2_EVM_TESTNET,
+  MESSAGE_TRANSMITTER_V2_SOLANA,
+  messageTransmitterV2Abi,
+} from "@usewhisk/cctp";
 import type { Chain } from "../types/chain.js";
-import { chainInfo, explorerTxUrl } from "./../chains/registry.js";
+import { explorerTxUrl } from "../chains/index.js";
 
-// Canonical CCTP v2 MessageTransmitter addresses, mirrored from
-// @circle-fin/app-kit/chains. Circle uses the same address across
-// every chain of a given network.
+/** EVM `MessageTransmitterV2`, the same address on every EVM mainnet. */
 export const EVM_MAINNET_MESSAGE_TRANSMITTER =
-  "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64" as const;
+  MESSAGE_TRANSMITTER_V2_EVM_MAINNET;
+/** EVM `MessageTransmitterV2`, the same address on every EVM testnet. */
 export const EVM_TESTNET_MESSAGE_TRANSMITTER =
-  "0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275" as const;
-export const SOLANA_MESSAGE_TRANSMITTER =
-  "CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbeC" as const;
+  MESSAGE_TRANSMITTER_V2_EVM_TESTNET;
+/** Solana `MessageTransmitterV2` program, the same on mainnet-beta and devnet. */
+export const SOLANA_MESSAGE_TRANSMITTER = MESSAGE_TRANSMITTER_V2_SOLANA;
 
-export const RECEIVE_MESSAGE_ABI = [
-  {
-    type: "function",
-    name: "receiveMessage",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "message", type: "bytes" },
-      { name: "attestation", type: "bytes" },
-    ],
-    outputs: [{ name: "success", type: "bool" }],
-  },
-] as const;
+export const RECEIVE_MESSAGE_ABI = messageTransmitterV2Abi.filter(
+  (entry): entry is typeof entry & { name: "receiveMessage" } =>
+    entry.type === "function" && entry.name === "receiveMessage",
+);
 
 export type ReceiveMessageCall = {
   destinationChain: Chain;
@@ -32,22 +37,13 @@ export type ReceiveMessageCall = {
   args: [string, string];
 };
 
-export function messageTransmitterAddress(chain: Chain): string | undefined {
-  const info = chainInfo(chain);
-  if (info.kind === "solana") return SOLANA_MESSAGE_TRANSMITTER;
-  if (info.kind === "evm") {
-    return info.network === "mainnet"
-      ? EVM_MAINNET_MESSAGE_TRANSMITTER
-      : EVM_TESTNET_MESSAGE_TRANSMITTER;
-  }
-  return undefined;
+export function messageTransmitterAddress(chain: Chain): string {
+  return getChain(chain).messageTransmitter;
 }
 
 /**
- * Build a `MessageTransmitter.receiveMessage` call descriptor for the
- * destination chain. Returns `null` for Solana destinations (different
- * call surface, not yet implemented) or chains without a registered
- * MessageTransmitter. Throws on malformed hex inputs.
+ * Returns `null` for non-EVM destinations, which take a different call.
+ * Throws a `TypeError` unless both inputs are 0x-prefixed hex.
  */
 export function buildReceiveMessageCall(
   destinationChain: Chain,
@@ -64,15 +60,12 @@ export function buildReceiveMessageCall(
       "buildReceiveMessageCall: `attestation` must be a 0x-prefixed hex string",
     );
   }
-  const info = chainInfo(destinationChain);
-  if (info.kind !== "evm") return null;
-
-  const address = messageTransmitterAddress(destinationChain);
-  if (!address) return null;
+  const destination = getChain(destinationChain);
+  if (destination.ecosystem !== "evm") return null;
 
   return {
     destinationChain,
-    address,
+    address: destination.messageTransmitter,
     abi: RECEIVE_MESSAGE_ABI,
     functionName: "receiveMessage",
     args: [message, attestation],

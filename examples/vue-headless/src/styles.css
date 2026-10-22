@@ -1,0 +1,171 @@
+:root {
+  --bg: #0b0c10;
+  --card: #161821;
+  --fg: #e6e8ee;
+  --fg-mute: #8d93a0;
+  --border: #262834;
+  --accent: #6ad080;
+  --error: #f47174;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+#app {
+  width: 100%;
+  max-width: 480px;
+  padding: 24px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+label {
+  font-size: 12px;
+  color: var(--fg-mute);
+  letter-spacing: 0.02em;
+}
+
+input,
+select {
+  background: #0d0e15;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--fg);
+  font: inherit;
+  width: 100%;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+button {
+  background: var(--accent);
+  color: #062c11;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.muted {
+  color: var(--fg-mute);
+  font-size: 13px;
+}
+
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 6px;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.step-dot.pending {
+  background: #f6b04e;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.step-dot.success {
+  background: var(--accent);
+}
+
+.step-dot.error {
+  background: var(--error);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.error {
+  background: rgba(244, 113, 116, 0.1);
+  border: 1px solid rgba(244, 113, 116, 0.3);
+  color: var(--error);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+a {
+  color: var(--accent);
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+
+.lead {
+  margin: 0 0 16px;
+  color: var(--fg-mute);
+  font-size: 13px;
+}

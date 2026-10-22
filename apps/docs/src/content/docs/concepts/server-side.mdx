@@ -1,174 +1,169 @@
 ---
 title: Server-side sends
-description: Drive Whisk from a backend with Circle Developer-Controlled Wallets, no React or user signature.
+description: Drive Whisk from a backend with your own signing key, no React or user signature.
 ---
 
 `<WhiskSend>` is built for a connected user wallet. Most integrations
 look like that — the visitor opens your page, clicks **Send**, and
 their wallet pops a signature prompt. But not every USDC payment is
 user-initiated. Treasury moves, scheduled disbursements, batch
-payouts, marketplace settlement, employee payroll — these are all
-flows where _your backend_ needs to send USDC on a schedule or in
-response to a server event. No browser, no user signature.
+payouts, marketplace settlement, employee payroll — these are flows
+where _your backend_ needs to send USDC on a schedule or in response
+to a server event. No browser, no user signature.
 
 Whisk supports this path natively because the engine and the React
-layer are decoupled. You import the engine on the server, hand it a
-Circle Developer-Controlled Wallet adapter, and call the same
-`send()` / `bridge()` methods the widget calls.
+layer are decoupled. Import `@usewhisk/core` on the server, build an
+adapter around your own signing key (viem for EVM, `starknet.js` for
+Starknet, etc.), and call the same `send()` / `refund()` methods the
+widget calls.
 
 ## When this is the right tool
 
-| Scenario                                              | Server-side DCW | Widget (user wallet) |
-| ----------------------------------------------------- | --------------- | -------------------- |
-| Customer pays you for an order                        |                 | ✅                   |
-| Donor sends to your treasury                          |                 | ✅                   |
-| You pay out 200 contractors at end of month           | ✅              |                      |
-| Scheduled stablecoin disbursement (DAO grant, salary) | ✅              |                      |
-| Marketplace splits settlement to sellers              | ✅              |                      |
-| Internal treasury rebalancing across chains           | ✅              |                      |
+| Scenario                                              | Server-side | Widget (user wallet) |
+| ----------------------------------------------------- | ----------- | -------------------- |
+| Customer pays you for an order                        |             | ✅                   |
+| Donor sends to your treasury                          |             | ✅                   |
+| You pay out 200 contractors at end of month           | ✅          |                      |
+| Scheduled stablecoin disbursement (DAO grant, salary) | ✅          |                      |
+| Marketplace splits settlement to sellers              | ✅          |                      |
+| Internal treasury rebalancing across chains           | ✅          |                      |
 
 If a _user_ needs to sign, the widget is right. If _your service_
-needs to sign on behalf of a wallet you control, you want this page.
+needs to sign on behalf of a wallet you control, this page.
 
 ## The pieces you need
 
-1. **A Circle Developer-Controlled Wallet** with USDC funded on the
-   chain you'll be sending from. Created via the Circle Console or
-   the Circle API. Each wallet has an address per chain.
-2. **A Circle API key** that authorises your backend to sign
-   transactions on that wallet.
-3. **The `@usewhisk/core` package.** No React. The engine is
-   pure TypeScript.
-4. **The Circle Wallets adapter package**, `@circle-fin/adapter-circle-wallets`.
+1. **A signing key.** For EVM: a private key funded with USDC on
+   the source chain. For Solana / Stellar / Starknet: the equivalent
+   secret material in that ecosystem's format.
+2. **`@usewhisk/core`** (the engine) and **`@usewhisk/cctp`** (the
+   protocol layer). No React. Both are pure TypeScript.
+3. **viem** (or your ecosystem's equivalent SDK) for the actual
+   transaction signing and receipt polling.
 
 ## Install
 
-<InstallCommand
-  packages={["@usewhisk/core", "@circle-fin/adapter-circle-wallets"]}
-/>
+<InstallCommand packages={["@usewhisk/core", "@usewhisk/cctp", "viem"]} />
 
-## Wire it up
+## Wire it up (EVM)
 
-Three steps: create the adapter, create the engine, send.
+Three steps: build the adapter, build the engine, send. Whisk's
+adapter interface is small — implement `sendCalls`, `waitForReceipt`,
+`getChainId`, `switchChain` around your signer.
+
+```ts title="server/adapter.ts"
+import { createPublicClient, createWalletClient, http, type Hex } from "viem";
+import { privateKeyToAccount, nonceManager } from "viem/accounts";
+import { baseSepolia } from "viem/chains";
+import type { EvmAdapter, EvmCall } from "@usewhisk/core";
+
+export function createEvmAdapter(privateKey: Hex): EvmAdapter {
+  const account = privateKeyToAccount(privateKey, { nonceManager });
+  const transport = http();
+  const publicClient = createPublicClient({ chain: baseSepolia, transport });
+  const walletClient = createWalletClient({
+    account,
+    chain: baseSepolia,
+    transport,
+  });
+
+  return {
+    kind: "evm",
+    address: account.address,
+
+    async getChainId() {
+      return baseSepolia.id;
+    },
+    async switchChain(id) {
+      if (id !== baseSepolia.id) {
+        throw new Error(`Adapter pinned to ${baseSepolia.id}, got ${id}`);
+      }
+    },
+    async sendCalls(calls: EvmCall[]) {
+      const hashes: `0x${string}`[] = [];
+      for (const call of calls) {
+        const hash = await walletClient.sendTransaction({
+          to: call.to,
+          data: call.data,
+          value: call.value,
+          account,
+          chain: baseSepolia,
+        });
+        hashes.push(hash);
+        await publicClient.waitForTransactionReceipt({
+          hash,
+          confirmations: 2,
+        });
+      }
+      return { hashes };
+    },
+    async waitForReceipt(hash) {
+      const r = await publicClient.waitForTransactionReceipt({
+        hash,
+        confirmations: 2,
+      });
+      return {
+        status: r.status === "success" ? "success" : "reverted",
+        blockNumber: r.blockNumber,
+      };
+    },
+  };
+}
+```
+
+Then wire it into the engine:
 
 ```ts title="server/usdc-sender.ts"
 import { createWhisk } from "@usewhisk/core";
-import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
+import { createEvmAdapter } from "./adapter.js";
 
-const adapter = await createCircleWalletsAdapter({
-  apiKey: process.env.CIRCLE_API_KEY!,
-  entitySecret: process.env.CIRCLE_ENTITY_SECRET!,
-  walletId: process.env.CIRCLE_WALLET_ID!,
-});
+const adapter = createEvmAdapter(process.env.PRIVATE_KEY! as `0x${string}`);
 
 const engine = createWhisk({
-  chains: ["Arc_Testnet", "Base_Sepolia"],
-  defaultSourceChain: "Arc_Testnet",
+  chains: ["Base_Sepolia", "Ethereum_Sepolia"],
+  mode: "testnet",
 });
 
 export async function sendUsdc(toAddress: string, amount: string) {
-  const recipient = await engine.resolve(toAddress, "Base_Sepolia");
-
+  const recipient = await engine.resolve(toAddress, "Ethereum_Sepolia");
   const quote = await engine.quote({
     recipient,
     amount,
-    sourceChain: "Arc_Testnet",
+    sourceChain: "Base_Sepolia",
+    destinationChain: "Ethereum_Sepolia",
     adapter,
   });
-
-  const result = await engine.send({ quote, adapter });
-  return result;
+  return engine.send({
+    recipient,
+    amount,
+    quote,
+    adapter,
+    sourceChain: "Base_Sepolia",
+    destinationChain: "Ethereum_Sepolia",
+  });
 }
 ```
-
-That's the entire integration. No React provider, no wallet connect
-modal, no signature popup — Circle signs via its API on the server
-when `engine.send` fires, and the function returns the final tx
-hash.
 
 ## A real example: scheduled payouts
 
-Drop the helper into a route handler or a cron job and you have a
-payroll runner.
+See [`examples/node-headless`](https://github.com/usewhisk/whisk/tree/main/examples/node-headless)
+for a runnable version with:
 
-```ts title="app/api/payroll/run/route.ts"
-import { sendUsdc } from "@/server/usdc-sender";
-import { db } from "@/server/db";
+- `send.ts` — single transfer
+- `payroll.ts` — iterate over N payees
+- `refund.ts` — `engine.refund()` with `merchantAdapter`
+- `receipt.ts` — poll for receipt/attestation status
+- `webhook-*.ts` — verified webhook flow
 
-export async function POST() {
-  const payees = await db.payee.findMany({
-    where: { active: true, paidThisMonth: false },
-  });
+## Beyond EVM
 
-  const results: Array<{ id: string; ok: boolean; tx?: string }> = [];
+The same pattern works for Solana, Stellar, and Starknet. Build the
+matching adapter (`SolanaAdapter`, `StellarAdapter`, `StarknetAdapter`)
+using the ecosystem's node SDK — `@solana/web3.js`,
+`@stellar/stellar-sdk`, `starknet` — and hand it to `engine.send`.
+The engine picks the right adapter for the source chain
+automatically.
 
-  for (const p of payees) {
-    try {
-      const r = await sendUsdc(p.walletAddress, p.salary);
-      if (r.kind === "success") {
-        await db.payee.update({
-          where: { id: p.id },
-          data: { paidThisMonth: true, lastTx: r.finalTxHash },
-        });
-        results.push({ id: p.id, ok: true, tx: r.finalTxHash });
-      } else {
-        results.push({ id: p.id, ok: false });
-      }
-    } catch (err) {
-      results.push({ id: p.id, ok: false });
-    }
-  }
-
-  return Response.json({ results });
-}
-```
-
-Hit `/api/payroll/run` from a Vercel cron, GitHub Actions workflow,
-or any scheduler — it iterates the payee list, signs each tx via
-the Circle DCW, and updates your database with the on-chain
-receipt. The widget itself is never involved.
-
-## What you don't get
-
-The server-side path skips a few things the widget gives you for
-free. Worth knowing what you're trading away:
-
-- **Per-user balance visibility.** The DCW holds your money, not the
-  recipient's. Use `engine.quote` to see fees + amounts before you
-  commit, but you can't read someone else's wallet from this path.
-- **Recipient confirmation UI.** No user clicks **Send**; you commit
-  the moment your code calls `engine.send`. Build idempotency keys
-  and dry-run flags into your route handler if double-sending is a
-  business risk.
-- **Wallet ergonomics like ENS chip rendering.** You're not in
-  React; the resolver still works (it's pure TS), but the chip
-  doesn't exist outside the widget.
-
-## Don't try to mount the widget against a DCW
-
-A user-controlled wallet on the browser and a server-held DCW are
-fundamentally different signing models. Wiring a DCW adapter into
-`<WhiskProvider>` doesn't work because the React layer expects an
-`appKitAdapter` resolved from a connected client wallet (wagmi or
-Solana wallet-adapter), not a server credential. The architectural
-seam is: **use the widget for user-initiated payments, the engine
-for backend-initiated payments.**
-
-## User-Controlled Wallets (UCW)
-
-UCW is the other half of Circle Wallets — embedded wallets where
-each user gets their own wallet authenticated via email, passkey,
-or OAuth, with Circle's MPC splitting the key share between Circle
-and the user. UCW _is_ a fit for the widget (it's a client-side
-wallet from React's perspective), but support hasn't landed in
-Whisk yet. See the [Components → ConnectModal](/docs/components/connect-modal)
-roadmap note for status.
-
-## Related
-
-- [Engine](/docs/concepts/engine) — what `createWhisk` returns and
-  how the React layer wraps it.
-- [Routing](/docs/concepts/routing) — same-chain transfer vs CCTP
-  bridge logic. Both paths are available server-side via `engine.send`.
-- [Errors](/docs/api/errors) — typed errors thrown by `engine.send`
-  during failure. Handle them the same way the widget does.
+Whisk's `packages/core/scripts/testnet/wallets.ts` in the repo shows a
+production-shaped implementation of all four ecosystems side by
+side; use it as a reference when you build your own.

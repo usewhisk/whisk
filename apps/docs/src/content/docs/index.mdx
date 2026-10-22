@@ -1,14 +1,14 @@
 ---
 title: Introduction
-description: A React widget for sending and bridging USDC, built on Circle App Kit.
+description: A React widget for USDC payments and cross-chain bridges via CCTP V2.
 ---
 
 Whisk is a React component you drop into a page so people can send
-USDC. Once it's mounted, they can pay anyone with a wallet, on any
-chain Circle App Kit supports, with or without a bridge in the
-middle. You don't have to think about wagmi configs, CCTP step
-ordering, or which RPC speaks Solana; Whisk handles all of that
-behind the component.
+USDC. Once it's mounted, users can pay anyone with a wallet, on any
+chain that Circle's CCTP V2 protocol reaches, with or without a
+bridge in the middle. You don't have to think about wagmi configs,
+CCTP step ordering, or Cairo `ByteArray` encoding; Whisk handles all
+of that behind the component.
 
 ```tsx title="app/page.tsx"
 import {
@@ -16,12 +16,26 @@ import {
   WhiskSend,
   createWhiskConfig,
   evm,
+  solana,
+  stellar,
+  starknet,
 } from "@usewhisk/react";
 import "@usewhisk/react/styles.css";
 
 const config = createWhiskConfig({
-  wallets: [evm({ projectId: process.env.WALLETCONNECT_PROJECT_ID! })],
-  chains: ["Arc_Testnet", "Base_Sepolia"],
+  wallets: [
+    evm({ projectId: process.env.WALLETCONNECT_PROJECT_ID! }),
+    solana(),
+    stellar(),
+    starknet(),
+  ],
+  chains: [
+    "Base_Sepolia",
+    "Ethereum_Sepolia",
+    "Solana_Devnet",
+    "Stellar_Testnet",
+    "Starknet_Sepolia",
+  ],
 });
 
 export default function Page() {
@@ -34,18 +48,34 @@ export default function Page() {
 ```
 
 Save the file. Open the page. That's the entire integration. Connect
-a wallet, type an address, type an amount, hit send. If the
-destination is a different chain than the source, Whisk routes
-through CCTP; if it's the same chain, it skips the bridge.
+a wallet, type an address, type an amount, hit send. If source and
+destination match, Whisk transfers directly; otherwise it routes
+through CCTP V2 Fast Transfer.
 
-## Two packages
+## Three packages
 
-`@usewhisk/react` ships the components, hooks, and provider.
-`@usewhisk/core` ships the engine that drives them; pure
-TypeScript, no React import. The React package re-exports the few
-helpers most apps need (`chainInfo`, `composeResolvers`,
-`WhiskError` subclasses), so you almost never have to import from
-core directly.
+`@usewhisk/react` ships the components, hooks, and providers.
+`@usewhisk/core` ships the engine that drives them; pure TypeScript,
+no React import. `@usewhisk/cctp` ships the CCTP V2 protocol layer
+(chain registry, ABIs, Iris client, burn/mint builders across EVM,
+Solana, Stellar, and Starknet). The React package re-exports the few
+helpers most apps need, so you almost never have to import from core
+directly.
+
+## Four ecosystems, one widget
+
+Whisk speaks every CCTP V2 destination Circle supports today:
+
+- **EVM** — Ethereum, Base, Arbitrum, Optimism, Avalanche, Polygon,
+  Linea, Unichain, World Chain
+- **Solana** — via Wallet Standard (Phantom, Solflare, Backpack, …)
+- **Stellar** — via Stellar Wallets Kit (Freighter, xBull, LOBSTR, …)
+- **Starknet** — via get-starknet-core (Argent X, Braavos, …)
+
+Cross-ecosystem bridges use Circle's Iris service to hand your burn
+across chains and (where available) the Iris Forwarder to auto-mint
+on the destination. Stellar and Starknet destinations mint manually
+via the destination adapter.
 
 ## What it does that you don't have to
 
@@ -53,11 +83,12 @@ core directly.
   <Card title="Recipient lookup" href="/docs/concepts/resolvers">
     Addresses, ENS names, and ENSIP-11 multichain coin types resolve against the
     destination chain. Bring your own resolvers; Lens, Farcaster, an internal
-    email lookup, and they slot into the same chain.
+    email lookup, they slot into the same chain.
   </Card>
   <Card title="Quote and route" href="/docs/concepts/routing">
-    Same-chain transfers go direct. Cross-chain transfers route through CCTP v2
-    with Circle's Iris forwarder handling the mint, so the user signs once.
+    Same-chain transfers go direct. Cross-chain transfers route through CCTP V2
+    Fast Transfer; where the Forwarder covers the destination, the user signs
+    once and the mint lands automatically.
   </Card>
   <Card title="State you can read" href="/docs/concepts/state-machine">
     Every transition fires through a discriminated union. Narrow on `state.kind`
@@ -73,10 +104,10 @@ core directly.
 
 ## A note on status
 
-Whisk is live on 17 testnets today. Mainnet is in progress. If you're
-building toward production, build against testnet first. The API
-won't change between testnet and mainnet, only the chain identifiers
-you put in `createWhiskConfig`.
+Whisk is live on testnet across all four ecosystems today. Mainnet
+is next. If you're building toward production, build against testnet
+first. The API doesn't change between testnet and mainnet — only the
+chain identifiers you put in `createWhiskConfig`.
 
 ## Where to start
 

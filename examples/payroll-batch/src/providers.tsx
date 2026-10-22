@@ -5,9 +5,8 @@ export function Providers({ children }: { children: ReactNode }) {
   const config = useMemo(
     () =>
       createWhiskConfig({
-        mode: "testnet",
-        // Studio treasury covers the bridge fees so each contractor is paid
-        // their exact salary, net of nothing.
+        // The treasury pays the bridge fees so each contractor receives their
+        // exact salary.
         feeBearer: "sender",
         wallets: [
           evm({
@@ -27,10 +26,10 @@ export function Providers({ children }: { children: ReactNode }) {
           "Base_Sepolia",
           "Optimism_Sepolia",
         ],
-        // Treasury sits on Arbitrum for cheap outgoing payouts; each
-        // dispatch then bridges to the contractor's preferred chain.
-        defaultSourceChain: "Arbitrum_Sepolia",
-        defaultDestinationChain: "Arbitrum_Sepolia",
+        // Payouts start on Arc, where gas is cheap, and each payment bridges
+        // to the contractor's chain.
+        defaultSourceChain: "Arc_Testnet",
+        defaultDestinationChain: "Arc_Testnet",
         appLabel: "whisk-example-payroll",
       }),
     [],

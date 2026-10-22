@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  UnknownChainError,
+  type IrisMessage as CctpIrisMessage,
+} from "@usewhisk/cctp";
+import type { Chain } from "../types/chain.js";
+import { createFakeIris } from "../test/harness/index.js";
+import {
   IRIS_MAINNET_URL,
   IRIS_SANDBOX_URL,
   fetchAttestationOnce,
@@ -43,12 +49,28 @@ describe("getIrisBaseUrl", () => {
 });
 
 describe("fetchAttestationOnce", () => {
-  it("returns not_found when the source chain has no CCTP domain", async () => {
-    // Monad_Testnet is in the chain registry but has no CCTP domain entry.
+  it("queries the baseUrl override instead of Circle's host", async () => {
+    const injected = vi.fn<typeof fetch>(
+      async () =>
+        new Response(JSON.stringify({ messages: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    await fetchAttestationOnce("Arc_Testnet", "0xburn", {
+      baseUrl: "https://iris.proxy.example",
+      fetch: injected,
+    });
+    const url = new URL(String(injected.mock.calls[0]?.[0]));
+    expect(url.origin).toBe("https://iris.proxy.example");
+    expect(url.pathname).toBe("/v2/messages/26");
+  });
+
+  it("throws for a chain outside the registry without calling Iris", async () => {
     const fetchMock = stubFetch();
-    const msg = await fetchAttestationOnce("Monad_Testnet", "0xburn");
-    expect(msg.status).toBe("not_found");
-    // Iris should never have been called.
+    await expect(
+      fetchAttestationOnce("__unknown__" as Chain, "0xburn"),
+    ).rejects.toBeInstanceOf(UnknownChainError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -85,9 +107,16 @@ describe("fetchAttestationOnce", () => {
   });
 
   it("throws on non-OK non-404 responses", async () => {
-    stubFetch({ ok: false, status: 500, statusText: "Server Error" });
+    // Iris client retries 5xx with backoff before giving up, so the
+    // stub needs to fail every attempt.
+    const failing: FakeResponse = {
+      ok: false,
+      status: 500,
+      statusText: "Server Error",
+    };
+    stubFetch(failing, failing, failing, failing, failing);
     await expect(fetchAttestationOnce("Arc_Testnet", "0xburn")).rejects.toThrow(
-      /500/,
+      /Iris/,
     );
   });
 });
@@ -119,16 +148,20 @@ describe("pollAttestation", () => {
     expect(onUpdate.mock.calls[1]![0].status).toBe("complete");
   });
 
-  it("returns 'failed' immediately and stops polling further", async () => {
-    const fetchMock = stubFetch({
+  it("treats a status Iris does not send as still pending", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
       json: async () => ({ messages: [{ status: "failed" }] }),
     });
+    vi.stubGlobal("fetch", fetchMock);
     const result = await pollAttestation("Arc_Testnet", "0xburn", {
       pollingInterval: 1,
-      timeout: 1000,
+      timeout: 20,
     });
-    expect(result.status).toBe("failed");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("pending_confirmations");
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
   });
 
   it("returns the latest message when the timeout elapses without terminal status", async () => {
@@ -149,4 +182,32 @@ describe("pollAttestation", () => {
     expect(result.status).toBe("pending_confirmations");
     expect(fetchMock).toHaveBeenCalled();
   });
+});
+
+describe("non-EVM source domains", () => {
+  const COMPLETE: CctpIrisMessage = {
+    message: "0x11",
+    attestation: "0x22",
+    eventNonce: "3",
+    status: "complete",
+    cctpVersion: 2,
+  };
+
+  it.each([
+    ["Stellar", 27],
+    ["Starknet", 25],
+  ] as const)(
+    "asks Iris about a %s burn on domain %i",
+    async (chain, domain) => {
+      const iris = createFakeIris();
+      iris.replyToMessages({ message: COMPLETE });
+      const msg = await fetchAttestationOnce(chain, "0xburn", {
+        fetch: iris.fetch,
+      });
+      expect(msg.status).toBe("complete");
+      expect(iris.requests.map((r) => r.url.pathname)).toEqual([
+        `/v2/messages/${domain}`,
+      ]);
+    },
+  );
 });

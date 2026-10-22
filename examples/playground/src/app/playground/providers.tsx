@@ -6,64 +6,48 @@ import {
   createWhiskConfig,
   evm,
   solana,
+  starknet,
+  stellar,
   type Chain,
   type FeeBearer,
 } from "@usewhisk/react";
 
 /**
- * Every testnet App Kit currently supports. The playground exposes
- * the full set so the chain picker mirrors what production apps will
- * see. Solana Devnet rides on `useWhiskAdapter`'s hand-built
- * `TransactionPartialSigner` workaround for App Kit's sending-vs-
- * partial-signer mismatch; the workaround lives in
- * `packages/react/src/hooks/useWhiskAdapter.ts`.
+ * Every CCTP V2 testnet Whisk supports, so the widget's chain pickers show
+ * the full set a production app could offer.
  */
 const TESTNET_CHAINS: Chain[] = [
   "Arc_Testnet",
   "Arbitrum_Sepolia",
   "Avalanche_Fuji",
   "Base_Sepolia",
-  "Codex_Testnet",
   "Ethereum_Sepolia",
-  "HyperEVM_Testnet",
-  "Ink_Testnet",
   "Linea_Sepolia",
-  "Monad_Testnet",
   "Optimism_Sepolia",
-  "Plume_Testnet",
   "Polygon_Amoy_Testnet",
-  "Sei_Testnet",
   "Solana_Devnet",
-  "Sonic_Testnet",
+  "Starknet_Sepolia",
+  "Stellar_Testnet",
   "Unichain_Sepolia",
   "World_Chain_Sepolia",
-  "XDC_Apothem",
 ];
 
-/** Re-exported so the controls panel can render a chain picker without
- *  duplicating the list. */
 export const PLAYGROUND_CHAINS = TESTNET_CHAINS;
 
 /**
- * Whisk's provider stack. `theme` is reactive — the WhiskProvider
- * only changes one DOM attribute (`data-whisk-theme`) when it flips,
- * so toggling theme from the controls panel does NOT remount wagmi
- * or react-query underneath. Wallet connection survives a theme
- * change.
+ * Changing `theme` only updates the provider's `data-whisk-theme`
+ * attribute, so wagmi stays mounted and the wallet stays connected.
  *
- * `config` is memoized on `feeBearer` — almost every knob lives on
- * `<WhiskSend>` props or the reactive `theme` prop, but `feeBearer` is
- * part of `createWhiskConfig`, which the engine reads once at creation.
- * The `key={feeBearer}` on the provider forces a clean remount when it
- * flips, so a fresh engine picks up the new fee policy. (Toggling it
- * therefore drops the wallet connection — fine for a QA knob.)
+ * `feeBearer` is read once when the engine is created, so
+ * `key={feeBearer}` remounts the provider with a fresh engine when it
+ * changes. That drops the wallet connection, which is fine for a test knob.
  */
 export function PlaygroundProviders({
   theme,
   feeBearer,
   children,
 }: {
-  theme: "system" | "light" | "dark";
+  theme: "auto" | "light" | "dark";
   feeBearer: FeeBearer;
   children: React.ReactNode;
 }) {
@@ -76,25 +60,14 @@ export function PlaygroundProviders({
             chains: TESTNET_CHAINS,
             projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
             appName: "Whisk Playground",
-            // Fallback RPC chain. Circle's public Arc Testnet RPC
-            // rate-limits hard during testnet sweeps, which surfaced
-            // as viem "Timed out while waiting for transaction
-            // receipt" errors during swap approves. The list below
-            // is tried in order and re-ranked by latency, so a stuck
-            // primary transparently flips to the next.
-            rpcUrls: {
-              Arc_Testnet: [
-                "https://rpc.testnet.arc.network",
-                "https://arc-testnet.drpc.org",
-                "https://rpc.blockdaemon.testnet.arc.network",
-                "https://rpc.quicknode.testnet.arc.network",
-              ],
-            },
           }),
-          // Solana Devnet support — the factory defaults to devnet, so
-          // no options needed. Mounts `<ConnectionProvider>` +
-          // `<WalletProvider>` only when this is present.
+          // Defaults to devnet.
           solana(),
+          // Defaults to testnet.
+          stellar(),
+          // Defaults to Sepolia and discovers Argent X, Braavos and other
+          // injected wallets.
+          starknet(),
         ],
         chains: TESTNET_CHAINS,
         defaultSourceChain: "Arc_Testnet",

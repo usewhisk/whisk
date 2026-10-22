@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 
 const config: NextConfig = {
   reactStrictMode: true,
-  // Worktrees under .worktrees/ sit inside a checkout with its own lockfile.
+  // Trace from the monorepo root, not an outer checkout that holds a worktree.
   outputFileTracingRoot: path.join(__dirname, "../.."),
   transpilePackages: ["@usewhisk/core", "@usewhisk/react"],
   webpack: (config) => {

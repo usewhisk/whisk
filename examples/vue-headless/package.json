@@ -1,0 +1,28 @@
+{
+  "name": "@usewhisk/example-vue-headless",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Vite + Vue 3 example that drives @usewhisk/core directly — no React, no @usewhisk/react. Demonstrates the headless engine + browser MetaMask integration.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3014",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview --port 3014",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@usewhisk/core": "workspace:*",
+    "buffer": "^6.0.3",
+    "viem": "^2.57.5",
+    "vue": "^3.5.42"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.4.3",
+    "vue-tsc": "^2.2.0"
+  }
+}

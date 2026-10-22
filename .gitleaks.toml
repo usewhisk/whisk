@@ -1,0 +1,22 @@
+[extend]
+useDefault = true
+
+# Stellar contract (C) and account (G) strkeys are public addresses. Secret seeds
+# start with S and are not covered here.
+[[allowlists]]
+description = "Public Stellar strkeys"
+regexTarget = "secret"
+regexes = ['''^[CG][A-Z2-7]{55}$''']
+
+# EVM addresses are 20 bytes. A 32-byte private key is longer, so it is still caught.
+[[allowlists]]
+description = "Public EVM addresses"
+regexTarget = "secret"
+regexes = ['''^0x[0-9a-fA-F]{40}$''']
+
+[[allowlists]]
+description = "Fixture webhook secrets in tests"
+condition = "AND"
+paths = ['''\.test\.tsx?$''']
+regexTarget = "secret"
+regexes = ['''^whsk_test_secret_''']

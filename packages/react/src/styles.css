@@ -1,70 +1,41 @@
 /**
- * Whisk default theme — warm earth-tone system.
+ * Whisk's default theme. Every visual property reads a `--whisk-*` variable,
+ * so a host app can restyle the widget with one rule on `[data-whisk]`.
  *
- * Every visual property routes through a CSS variable so host apps can
- * override anything from a single `:root` rule without forking any
- * component. The brand tokens (bg, fg, fg-muted, border, primary,
- * primary-fg) match the system shipped in the design spec; semantic
- * tokens (success, warning, destructive) are added as harmonised
- * defaults you can override the same way.
- *
- * Implementation note: tokens are stored as hex so devs can paste any
- * colour format when overriding. Where opacity composition is needed
- * (focus rings, hover states), components use `color-mix(in srgb, ...)`
- * — supported in every evergreen browser (Safari 16.4+, Chrome 111+,
+ * Where a component needs opacity it uses `color-mix(in srgb, ...)`, so
+ * overrides can be any colour format (Safari 16.4+, Chrome 111+,
  * Firefox 113+).
  */
 
 [data-whisk] {
-  /* ==========================================================
-     Brand surfaces  (override these to match your app)
-     ========================================================== */
   --whisk-bg: #cdc3a3; /* deeper cream */
-  --whisk-fg: #56363d; /* deep wine — primary text */
-  /* Body text — fg at 75% over bg. Matches the marketing site's
-     `text-foreground/75` so the widget reads at the same weight as the
-     surrounding docs / landing surfaces. */
+  --whisk-fg: #56363d; /* deep wine */
+  /* fg at 75% over bg, the same weight as body text on the marketing
+     site. */
   --whisk-fg-muted: color-mix(in srgb, var(--whisk-fg) 75%, transparent);
   --whisk-border: #b09382; /* deeper rose */
 
-  /* ==========================================================
-     Brand accent  (CTA, primary button)
-     ========================================================== */
   --whisk-primary: #d65c3c; /* terracotta */
   --whisk-primary-fg: #fbf8ee; /* off-white text on accent */
 
-  /* ==========================================================
-     Derived surfaces  (default to brand; override if needed)
-     ========================================================== */
   --whisk-card: var(--whisk-bg);
   --whisk-card-fg: var(--whisk-fg);
   --whisk-input: var(--whisk-border);
   --whisk-ring: var(--whisk-primary);
 
-  /* ==========================================================
-     Semantic state  (harmonised with the warm palette)
-     ========================================================== */
   --whisk-success: #6b8e4e; /* moss green */
   --whisk-warning: #d69a3c; /* warm amber */
   --whisk-destructive: #b23a3a; /* deep terracotta-red */
   --whisk-destructive-fg: #fbf8ee;
 
-  /* ==========================================================
-     Shape
-     ========================================================== */
   --whisk-radius: 0.625rem; /* fields, buttons */
   --whisk-radius-sm: 0.375rem; /* badges */
   --whisk-radius-md: 0.625rem; /* alias for --whisk-radius (medium) */
   --whisk-radius-lg: 1rem; /* card */
-  --whisk-border-w: 0.5px; /* refined hairline borders */
+  --whisk-border-w: 0.5px; /* hairline */
 
-  /* ==========================================================
-     Type. The preferred stack matches the marketing site and docs:
-     Inter for body, Familjen Grotesk for display (headlines, amount
-     readouts), JetBrains Mono for code / addresses. Host apps that
-     already load these fonts get them; others fall back cleanly to
-     system fonts. No font files are bundled by the widget itself.
-     ========================================================== */
+  /* The widget bundles no font files. Host apps that load these fonts get
+     them, or can import fonts.css; everyone else gets system fonts. */
   --whisk-font:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
     sans-serif;
@@ -76,29 +47,15 @@
     monospace;
 }
 
-/* ============================================================
-   Dark mode — cream/wine relationship inverts.
-   Sage finally has a real home as muted text on deep wine.
-   ============================================================
-   Two independent paths apply dark theming:
+/* Dark mode applies two ways. With theme="auto", a `prefers-color-scheme`
+   media query switches the variables in CSS alone, so nothing flashes on
+   hydration. With theme="dark", the provider sets `data-whisk-theme="dark"`
+   and a `.dark` class for Tailwind; those rules come last so they beat the
+   media query.
 
-   1. Automatic (theme="system", default): a `prefers-color-scheme`
-      media query applies dark vars when the OS is dark AND the dev
-      hasn't pinned the widget to light. No JS, no hydration risk,
-      no flash — the browser handles theming entirely from CSS.
-
-   2. Explicit override: a dev passes `theme="dark"`. The provider
-      renders `data-whisk-theme="dark"` (and the legacy `.dark` class
-      for Tailwind users). Those selectors come last so they always
-      win over the media query.
-
-   Light is always the default; everything else opts in.
-
-   The theme discriminators are wrapped in `:where()` so they add no
-   specificity — every block stays at `[data-whisk]` (0,1,0). That keeps
-   the host override contract intact: a recipe that re-themes `--whisk-*`
-   on `[data-whisk]` (loaded after this file) wins in light AND dark,
-   instead of being out-specified by the dark block.
+   The theme selectors sit inside `:where()` so every block keeps
+   `[data-whisk]` specificity. A host rule on `[data-whisk]` loaded after
+   this file then wins in light and dark alike.
 */
 
 @media (prefers-color-scheme: dark) {
@@ -139,10 +96,6 @@
   --whisk-destructive-fg: #fbf8ee;
 }
 
-/* ============================================================
-   Container
-   ============================================================ */
-
 [data-whisk] {
   font-family: var(--whisk-font);
   color: var(--whisk-fg);
@@ -156,10 +109,6 @@
   box-sizing: border-box;
 }
 
-/* ============================================================
-   Card
-   ============================================================ */
-
 [data-whisk] .whisk-card {
   background: var(--whisk-card);
   color: var(--whisk-card-fg);
@@ -170,10 +119,6 @@
     0 1px 2px 0 color-mix(in srgb, var(--whisk-fg) 6%, transparent),
     0 8px 28px -10px color-mix(in srgb, var(--whisk-fg) 10%, transparent);
 }
-
-/* ============================================================
-   Header (brand wordmark + optional eyebrow tag)
-   ============================================================ */
 
 [data-whisk] .whisk-header {
   display: flex;
@@ -199,10 +144,6 @@
   color: var(--whisk-fg-muted);
 }
 
-/* ============================================================
-   Field box — inset-label pattern (Stripe-style)
-   ============================================================ */
-
 [data-whisk] .whisk-fieldbox {
   border: var(--whisk-border-w) solid var(--whisk-border);
   border-radius: var(--whisk-radius);
@@ -210,10 +151,9 @@
   background: var(--whisk-bg);
   display: flex;
   flex-direction: column;
-  /* Allow the fieldbox to shrink inside a flex / grid parent (the
-   * source/destination chain picker row in InputStep). Without this,
-   * the box would size to its content's intrinsic width and a long
-   * chain label would push the column past the card edge. */
+  /* Lets the field shrink in a flex or grid row, such as two chain
+   * pickers side by side, so a long chain label cannot push past the card
+   * edge. */
   min-width: 0;
   gap: 0.125rem;
   transition:
@@ -221,12 +161,9 @@
     box-shadow 0.16s ease;
 }
 
-/* Chain pickers run in tight two-column layouts (source / destination),
- * so they get tighter horizontal padding than amount / recipient fields.
- * `:has()` keeps the rule scoped without forcing ChainPicker to render
- * a modifier class. Reduced more aggressively (0.5 → 0.375rem) to keep
- * long names like "Polygon Amoy Testnet" / "World Chain Sepolia" on a
- * single line at the widget's narrowest card width. */
+/* Chain pickers sit two to a row, so they get less horizontal padding,
+ * enough to keep names like "Polygon Amoy Testnet" on one line at the
+ * narrowest card width. `:has()` saves ChainPicker a modifier class. */
 [data-whisk] .whisk-fieldbox:has(.whisk-select-trigger) {
   padding-left: 0.375rem;
   padding-right: 0.375rem;
@@ -283,9 +220,8 @@
   color: var(--whisk-fg-muted);
 }
 
-/* When the suffix slot holds an interactive control (TokenPicker), the
-   field's `align-items: baseline` would clip the pill at the input's
-   baseline. Center the control vertically instead and let it size itself. */
+/* With baseline alignment, an interactive control in the suffix slot
+   would be clipped at the input's baseline, so it is centred instead. */
 [data-whisk] .whisk-fieldbox__control:has(.whisk-token-picker) {
   align-items: center;
 }
@@ -301,9 +237,7 @@
   letter-spacing: -0.01em;
 }
 
-/* Placeholder in amount-mode fields uses the body type size and
- * weight. Inheriting the 1.375rem display size made hints like
- * "Calculating…" or "—" look comically loud. */
+/* At the 1.375rem display size, placeholder hints look far too loud. */
 [data-whisk]
   .whisk-fieldbox--amount
   .whisk-fieldbox__control
@@ -318,10 +252,6 @@
   font-size: 0.8125rem;
   letter-spacing: -0.01em;
 }
-
-/* ============================================================
-   Buttons
-   ============================================================ */
 
 [data-whisk] .whisk-button {
   display: inline-flex;
@@ -401,10 +331,6 @@
   font-size: 0.8125rem;
 }
 
-/* ============================================================
-   Inputs
-   ============================================================ */
-
 [data-whisk] .whisk-input {
   display: block;
   width: 100%;
@@ -441,10 +367,6 @@
     color-mix(in srgb, var(--whisk-destructive) 25%, transparent);
 }
 
-/* ============================================================
-   Field labels and helpers
-   ============================================================ */
-
 [data-whisk] .whisk-label {
   display: block;
   font-size: 0.75rem;
@@ -470,14 +392,14 @@
   font-weight: 500;
 }
 
-/* ============================================================
-   Banner (inline advisory — chain-mismatch, low-gas, info)
-   ============================================================
-   Three tone variants share layout (icon + message + optional
-   action) and differ only in colour mix. Background is a soft tint
-   of the variant colour so it reads "informational" rather than
-   alarming. Border picks up the same colour at higher alpha.
-*/
+/* Banner backgrounds are a soft tint of the variant colour so they read
+   as information rather than alarm. */
+
+[data-whisk] .whisk-resume {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 
 [data-whisk] .whisk-banner {
   display: flex;
@@ -572,10 +494,6 @@
   cursor: not-allowed;
 }
 
-/* ============================================================
-   Badges
-   ============================================================ */
-
 [data-whisk] .whisk-badge {
   display: inline-flex;
   align-items: center;
@@ -605,18 +523,10 @@
   color: var(--whisk-fg-muted);
 }
 
-/* ============================================================
-   Mono helper
-   ============================================================ */
-
 [data-whisk] .whisk-mono {
   font-family: var(--whisk-font-mono);
   letter-spacing: -0.01em;
 }
-
-/* ============================================================
-   Step rail — connecting line + animated state per step.
-   ============================================================ */
 
 [data-whisk] .whisk-step-rail {
   position: relative;
@@ -703,10 +613,6 @@
   }
 }
 
-/* ============================================================
-   Spinner
-   ============================================================ */
-
 [data-whisk] .whisk-spinner {
   width: 1rem;
   height: 1rem;
@@ -721,10 +627,6 @@
     transform: rotate(360deg);
   }
 }
-
-/* ============================================================
-   Footer (powered-by)
-   ============================================================ */
 
 [data-whisk] .whisk-footer {
   display: flex;
@@ -746,10 +648,6 @@
   color: var(--whisk-fg);
   text-transform: lowercase;
 }
-
-/* ============================================================
-   Tabs (Radix UI)
-   ============================================================ */
 
 [data-whisk] .whisk-tabs {
   display: flex;
@@ -802,10 +700,6 @@
   outline: none;
 }
 
-/* ============================================================
-   Swap UI
-   ============================================================ */
-
 [data-whisk] .whisk-swap-row {
   display: flex;
   gap: 0.5rem;
@@ -851,10 +745,6 @@
   outline-offset: 2px;
 }
 
-/* ============================================================
-   Summary (Review / Result rows — used by both Transfer + Swap)
-   ============================================================ */
-
 [data-whisk] .whisk-summary {
   display: flex;
   flex-direction: column;
@@ -882,10 +772,6 @@
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
-
-/* ============================================================
-   Dialog (Radix UI) — Connect modal + future modals
-   ============================================================ */
 
 [data-whisk] .whisk-dialog__overlay {
   position: fixed;
@@ -982,10 +868,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  /* Scrolls when the host configures many connectors; the header above
-     stays fixed so the user always knows what they're choosing from.
-     The scrollbar itself is hidden — Firefox uses `scrollbar-width:none`,
-     WebKit / Blink use the pseudo-element. Wheel + drag still work. */
+  /* The scrollbar is hidden (`scrollbar-width` for Firefox, the
+     pseudo-element for WebKit and Blink); wheel and drag still scroll. */
   overflow-y: auto;
   flex: 1 1 auto;
   min-height: 0;
@@ -1145,10 +1029,6 @@
   }
 }
 
-/* ============================================================
-   Account row, chip, network pill
-   ============================================================ */
-
 [data-whisk] .whisk-account-row {
   display: flex;
   align-items: center;
@@ -1157,17 +1037,14 @@
   flex-wrap: wrap;
 }
 
-/* Mode indicator row — kept for legacy callers but no longer used by
- * WhiskSend itself, which now ships a single top row instead. */
+/* WhiskSend does not use this row; it is kept for custom markup. */
 [data-whisk] .whisk-mode-row {
   display: flex;
   align-items: center;
   margin: 0;
 }
 
-/* Top row: Testnet pill on the left, account chip + network pill on the
- * right. Single row using space-between so each side anchors to its
- * edge. Empty slots are fine — they just don't render children. */
+/* Each slot anchors to its own edge; an empty slot is fine. */
 [data-whisk] .whisk-top-row {
   display: flex;
   align-items: center;
@@ -1266,10 +1143,6 @@
   flex-shrink: 0;
 }
 
-/* ============================================================
-   Account dropdown (Radix DropdownMenu)
-   ============================================================ */
-
 [data-whisk] .whisk-account-menu {
   min-width: 10.5rem;
   background: var(--whisk-bg);
@@ -1335,10 +1208,6 @@
   margin: 0.3125rem 0;
 }
 
-/* ============================================================
-   Balance line (under the amount input)
-   ============================================================ */
-
 [data-whisk] .whisk-balance-line {
   display: flex;
   align-items: center;
@@ -1397,20 +1266,15 @@
   cursor: not-allowed;
 }
 
-/* ============================================================
-   Token picker (Radix Select pill)
-   ============================================================ */
-
 [data-whisk] .whisk-token-picker {
   appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   padding: 0.4375rem 0.625rem 0.4375rem 0.75rem;
-  /* Match `whisk-fieldbox` so the token pill reads as a peer of the
-     amount input — same border + background tokens, same hairline
-     weight. The radius differs (pill vs rounded-rect) on purpose so
-     the token picker still scans as a "select" rather than a field. */
+  /* Same border and background as `whisk-fieldbox`, so the pill reads as
+     a peer of the amount input. The pill radius keeps it looking like a
+     select rather than a field. */
   border: var(--whisk-border-w) solid var(--whisk-border);
   border-radius: 999px;
   background: var(--whisk-bg);
@@ -1449,9 +1313,8 @@
   min-width: 8rem;
 }
 
-/* Nested-in-field variant — when the TokenPicker sits inside a FieldBox
-   suffix slot, shrink the height and drop the heavy outer border so it
-   reads as a child of the field rather than competing with it. */
+/* Inside a FieldBox suffix the pill is shorter and drops its outer
+   border, so it reads as part of the field. */
 [data-whisk] .whisk-fieldbox__suffix .whisk-token-picker {
   height: 1.75rem;
   padding: 0.25rem 0.5rem 0.25rem 0.5rem;
@@ -1468,9 +1331,8 @@
   min-width: 0;
 }
 
-/* Hide the native number-input spin buttons inside the amount field.
-   They look noisy in compact widget UIs and most apps don't want users
-   nudging amounts by 1 — paste / type / Max are the real entry paths. */
+/* Spin buttons would nudge a USDC amount by 1; typing, paste and Max
+   are enough. */
 [data-whisk] .whisk-fieldbox input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
@@ -1482,10 +1344,6 @@
   appearance: none;
   margin: 0;
 }
-
-/* ============================================================
-   Amount + token row (Transfer)
-   ============================================================ */
 
 [data-whisk] .whisk-amount-row {
   display: flex;
@@ -1504,17 +1362,12 @@
   border-radius: var(--whisk-radius-md);
 }
 
-/* ============================================================
-   Select (Radix Select) — Chain picker
-   ============================================================ */
-
 [data-whisk] .whisk-select-trigger {
   width: 100%;
   display: flex;
   align-items: center;
-  /* Tight icon → label → chevron spacing. The two-column source/dest
-   * layout has ~130–140px of usable text width per column at the
-   * narrowest card width, and every pixel of gap eats into that. */
+  /* Each column has about 130 to 140px of text width at the narrowest
+   * card, so every pixel of gap counts. */
   gap: 0.25rem;
   /* Allow the trigger to shrink inside the source/destination grid so
    * long network names truncate cleanly instead of pushing siblings. */
@@ -1522,10 +1375,8 @@
   border: none;
   background: transparent;
   font: inherit;
-  /* 0.75rem (12px) is the floor — below that, chain labels become hard
-   * to scan. With this size + ChainIcon at 14px + chevron at 14px,
-   * the longest network name in the registry ("Polygon Amoy Testnet",
-   * 20 chars) fits without ellipsis at the default 26rem card width. */
+  /* 0.75rem is the smallest size that still scans, and at it the longest
+   * chain name ("Polygon Amoy Testnet") fits without an ellipsis. */
   font-size: 0.75rem;
   color: var(--whisk-fg);
   text-align: left;
@@ -1544,11 +1395,8 @@
   white-space: nowrap;
 }
 
-/* No inner focus ring on the trigger — the wrapping fieldbox already
- * lights up via `.whisk-fieldbox:focus-within` (border + soft halo),
- * and stacking a solid outline on top of that reads as a double ring.
- * Accessibility is preserved by the outer ring; keyboard users still
- * see a clear "the whole field is active" signal. */
+/* The fieldbox around the trigger already shows focus through
+ * `:focus-within`, so a ring here would read as a double ring. */
 [data-whisk] .whisk-select-trigger:focus-visible {
   outline: none;
 }
@@ -1557,8 +1405,7 @@
   flex-shrink: 0;
 }
 
-/* Chevron sits at the end. `:last-child` works because the trigger
- * renders <icon><value><chevron>` in that order. */
+/* The chevron is the trigger's last child. */
 [data-whisk] .whisk-select-trigger > :last-child {
   margin-left: auto;
 }
@@ -1597,8 +1444,8 @@
   gap: 0.5rem;
   padding: 0.5rem 1.5rem 0.5rem 0.625rem;
   font-size: 0.8125rem;
-  /* Single-line items — dropdown sets its own min-width to the trigger
-   * width, so labels never need to wrap. */
+  /* The dropdown is at least as wide as the trigger, so labels never
+   * need to wrap. */
   white-space: nowrap;
   border-radius: calc(var(--whisk-radius-md) - 0.25rem);
   color: var(--whisk-fg);

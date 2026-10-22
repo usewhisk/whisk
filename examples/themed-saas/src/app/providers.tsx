@@ -7,7 +7,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const config = useMemo(
     () =>
       createWhiskConfig({
-        mode: "testnet",
         // Treasury covers the bridge fees so each vendor receives their exact
         // invoiced amount.
         feeBearer: "sender",

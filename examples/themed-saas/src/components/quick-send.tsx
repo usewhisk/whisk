@@ -78,7 +78,6 @@ function SelectedVendor({
         <WhiskSend
           amount={vendor.amount}
           recipient={TREASURY}
-          showFooter={false}
           onSuccess={({ finalTxHash }) => onPaid(finalTxHash)}
         />
       </div>

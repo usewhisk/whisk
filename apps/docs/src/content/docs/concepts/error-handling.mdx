@@ -216,8 +216,8 @@ import {
 } from "@usewhisk/core";
 
 const engine = createWhisk({
-  chains: ["Arc_Testnet", "Base_Sepolia", "Polygon_Amoy_Testnet"],
-  defaultSourceChain: "Arc_Testnet",
+  chains: ["Ethereum_Sepolia", "Base_Sepolia", "Polygon_Amoy_Testnet"],
+  defaultSourceChain: "Ethereum_Sepolia",
 });
 
 async function bridgeWithRecovery({

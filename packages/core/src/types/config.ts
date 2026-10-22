@@ -1,9 +1,9 @@
-import type { Chain, ChainNetwork } from "./chain.js";
+import type { InflightStore } from "../inflight/types.js";
+import type { Chain } from "./chain.js";
 import type { Token } from "./token.js";
 import type { FeePolicy, FeeBearer } from "./fee.js";
 import type { Resolver } from "./resolver.js";
-
-export type WhiskMode = ChainNetwork;
+import type { WhiskMetadata } from "../metadata/types.js";
 
 export type WhiskConfig = {
   chains: Chain[];
@@ -18,24 +18,47 @@ export type WhiskConfig = {
 
   feePolicy?: FeePolicy;
 
-  /** Who absorbs the bridge fees. Defaults to `"receiver"`. See {@link FeeBearer}. */
+  /** Who absorbs the bridge fees. Defaults to `"sender"`. See {@link FeeBearer}. */
   feeBearer?: FeeBearer;
 
   /**
-   * Override App Kit's public RPC endpoints. Pass an array to install a
-   * viem `fallback` transport that re-ranks by latency.
+   * Default correlation metadata merged into every send. Per-call
+   * `SendParams.metadata` overrides on key conflict. See
+   * {@link WhiskMetadata} for size and value constraints. Do not put PII,
+   * payment credentials, or anything sensitive here.
+   */
+  defaultMetadata?: WhiskMetadata;
+
+  /**
+   * RPC endpoints to try, in order, before the chain's default public ones.
    */
   rpcUrls?: Partial<Record<Chain, string | string[]>>;
 
   /**
-   * Use Circle's Forwarding Service to submit the destination mint on
-   * cross-chain bridges. Default `true`. Cross-ecosystem bridges
-   * (Solana ↔ EVM) always use the forwarder regardless.
+   * Use Circle's Forwarder Service to submit the destination mint on
+   * cross-chain bridges. Default `true`. The burn then carries Circle's
+   * `cctp-forward` hookData (32-byte magic prefix).
    */
   useForwarder?: boolean;
 
-  /** Inferred from `chains` when omitted. Mixed networks default to `"testnet"` with a warning. */
-  mode?: WhiskMode;
+  /**
+   * Where transfers are kept between the burn and the mint, so a reload can
+   * resume them. Defaults to memory, which lasts as long as the engine.
+   */
+  inflightStore?: InflightStore;
+
+  /**
+   * Circle's forwarding fee level. Defaults to `high`, or `med` into
+   * Ethereum, where `high` costs about 0.30 USDC more.
+   */
+  forwarderFeeLevel?: "med" | "high";
+
+  /**
+   * Used for every Iris request and for the `getMinFeeAmount` read on
+   * Standard burns. Defaults to the global `fetch`. Pass one to route Circle
+   * through a proxy, or to stub it in tests.
+   */
+  fetch?: typeof fetch;
 
   appLabel?: string;
 };

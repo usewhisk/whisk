@@ -27,7 +27,7 @@ export type WhiskState =
       error: WhiskError;
       quote?: Quote;
       steps?: Step[];
-      /** Original App Kit `BridgeResult`; lets `retry()` resume via `kit.retryBridge` instead of re-burning. */
+      /** Recovery snapshot of the failed send. Retry needs it to resume from the failed step instead of burning again. */
       raw?: unknown;
     };
 

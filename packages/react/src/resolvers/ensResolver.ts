@@ -5,8 +5,10 @@ import { mainnet, sepolia } from "viem/chains";
 import { normalize } from "viem/ens";
 import {
   ResolverError,
-  chainInfo,
+  addressFormat,
   cleanErrorMessage,
+  getChain,
+  type CctpChain,
   type Resolver,
 } from "@usewhisk/core";
 
@@ -30,15 +32,14 @@ export const DEFAULT_ENS_SEPOLIA_RPC_URLS = [
 
 export type EnsResolverOptions = {
   chain?: EnsResolverChain;
-  /** `undefined` → bundled fallback chain; string → single URL; array → viem `fallback` with latency ranking. */
+  /** One URL, or several tried by latency through viem's `fallback`. Defaults to the lists above. */
   rpcUrl?: string | string[];
   /** Reuse an existing viem client (e.g. from wagmi) instead of constructing one. */
   client?: PublicClient;
   /**
-   * When the destination coinType returns null, retry with Ethereum
-   * mainnet coinType 60. Safe for EVM (addresses are namespace-equivalent);
-   * Solana destinations stay safe via the destination regex check.
-   * Defaults to `true` — matches MetaMask / Rainbow behaviour.
+   * When the name has no address for an EVM destination's coinType, use its
+   * Ethereum (coinType 60) address. Defaults to `true`, as in MetaMask and
+   * Rainbow.
    */
   fallbackToEthAddress?: boolean;
 };
@@ -69,7 +70,7 @@ export function createEnsResolver(options: EnsResolverOptions = {}): Resolver {
 
   return {
     name,
-    // Accept any `<label>.<tld>` shape — DNS-imported TLDs work too.
+    // Any `<label>.<tld>`, since DNS-imported TLDs resolve too.
     matches: (input) => /\.[a-z0-9]{2,}$/i.test(input.trim()),
     resolve: async (input, ctx) => {
       const trimmed = input.trim();
@@ -80,8 +81,9 @@ export function createEnsResolver(options: EnsResolverOptions = {}): Resolver {
         return null;
       }
 
-      const info = chainInfo(ctx.chain);
-      const destinationCoinType = ensCoinTypeForChain(info);
+      const destination = getChain(ctx.chain);
+      const { pattern } = addressFormat(ctx.chain);
+      const destinationCoinType = ensCoinTypeForChain(destination);
 
       const client = getClient();
 
@@ -90,18 +92,18 @@ export function createEnsResolver(options: EnsResolverOptions = {}): Resolver {
         normalized,
         destinationCoinType,
       );
-      if (primary && info.addressRegex.test(primary)) {
+      if (primary && pattern.test(primary)) {
         return { address: primary, chain: ctx.chain };
       }
 
-      // EVM addresses are namespace-equivalent; Solana regex check keeps cross-ecosystem safe.
+      // An EVM address is the same account on every EVM chain.
       if (
         fallbackToEthAddress &&
-        info.kind === "evm" &&
+        destination.ecosystem === "evm" &&
         destinationCoinType !== 60
       ) {
         const fallbackAddr = await safeGetEnsAddress(client, normalized, 60);
-        if (fallbackAddr && info.addressRegex.test(fallbackAddr)) {
+        if (fallbackAddr && pattern.test(fallbackAddr)) {
           return { address: fallbackAddr, chain: ctx.chain };
         }
       }
@@ -151,18 +153,13 @@ export const sepoliaEnsResolver: Resolver = createEnsResolver({
 });
 
 // ENSIP-11: mainnet → 60, other EVM → unsigned (0x80000000 | chainId), Solana → 501.
-function ensCoinTypeForChain(
-  info: ReturnType<typeof chainInfo>,
-): number | undefined {
-  if (info.kind === "evm") {
-    if (info.evmChainId === 1) return 60;
-    if (typeof info.evmChainId === "number") {
-      // `|` returns signed int32 — coerce to unsigned for chainIds ≥ 2^31.
-      return (0x80000000 | info.evmChainId) >>> 0;
-    }
-    return undefined;
+function ensCoinTypeForChain(chain: CctpChain): number | undefined {
+  if (chain.ecosystem === "evm") {
+    if (chain.evmChainId === 1) return 60;
+    // `|` returns a signed int32, so coerce to unsigned for chain ids of 2^31 and up.
+    return (0x80000000 | chain.evmChainId) >>> 0;
   }
-  if (info.kind === "solana") {
+  if (chain.ecosystem === "solana") {
     return 501;
   }
   return undefined;

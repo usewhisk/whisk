@@ -16,12 +16,27 @@ const recipient: ResolvedRecipient = {
 };
 
 const sendQuote: Quote = {
+  id: "q1",
+  issuedAt: 0,
+  expiresAt: 60_000,
+  feeMode: "maxFee",
   route: { kind: "send", chain: "Arc_Testnet" },
   recipient,
   amountIn: "10",
   amountOut: "10",
+  amountBurned: "10",
   token: "USDC",
   fees: { total: "0", token: "USDC", entries: [] },
+  subunits: {
+    requested: 10_000_000n,
+    amountIn: 10_000_000n,
+    burnAmount: 0n,
+    burnFee: 0n,
+    forwarderFee: 0n,
+    maxFee: 0n,
+    amountOut: 10_000_000n,
+    customFee: 0n,
+  },
 };
 
 const bridgeQuote: Quote = {

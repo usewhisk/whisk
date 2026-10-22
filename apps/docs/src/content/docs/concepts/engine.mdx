@@ -23,7 +23,7 @@ Most apps never import the engine directly. You'll reach for it when:
 import { createWhisk } from "@usewhisk/core";
 
 const engine = createWhisk({
-  chains: ["Arc_Testnet", "Base_Sepolia"],
+  chains: ["Ethereum_Sepolia", "Base_Sepolia"],
   resolver: /* defaultResolver or your own */,
   feePolicy: /* optional fee config */,
 });
@@ -38,7 +38,7 @@ await engine.resolve("vitalik.eth", "Base_Sepolia");
 await engine.quote({
   recipient,
   amount: "10",
-  sourceChain: "Arc_Testnet",
+  sourceChain: "Ethereum_Sepolia",
   adapter,
 });
 // → Quote { route, fees, amountIn, amountOut, expiresAt, ... }
@@ -89,4 +89,8 @@ for the engine from anywhere outside a component tree.
 
 ## Next
 
-[How the state machine drives the UI](/docs/concepts/state-machine).
+- [Headless engine](/docs/concepts/headless) — the practical
+  guide to driving Whisk from Node, Vue, Svelte, Workers, or any
+  non-React surface. Full method-by-method reference, runtime
+  support matrix, and adapter patterns.
+- [How the state machine drives the UI](/docs/concepts/state-machine).

@@ -22,9 +22,8 @@ export type CartTotals = {
 };
 
 /**
- * Cart state hook. Owns the line array and exposes mutations that match a
- * real shop's affordances: add (merges into an existing line if variant is
- * identical), setQty (zero or below removes the line), clear (after order).
+ * `addLine` merges into an existing line with the same variant, up to 9.
+ * `setQty` to zero or below removes the line.
  */
 export function useCart() {
   const [lines, setLines] = useState<CartLine[]>([]);

@@ -3,8 +3,8 @@
 import {
   addressResolver,
   composeResolvers,
+  getChain,
   type Resolver,
-  type WhiskMode,
 } from "@usewhisk/core";
 import {
   createEnsResolver,
@@ -25,33 +25,35 @@ export {
 };
 export type { EnsResolverChain, EnsResolverOptions };
 
-/** Mainnet-only. Use `createDefaultResolver({ mode: "testnet" })` for the Sepolia-first variant. */
-export const defaultResolver: Resolver = composeResolvers(
-  [addressResolver, ensResolver],
-  { name: "default" },
-);
+export type CreateDefaultResolverOptions = Omit<EnsResolverOptions, "chain">;
 
-export type CreateDefaultResolverOptions = EnsResolverOptions & {
-  mode?: WhiskMode;
-};
-
-/** testnet → [address, sepolia-ens, mainnet-ens]; mainnet → [address, mainnet-ens]. */
+/**
+ * Addresses, then ENS. A testnet destination tries Sepolia ENS before
+ * mainnet ENS; a mainnet destination uses mainnet ENS only.
+ */
 export function createDefaultResolver(
   options: CreateDefaultResolverOptions = {},
 ): Resolver {
-  const { mode = "mainnet", ...ensOptions } = options;
-  if (mode === "testnet") {
-    return composeResolvers(
-      [
-        addressResolver,
-        createEnsResolver({ ...ensOptions, chain: "sepolia" }),
-        createEnsResolver({ ...ensOptions, chain: "mainnet" }),
-      ],
-      { name: "default-testnet" },
-    );
-  }
-  return composeResolvers(
-    [addressResolver, createEnsResolver({ ...ensOptions, chain: "mainnet" })],
+  const mainnet = composeResolvers(
+    [addressResolver, createEnsResolver({ ...options, chain: "mainnet" })],
     { name: "default-mainnet" },
   );
+  const testnet = composeResolvers(
+    [
+      addressResolver,
+      createEnsResolver({ ...options, chain: "sepolia" }),
+      createEnsResolver({ ...options, chain: "mainnet" }),
+    ],
+    { name: "default-testnet" },
+  );
+  return {
+    name: "default",
+    matches: (input) => mainnet.matches(input),
+    resolve: (input, ctx) =>
+      getChain(ctx.chain).network === "testnet"
+        ? testnet.resolve(input, ctx)
+        : mainnet.resolve(input, ctx),
+  };
 }
+
+export const defaultResolver: Resolver = createDefaultResolver();
