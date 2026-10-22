@@ -15,21 +15,10 @@ import {
 import { useStarknetWallet } from "../provider/starknetContext.js";
 
 /**
- * Build a Whisk `StarknetAdapter` from the surrounding Starknet wallet
- * context (mounted by `WhiskProvider` when a `starknet()` factory is in
- * `config.wallets`).
- *
- * Returns `null` until the user picks + connects a wallet via the
- * `ConnectModal`. Once connected the adapter:
- *
- *   - `address`             → connected account felt
- *   - `getChainId`          → `wallet_requestChainId` RPC call
- *   - `submitCalls`         → `wallet_addInvokeTransaction` — Starknet
- *                              accounts natively multicall, so the
- *                              engine can pass `[approve, burn]` and
- *                              get atomic execution in one tx
- *   - `confirmTransaction`  → polls Starknet RPC until the tx lands
- *                              or fails
+ * The connected Starknet wallet as a `StarknetAdapter`, or `null` when no
+ * wallet is connected or `config.wallets` has no `starknet()` factory.
+ * Starknet accounts multicall, so `[approve, burn]` goes out as one atomic
+ * transaction.
  */
 export function useStarknetAdapter(): StarknetAdapter | null {
   const starknet = useStarknetWallet();

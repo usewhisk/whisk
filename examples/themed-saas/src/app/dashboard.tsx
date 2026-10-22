@@ -9,11 +9,6 @@ import { QuickSend } from "../components/quick-send";
 import { RecentSettlements } from "../components/recent-settlements";
 import { ActivityLog, DashboardFooter } from "../components/activity-log";
 
-/**
- * Steelpath Cloud dashboard — composition root. The vendor → payout flow
- * lives in `usePayout`; the dashboard wires the table's `onSelect` into it
- * and forwards the resulting state into the QuickSend panel.
- */
 export function Dashboard() {
   const payout = usePayout();
 

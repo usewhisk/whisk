@@ -1,18 +1,7 @@
 /**
- * Stellar → Solana bridge executor.
- *
- * Flow:
- *   1. Stellar source signs `deposit_for_burn` (no hook — Solana
- *      destination doesn't run a forwarder). `mintRecipient` is the
- *      recipient's USDC ATA on Solana, 32 raw bytes.
- *   2. Iris attests.
- *   3. Destination Solana wallet signs `receive_message` (with the
- *      message + attestation bytes from Iris). USDC is minted directly
- *      to the recipient's ATA — same flow as EVM → Solana.
- *
- * The recipient's USDC ATA must exist on Solana before submitting
- * `receive_message`; the executor rejects with a clear error if it
- * doesn't (the user pre-creates via a dust transfer or initial fund).
+ * Stellar to Solana bridge. The burn names the recipient's USDC account,
+ * and the Solana wallet signs `receive_message` once Iris attests. That
+ * account must already exist; the executor fails with a clear error if not.
  */
 import { attestationPolling } from "./polling.js";
 import { PublicKey } from "@solana/web3.js";
@@ -48,9 +37,9 @@ export type ExecuteStellarToSolanaInput = {
   network: Network;
   source: StellarChain;
   destination: SolanaChain;
-  /** Recipient Solana wallet pubkey (base58). ATA is derived. */
+  /** The recipient's wallet; the burn names its USDC account. */
   recipientAddress: string;
-  /** Burn amount in 6-decimal canonical subunits. */
+  /** 6-decimal subunits. */
   burnAmount: bigint;
   maxFee: bigint;
   burnFee: bigint;
@@ -58,7 +47,7 @@ export type ExecuteStellarToSolanaInput = {
   tier: BurnFeeTier;
   forwarderLevel?: keyof ForwarderFeeTier;
   sourceAdapter: StellarAdapter;
-  /** REQUIRED — signs receive_message on Solana. */
+  /** Signs `receive_message` on Solana. */
   destinationAdapter: SolanaAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
@@ -77,7 +66,8 @@ export async function executeStellarToSolana(
     );
   }
   const steps: Step[] = ALL_STEPS.map((name) => ({ name, state: "pending" }));
-  steps[0] = { name: "approve", state: "noop" }; // Stellar doesn't need approve
+  // The approve goes in the same submission as the burn.
+  steps[0] = { name: "approve", state: "noop" };
   listeners?.onStep?.(steps[0]);
 
   const snapshot: BridgeRecoverySnapshot = {
@@ -90,8 +80,8 @@ export async function executeStellarToSolana(
     recipientAddress: input.recipientAddress,
   };
 
-  // mintRecipient on the Solana side = recipient's USDC ATA (CCTP V2
-  // Solana enforces recipient_token_account.key() == mint_recipient).
+  // Solana's receive_message requires the mintRecipient to be the USDC
+  // token account, not the wallet.
   let recipientWallet: PublicKey;
   let recipientUsdcAta: PublicKey;
   try {
@@ -110,7 +100,6 @@ export async function executeStellarToSolana(
     );
   }
 
-  // Build the Stellar burn — amounts converted to 7 decimals.
   const stellarAmount = canonicalToStellarSubunits(input.burnAmount);
   const stellarMaxFee = canonicalToStellarSubunits(input.maxFee);
   let intent: ReturnType<typeof buildStellarBurnIntent>;
@@ -122,7 +111,7 @@ export async function executeStellarToSolana(
       amount: stellarAmount,
       maxFee: stellarMaxFee,
       mintRecipientBytes32: recipientUsdcAta.toBytes(),
-      destinationCallerBytes32: new Uint8Array(32), // any caller
+      destinationCallerBytes32: new Uint8Array(32),
       caller: input.sourceAdapter.address,
     });
   } catch (cause) {
@@ -158,8 +147,8 @@ export async function executeStellarToSolana(
     );
   }
 
-  // Prepend approve (TMM pulls via transfer_from). Stellar SAC requires
-  // `live_until_ledger >= current ledger`; use current + 720 ledgers.
+  // TokenMessengerMinter pulls the USDC with `transfer_from`. The SAC
+  // requires `live_until_ledger >= current ledger`, so a static 0 fails.
   let approveExpirationLedger: number;
   try {
     const latest = await input.sourceAdapter.getLatestLedger();
@@ -236,7 +225,6 @@ export async function executeStellarToSolana(
   steps[1] = { name: "burn", state: "success", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
 
-  // Iris poll.
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);
   let message: IrisMessage | null;
@@ -287,7 +275,6 @@ export async function executeStellarToSolana(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Solana destination — same flow as EVM → Solana.
   const destAdapter = input.destinationAdapter;
   try {
     const cluster = await destAdapter.getCluster();
@@ -312,8 +299,8 @@ export async function executeStellarToSolana(
     );
   }
 
-  // Verify the recipient ATA exists (receive_message tx is at the 1232B
-  // legacy cap; no headroom to prepend ATA-create).
+  // receive_message already fills the 1232-byte legacy transaction, leaving
+  // no room to create the account in the same transaction.
   try {
     const ataInfo = await destAdapter.getAccountInfo(
       recipientUsdcAta.toBase58(),
@@ -339,7 +326,8 @@ export async function executeStellarToSolana(
     );
   }
 
-  // Read TokenMessenger fee_recipient.
+  // `receive_message` needs the TokenMessenger's fee_recipient as a
+  // remaining account.
   const tmmProgram = new PublicKey(input.destination.tokenMessengerMinter);
   const tokenMessengerPda = deriveTokenMessenger(tmmProgram);
   let feeRecipient: PublicKey;
@@ -369,7 +357,6 @@ export async function executeStellarToSolana(
     feeRecipient,
   );
 
-  // Source-token bytes32: Stellar USDC SAC strkey decoded to 32 bytes.
   const sourceTokenBytes32 = decodeStrkeyToBytes32(input.source.usdc);
 
   let receiveInstruction;

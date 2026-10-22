@@ -1,9 +1,6 @@
 /**
- * Poll a settlement status from Node — same primitives `<WhiskReceipt>`
- * uses, minus the React state.
- *
- * Useful for a fulfilment worker that's tracking long-running bridges
- * and writing status back to your DB without keeping a browser tab open.
+ * Tracks a bridge from Node with the same helpers `<WhiskReceipt>` uses,
+ * for a worker that records settlement without a browser open.
  *
  * Usage:
  *   SOURCE_CHAIN=Base_Sepolia DEST_CHAIN=Arc_Testnet TX=0x... pnpm receipt

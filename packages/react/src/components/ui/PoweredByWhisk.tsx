@@ -3,14 +3,9 @@
 import { useCallback } from "react";
 
 /**
- * "Powered by Whisk" attribution badge. Non-removable — every visual
- * property is set via inline `!important` declarations, which always
- * beat host-app CSS rules (inline > stylesheet, regardless of either
- * side using `!important`).
- *
- * The badge is auto-rendered in `<WhiskSend>` and `<WhiskReceipt>`
- * footers and exported here for custom widgets that compose the
- * lower-level primitives.
+ * Attribution badge that host CSS cannot hide: its styles are inline
+ * `!important` declarations, which beat any stylesheet rule. `<WhiskSend>`
+ * and `<WhiskReceipt>` render it already; export it for custom widgets.
  */
 export function PoweredByWhisk() {
   const apply = useCallback(applyImportantStyles, []);
@@ -28,10 +23,6 @@ export function PoweredByWhisk() {
   );
 }
 
-/**
- * Wrapper-level styles. Centred horizontally, breathable padding above
- * the surrounding card edge, and never hidden by `display: none` rules.
- */
 const WRAPPER_STYLES: Record<string, string> = {
   display: "flex",
   "align-items": "center",
@@ -45,11 +36,7 @@ const WRAPPER_STYLES: Record<string, string> = {
   "z-index": "1",
 };
 
-/**
- * Link-level styles. Routes the colour through the theme tokens so the
- * badge tracks light / dark / preset modes — the lockdown is purely
- * about visibility, not branding.
- */
+/** Colours come from the theme; only visibility is locked down. */
 const ANCHOR_STYLES: Record<string, string> = {
   display: "inline-flex",
   "align-items": "center",

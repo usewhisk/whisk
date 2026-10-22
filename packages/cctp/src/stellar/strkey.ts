@@ -4,9 +4,9 @@
  * Stellar addresses are Base32 "strkeys" with a single-character type
  * marker: `G` = Ed25519 account, `M` = muxed account, `C` = Soroban
  * contract. CCTP messages strip the type marker and carry only the
- * 32-byte payload, so `mintRecipient` is always assumed to be a
- * contract — Whisk routes Stellar mints through `CctpForwarder` to
- * handle every account type.
+ * 32-byte payload, so `mintRecipient` is always treated as a contract:
+ * Whisk routes Stellar mints through `CctpForwarder` to handle every
+ * account type.
  */
 import { StrKey } from "@stellar/stellar-sdk";
 import { InvalidInputError } from "../errors.js";
@@ -21,7 +21,7 @@ export function isValidStellarStrkey(s: string): boolean {
   );
 }
 
-/** Returns the strkey type marker (`G`, `M`, or `C`). Throws if invalid. */
+/** Throws if `s` is not a valid strkey. */
 export function strkeyType(s: string): StellarStrkeyType {
   if (StrKey.isValidEd25519PublicKey(s)) return "G";
   if (StrKey.isValidMed25519PublicKey(s)) return "M";
@@ -32,11 +32,7 @@ export function strkeyType(s: string): StellarStrkeyType {
   );
 }
 
-/**
- * Decode a strkey to its raw 32-byte payload. Used to encode Stellar
- * addresses inside CCTP messages — `mintRecipient` is always a contract
- * (C) when bridging into Stellar.
- */
+/** The raw 32-byte payload of a G, M or C strkey, as CCTP carries it. */
 export function decodeStrkeyToBytes32(s: string): Uint8Array {
   if (StrKey.isValidEd25519PublicKey(s))
     return StrKey.decodeEd25519PublicKey(s);

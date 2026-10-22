@@ -1,11 +1,6 @@
 /**
- * End-to-end webhook + receipt + metadata integration.
- *
- * Locks the contract between the engine's `SendResult.metadata` flow,
- * the HMAC-SHA256 signing layer, and the receipt projection. A merchant
- * server signs a `SendResult` envelope; the merchant's own webhook
- * receiver verifies it; the UI re-renders the same lifecycle from the
- * stored source-tx hash.
+ * A merchant server signs a `SendResult` envelope, its webhook receiver
+ * verifies it, and the UI rebuilds the receipt from the stored source-tx hash.
  */
 import { describe, expect, it } from "vitest";
 import { Base } from "@usewhisk/cctp";
@@ -134,7 +129,7 @@ describe("webhook + receipt + metadata pipeline", () => {
       timestamp: 1_700_000_000_000,
     });
     const verified = await verifyWebhook(signed.body, signed.headers, SECRET, {
-      // 10 minutes after signing — outside the default 5-min tolerance.
+      // 10 minutes after signing, outside the default 5-minute tolerance.
       now: 1_700_000_000_000 + 10 * 60 * 1000,
     });
     expect(verified.ok).toBe(false);

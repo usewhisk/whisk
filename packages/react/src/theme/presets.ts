@@ -1,18 +1,7 @@
 import type { WhiskTheme, WhiskThemeName } from "./types.js";
 
-/**
- * Six built-in theme presets. Each one is a fully-specified {@link WhiskTheme}.
- *
- * `light` and `dark` mirror the defaults in `styles.css` so consumers who
- * pass `theme="light"` or `theme="dark"` see no visual change from before
- * this API shipped.
- *
- * `wine`, `indigo`, `emerald`, and `monochrome` are alternative palettes.
- * `indigo` and `emerald` use color values previously validated in the
- * playground's palette picker.
- */
+/** `light` and `dark` must match the defaults in `styles.css`. */
 export const themePresets: Record<WhiskThemeName, WhiskTheme> = {
-  // ── light: matches styles.css default (cream + terracotta) ────────
   light: {
     colorMode: "light",
     bg: "#cdc3a3",
@@ -29,7 +18,6 @@ export const themePresets: Record<WhiskThemeName, WhiskTheme> = {
     destructiveFg: "#fbf8ee",
   },
 
-  // ── dark: matches styles.css dark variant (deep wine + terracotta) ─
   dark: {
     colorMode: "dark",
     bg: "#2a1d21",
@@ -46,7 +34,6 @@ export const themePresets: Record<WhiskThemeName, WhiskTheme> = {
     destructiveFg: "#fbf8ee",
   },
 
-  // ── wine: dramatic deep-wine accent on cream (light mode) ─────────
   wine: {
     colorMode: "light",
     bg: "#fbf6f0",
@@ -63,7 +50,6 @@ export const themePresets: Record<WhiskThemeName, WhiskTheme> = {
     destructiveFg: "#ffffff",
   },
 
-  // ── indigo: light mode + indigo (from playground) ─────────────────
   indigo: {
     colorMode: "light",
     bg: "#f5f6fc",
@@ -80,7 +66,6 @@ export const themePresets: Record<WhiskThemeName, WhiskTheme> = {
     destructiveFg: "#ffffff",
   },
 
-  // ── emerald: light mode + emerald (from playground) ───────────────
   emerald: {
     colorMode: "light",
     bg: "#f3fbf6",
@@ -97,7 +82,6 @@ export const themePresets: Record<WhiskThemeName, WhiskTheme> = {
     destructiveFg: "#ffffff",
   },
 
-  // ── monochrome: pure grayscale (light mode, no chromatic accent) ──
   monochrome: {
     colorMode: "light",
     bg: "#ffffff",
@@ -115,7 +99,7 @@ export const themePresets: Record<WhiskThemeName, WhiskTheme> = {
   },
 };
 
-/** Lookup helper. Returns `undefined` for unknown names so callers can `??` to a default. */
+/** Returns `undefined` at runtime for a name that is not a preset. */
 export function getThemePreset(name: WhiskThemeName): WhiskTheme {
   return themePresets[name];
 }

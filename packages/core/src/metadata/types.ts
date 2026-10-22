@@ -1,16 +1,10 @@
 /**
- * Merchant-defined correlation metadata that travels with a Whisk transfer.
+ * Merchant correlation data echoed back on the `SendResult`, in `onSuccess`,
+ * and in signed webhooks: order IDs, internal references, SKUs, campaign
+ * codes.
  *
- * Used for order IDs, internal references, SKUs, campaign codes, and other
- * correlation data that the merchant wants echoed back in `onSuccess` and
- * server-to-server webhook deliveries.
- *
- * Stored client-side in localStorage alongside the recovery snapshot, so
- * mid-flight failures preserve the metadata for the eventual recovery.
- *
- * SAFETY: Metadata is stored in the user's browser localStorage. Do not put
- * PII, payment credentials, emails, or anything sensitive here. Use it for
- * correlation references only.
+ * It passes through the payer's browser. Do not put PII, payment
+ * credentials, emails, or anything sensitive here.
  *
  * Constraints (enforced by {@link validateMetadata}):
  * - Values must be `string | number | boolean` (no nested objects, no arrays).

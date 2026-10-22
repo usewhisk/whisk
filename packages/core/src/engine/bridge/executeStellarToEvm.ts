@@ -1,21 +1,10 @@
 /**
- * Stellar → EVM bridge executor.
+ * Stellar to EVM bridge. Iris reports no forwarding state for Stellar
+ * burns, so the EVM wallet signs `receiveMessage` once Iris attests.
  *
- * Iris's auto-forwarder ("Forwarding Service") does NOT relay
- * Stellar-source burns — the Iris message response omits the
- * `forwardState` field entirely. So the recipient (or any party) MUST
- * call `receiveMessage` on the EVM `MessageTransmitter` manually.
- *
- * Flow:
- *   1. Stellar source signs USDC SAC `approve` (TMM uses transfer_from).
- *   2. Stellar source signs `deposit_for_burn` (no hookData).
- *   3. Iris attests the burn.
- *   4. Destination EVM wallet signs `receiveMessage(message, attestation)`
- *      on the `MessageTransmitter` to mint USDC.
- *
- * `amount` and `maxFee` are passed to Soroban in 7-decimal Stellar
- * subunits. The contract drops the 7th decimal to produce the 6-decimal
- * canonical amount the CCTP message carries.
+ * Soroban takes `amount` and `maxFee` in Stellar's 7-decimal subunits; the
+ * contract drops the 7th decimal to produce the 6-decimal amount the CCTP
+ * message carries.
  */
 import { attestationPolling } from "./polling.js";
 import {
@@ -47,18 +36,17 @@ export type ExecuteStellarToEvmInput = {
   network: Network;
   source: StellarChain;
   destination: EvmChain;
-  /** Recipient EVM 0x-address on the destination chain. */
   recipientAddress: `0x${string}`;
-  /** Burn amount in 6-decimal canonical subunits. Scaled to 7 on submit. */
+  /** 6-decimal subunits, scaled to 7 on submit. */
   burnAmount: bigint;
-  /** Max fee in 6-decimal canonical subunits. Scaled to 7 on submit. */
+  /** 6-decimal subunits, scaled to 7 on submit. */
   maxFee: bigint;
   burnFee: bigint;
   forwarderFee: bigint;
   tier: BurnFeeTier;
   forwarderLevel?: keyof ForwarderFeeTier;
   sourceAdapter: StellarAdapter;
-  /** REQUIRED — signs `receiveMessage` on the EVM destination. */
+  /** Signs `receiveMessage` on the EVM destination. */
   destinationAdapter: EvmAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
@@ -77,7 +65,8 @@ export async function executeStellarToEvm(
     );
   }
   const steps: Step[] = ALL_STEPS.map((name) => ({ name, state: "pending" }));
-  steps[0] = { name: "approve", state: "noop" }; // approve+burn submitted together via Stellar adapter
+  // The approve goes in the same submission as the burn.
+  steps[0] = { name: "approve", state: "noop" };
   listeners?.onStep?.(steps[0]);
 
   const snapshot: BridgeRecoverySnapshot = {
@@ -90,8 +79,7 @@ export async function executeStellarToEvm(
     recipientAddress: input.recipientAddress,
   };
 
-  // The EVM destination expects the recipient in mintRecipient bytes32.
-  // 20-byte 0x-address left-padded with 12 zero bytes.
+  // CCTP mintRecipient is 32 bytes: the 20-byte address left-padded.
   const mintRecipientBytes32 = new Uint8Array(32);
   const evmAddrHex = input.recipientAddress.slice(2);
   for (let i = 0; i < 20; i++) {
@@ -100,13 +88,11 @@ export async function executeStellarToEvm(
       16,
     );
   }
-  // destinationCaller = 32 zero bytes (any caller — the EVM Forwarder).
+  // A zero destinationCaller lets anyone call receiveMessage.
   const destCallerBytes32 = new Uint8Array(32);
 
-  // Build the burn intent. Amounts in 7-decimal Stellar subunits.
-  // No hookData — Iris's auto-forwarder doesn't process Stellar-source
-  // burns, so the canonical `cctp-forward` magic would be a no-op and
-  // wastes Soroban gas. We mint manually on the EVM side.
+  // No hook data: Circle doesn't forward Stellar burns, so it would only
+  // cost Soroban fees.
   const stellarAmount = canonicalToStellarSubunits(input.burnAmount);
   const stellarMaxFee = canonicalToStellarSubunits(input.maxFee);
 
@@ -155,10 +141,9 @@ export async function executeStellarToEvm(
     );
   }
 
-  // Prepend USDC SAC approve — TMM uses `transfer_from` which checks
-  // the caller→TMM allowance. Stellar SAC requires
-  // `live_until_ledger >= current ledger`, so a static 0 fails. Use
-  // current + 720 ledgers (~1 hr at 5s/ledger) as a tight window.
+  // TokenMessengerMinter pulls the USDC with `transfer_from`, so it needs an
+  // allowance. The SAC requires `live_until_ledger >= current ledger`, so a
+  // static 0 fails; 720 ledgers is about an hour at 5s a ledger.
   let approveExpirationLedger: number;
   try {
     const latest = await input.sourceAdapter.getLatestLedger();
@@ -236,7 +221,6 @@ export async function executeStellarToEvm(
   steps[1] = { name: "burn", state: "success", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
 
-  // Poll Iris.
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);
   let message: IrisMessage | null;
@@ -292,8 +276,6 @@ export async function executeStellarToEvm(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Manual EVM mint — destinationAdapter signs `receiveMessage` on the
-  // destination MessageTransmitter.
   const destAdapter = input.destinationAdapter;
   let mintCalldata: EvmCall;
   try {

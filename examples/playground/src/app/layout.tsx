@@ -3,13 +3,6 @@ import localFont from "next/font/local";
 import "@usewhisk/react/styles.css";
 import "./globals.css";
 
-/**
- * Self-host the project's three fonts via Next's font API: Inter for
- * body, Familjen Grotesk for display, JetBrains Mono for code /
- * addresses. The widget reads these via its `--whisk-font` /
- * `--whisk-font-display` / `--whisk-font-mono` stack, so loading them
- * here means the widget picks them up automatically.
- */
 const sans = localFont({
   src: "./fonts/Inter.woff2",
   weight: "400 700",

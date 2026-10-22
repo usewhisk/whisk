@@ -5,15 +5,8 @@ import type { FeeBearer } from "@usewhisk/react";
 import type { PlaygroundAction, PlaygroundConfig, Theme } from "./store";
 
 /**
- * The control panel for the current `<WhiskSend>` surface. Sections:
- *
- *   1. Theme    — system / light / dark
- *   2. Fee bearer — sender / receiver
- *   3. Tabs     — Send only, Bridge only, or both
- *   4. Inspector — live JSON dump of the config + faucet quick-links
- *
- * For preset shapes (checkout, donate, invoice, payroll, themed SaaS)
- * see the dedicated recipe apps under `examples/`.
+ * Preset setups such as checkout, donate, invoice and payroll live in their
+ * own apps under `examples/`.
  */
 export function Controls({
   config,

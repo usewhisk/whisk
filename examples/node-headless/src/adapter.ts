@@ -1,9 +1,6 @@
 /**
- * Minimal viem-based `EvmAdapter` for headless server flows.
- *
- * Given a private key and a target chain, returns a Whisk `EvmAdapter`
- * that Whisk's engine can drive directly. Multi-chain runs can build
- * one adapter per chain and pass the right one to `engine.send`.
+ * A viem `EvmAdapter` for server scripts, signing with a private key. Each
+ * adapter is bound to one chain; build one per source chain you send from.
  */
 import {
   createPublicClient,
@@ -69,12 +66,6 @@ export type CreateEvmAdapterInput = {
   rpcUrl?: string;
 };
 
-/**
- * Build a viem-based `EvmAdapter` bound to a single chain. `send`
- * routes each call through `walletClient.sendTransaction` and waits
- * for two confirmations before moving on (belt-and-suspenders against
- * RPC state lag on Sepolia).
- */
 export function createEvmAdapter({
   chain,
   privateKey,

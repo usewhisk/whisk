@@ -40,7 +40,7 @@ export type FakeIris = {
   setNonceUsed(nonce: `0x${string}`): void;
   /**
    * What every TokenMessengerV2 answers to `getMinFeeAmount` over JSON-RPC.
-   * Defaults to 0, which is what each chain returns today.
+   * Defaults to 0, which every chain returns.
    */
   setStandardMinFee(fee: bigint): void;
   readonly quoteRequests: readonly QuoteRequest[];

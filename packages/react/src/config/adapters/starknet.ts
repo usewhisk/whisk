@@ -1,10 +1,6 @@
 /**
- * Starknet adapter factory.
- *
- * Wraps `@starknet-io/get-starknet-core` for wallet discovery (Argent X,
- * Braavos, Argent Mobile via WalletConnect, etc.) and Starknet RPC for
- * transaction confirmation. Per-wallet selection happens later via the
- * `ConnectModal`.
+ * Starknet wallets come from `@starknet-io/get-starknet-core`; the RPC is
+ * used to confirm transactions.
  */
 import { getChain } from "@usewhisk/core";
 import type { StarknetAdapterFactory } from "../types.js";
@@ -13,15 +9,16 @@ export type StarknetNetwork = "mainnet" | "sepolia";
 
 export type StarknetConfig = {
   network: StarknetNetwork;
-  /** Expected chainId felt — engine compares against wallet's live value. */
+  /** Expected chainId felt, compared against the wallet's live value. */
   chainId: string;
-  /** Starknet RPC URL — used to poll for tx receipts. */
+  /** Polled for transaction receipts. */
   rpcUrl: string;
+  /** Reserved. `WhiskProvider` does not read it. */
   autoConnect: boolean;
 };
 
 export type StarknetFactoryOptions = {
-  /** Defaults to `sepolia` for previewing; flip to `mainnet` in production. */
+  /** Defaults to `sepolia`. */
   network?: StarknetNetwork;
   /** Override the Starknet RPC. Defaults to the public endpoint. */
   rpcUrl?: string;

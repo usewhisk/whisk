@@ -48,10 +48,6 @@ function hex(bytes: Uint8Array): string {
     .join("");
 }
 
-/* --------------------------------------------------------------------- *
- *  Anchor discriminators
- * --------------------------------------------------------------------- */
-
 describe("anchor discriminators", () => {
   it("is exactly 8 bytes", () => {
     expect(DISCRIMINATOR_DEPOSIT_FOR_BURN.length).toBe(8);
@@ -60,8 +56,6 @@ describe("anchor discriminators", () => {
   });
 
   it('matches sha256("global:<name>")[0..8]', () => {
-    // Snapshot-style check — recompute via the helper, compare to the
-    // exported constant. Any drift fails loudly.
     const recompute = anchorDiscriminator("deposit_for_burn");
     expect(hex(recompute)).toBe(hex(DISCRIMINATOR_DEPOSIT_FOR_BURN));
   });
@@ -78,10 +72,6 @@ describe("anchor discriminators", () => {
     );
   });
 });
-
-/* --------------------------------------------------------------------- *
- *  Borsh writers
- * --------------------------------------------------------------------- */
 
 describe("borsh writers", () => {
   it("u64 LE encodes correctly", () => {
@@ -109,10 +99,6 @@ describe("borsh writers", () => {
     expect(() => writeU64LE(w, -1n)).toThrow();
   });
 });
-
-/* --------------------------------------------------------------------- *
- *  PDA derivation
- * --------------------------------------------------------------------- */
 
 describe("PDA derivation", () => {
   it("token_messenger PDA is on the curve as a PDA (off-curve)", () => {
@@ -195,10 +181,6 @@ describe("PDA derivation", () => {
     expect(PublicKey.isOnCurve(pda.toBytes())).toBe(false);
   });
 });
-
-/* --------------------------------------------------------------------- *
- *  buildSolanaBurnIntent
- * --------------------------------------------------------------------- */
 
 const RECIP_BYTES32 = new Uint8Array(32);
 RECIP_BYTES32.set(
@@ -342,10 +324,6 @@ describe("buildSolanaBurnIntent", () => {
     ).toThrow(/non-empty/);
   });
 });
-
-/* --------------------------------------------------------------------- *
- *  buildSolanaReceiveIntent
- * --------------------------------------------------------------------- */
 
 describe("buildSolanaReceiveIntent", () => {
   const MESSAGE = new Uint8Array(256).fill(0xcd);

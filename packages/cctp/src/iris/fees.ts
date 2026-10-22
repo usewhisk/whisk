@@ -30,10 +30,8 @@ export type GetBurnFeesOptions = FetchJsonOptions & {
 };
 
 /**
- * Fetch the fee tiers for a (src, dst) domain pair.
- *
- * Returns the raw tier array exactly as Iris returns it. Use
- * `pickFeeTier` to project to a specific finality + forwarder choice.
+ * Rows for thresholds other than Fast and Standard are dropped. Use
+ * `pickFeeTier` to choose one.
  */
 export async function getBurnFees(
   network: Network,

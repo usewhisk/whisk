@@ -1,22 +1,14 @@
 /**
- * Bridge quote.
+ * Fee math, in USDC subunits:
  *
- * Fetches fee tiers from Iris, computes the protocol burn fee and
- * Forwarder fee for the requested amount, and projects everything into
- * a {@link Quote} the UI can render.
- *
- * Fee math (USDC subunits, 6 decimals):
- *
- *   burnFee      = max(burnAmount × Iris bps, getMinFeeAmount on fee-switch chains)
+ *   burnFee      = max(burnAmount x Iris bps, getMinFeeAmount on fee-switch chains)
  *   forwarderFee = forwardFee at the chosen level
  *   maxFee       = burnFee + 10% on Fast + forwarderFee
  *
- * `feeBearer` decides who absorbs the fees:
- *
- *   sender    burnAmount = amount + maxFee   — sender pays more,
- *                                                recipient nets `amount`.
- *   receiver  burnAmount = amount            — sender debits `amount`,
- *                                                recipient nets amount − maxFee.
+ * With `feeBearer: "sender"` the burn is `amount + maxFee` and the recipient
+ * nets `amount`. With `"receiver"` the burn is `amount` and the recipient
+ * nets `amount - maxFee`. Paid upfront, the burn is `amount` and the fees
+ * are collected beside it.
  */
 import {
   computeMaxFee,
@@ -47,22 +39,17 @@ export type BuildBridgeQuoteInput = {
   sourceChain: Chain;
   destinationChain: Chain;
   recipient: ResolvedRecipient;
-  /** Human-readable amount, e.g. `"25"` or `"1.5"`. */
+  /** Human amount, e.g. `"1.5"`. */
   amount: string;
   feeBearer: FeeBearer;
   /** Defaults to {@link defaultForwarderLevel}. */
   forwarderLevel?: ForwarderLevel;
-  /** Whether the plan has Circle forward the mint. Default `true`. */
+  /** Default `true`. */
   useForwarder?: boolean;
   /** Pre-fetched tier; supply to skip the Iris call. */
   tier?: BurnFeeTier;
   token?: Token;
-  /**
-   * Optional integrator-supplied merchant fee. Surfaced as an extra
-   * `custom` entry in the quote and as a `transfer` call prepended to
-   * the source-chain submission. Sender always pays — `feeBearer`
-   * does not affect customFee.
-   */
+  /** Merchant fee. The sender always pays it, whatever `feeBearer` says. */
   customFee?: FeePolicy;
   fetch?: typeof fetch;
   /** Tried before the source chain's default RPCs for `getMinFeeAmount`. */
@@ -166,13 +153,13 @@ export async function fetchFeeTier(
 
 export type BuildBridgeQuoteResult = {
   quote: Quote;
-  /** Fee inputs preserved for the executor — same call uses the same tier. */
+  /** The executor burns with the same tier the quote used. */
   tier: BurnFeeTier;
   burnAmount: bigint;
   burnFee: bigint;
   forwarderFee: bigint;
   maxFee: bigint;
-  /** Merchant-fee amount in subunits (0n when no policy is set). */
+  /** Subunits; `0n` without a fee policy. */
   customFeeAmount: bigint;
 };
 
@@ -203,9 +190,8 @@ export async function buildBridgeQuote(
   const fees = (burn: bigint) =>
     computeBridgeFees(ctx, burn, { buffered: true });
 
-  // First pass computes fees against the raw `amount` to derive the
-  // sender/receiver split. The burn fee depends on `burnAmount`, so we
-  // recompute against the grossed-up total once we know it.
+  // The burn fee depends on `burnAmount`, so the sender-pays case
+  // recomputes it on the grossed-up total.
   const initial = await fees(amount);
   const feeMode = chooseFeeMode(input, useForwarder, initial.burnFee);
 
@@ -230,8 +216,8 @@ export async function buildBridgeQuote(
     forwarderFee = recomputed.forwarderFee;
     maxFee = recomputed.maxFee;
     recipientAmount = burnAmount - maxFee;
-    // Recomputed burnFee may grow with the larger burnAmount; top up
-    // once more so the recipient still nets at least `amount`.
+    // The larger burn can raise the fee; top up once more so the recipient
+    // still nets at least `amount`.
     if (recipientAmount < amount) {
       const shortfall = amount - recipientAmount;
       burnAmount += shortfall;
@@ -288,8 +274,8 @@ export async function buildBridgeQuote(
       customFeeAmount = 0n;
     }
   }
-  // Sender always carries the merchant fee — it's an integrator
-  // monetization knob, not a protocol fee, so `feeBearer` is bypassed.
+  // The merchant fee is the integrator's, not the protocol's, so the sender
+  // always pays it.
   const senderDebit =
     feeMode === "upfront"
       ? amount + maxFee + customFeeAmount

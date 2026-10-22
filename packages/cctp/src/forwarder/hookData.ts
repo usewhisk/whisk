@@ -6,17 +6,16 @@
  * destination mint on the user's behalf.
  *
  * Layout:
- *   bytes  0–11: ASCII "cctp-forward"
- *   bytes 12–23: zero pad
- *   bytes 24–27: uint32 BE version (currently 0)
- *   bytes 28–31: uint32 BE payload length (0 for basic forwarding)
+ *   bytes  0..11: ASCII "cctp-forward"
+ *   bytes 12..23: zero pad
+ *   bytes 24..27: uint32 BE version (0)
+ *   bytes 28..31: uint32 BE payload length (0 for basic forwarding)
  */
 
 /** Static hex string used for every Whisk bridge with forwarder enabled. */
 export const CCTP_FORWARD_HOOK_DATA =
   "0x636374702d666f72776172640000000000000000000000000000000000000000" as `0x${string}`;
 
-/** Length of the forwarder hookData in bytes. */
 export const CCTP_FORWARD_HOOK_DATA_LENGTH = 32;
 
 const MAGIC_PREFIX = "cctp-forward";
@@ -24,11 +23,8 @@ const VERSION = 0;
 const PAYLOAD_LENGTH = 0;
 
 /**
- * Construct the forwarder hookData from scratch.
- *
- * Equivalent to `CCTP_FORWARD_HOOK_DATA`; provided for symmetry with
- * the longer-form encoder used for chains that take additional payload
- * (e.g. Stellar's CctpForwarder, which lands in v1.3+).
+ * Encodes the same bytes as `CCTP_FORWARD_HOOK_DATA` field by field. Stellar
+ * destinations need a payload and use `buildStellarForwarderHookData`.
  */
 export function buildForwarderHookData(): `0x${string}` {
   const buf = new Uint8Array(CCTP_FORWARD_HOOK_DATA_LENGTH);
@@ -40,10 +36,7 @@ export function buildForwarderHookData(): `0x${string}` {
   return bytesToHex(buf);
 }
 
-/**
- * Returns `true` if the given hex string starts with the forwarder
- * magic prefix. Useful for parsing inbound CCTP messages.
- */
+/** True when `hex` starts with the 32-byte basic forwarder hookData. */
 export function isForwarderHookData(hex: string): boolean {
   if (!hex.startsWith("0x")) return false;
   return hex
@@ -53,7 +46,7 @@ export function isForwarderHookData(hex: string): boolean {
     );
 }
 
-/** Address constant used for the default destinationCaller. */
+/** bytes32(0) as `destinationCaller` lets anyone submit the mint. */
 export const ANY_DESTINATION_CALLER =
   "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
 

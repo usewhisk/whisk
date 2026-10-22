@@ -1,24 +1,15 @@
-/**
- * Amount helpers.
- *
- * The public API takes human-readable strings ("1.50") and the protocol
- * layer expects USDC subunits as bigint (6 decimals). These helpers
- * convert between the two with strict validation.
- */
 import { ConfigError } from "../errors/errors.js";
 
-/** USDC fixed at 6 decimals across every supported chain. */
+/** The decimals CCTP messages carry. Stellar's 7 are scaled at the edge. */
 export const USDC_DECIMALS = 6;
 
 const AMOUNT_REGEX = /^(\d+)(?:\.(\d+))?$/;
 
 /**
- * Parse a human amount string into USDC subunits.
- *
- * Rejects empty input, scientific notation, sign characters, and any
- * non-digit/dot character. Trailing fractional digits beyond
- * {@link USDC_DECIMALS} are truncated (NOT rounded) to avoid silent
- * over-debits at the edges.
+ * Parses a human amount such as `"1.50"` into USDC subunits. Rejects
+ * scientific notation, signs and anything but digits and one dot. Digits
+ * past {@link USDC_DECIMALS} are truncated, not rounded, so the payer is
+ * never debited more than they typed.
  */
 export function parseUsdcAmount(input: string): bigint {
   const trimmed = input.trim();
@@ -41,7 +32,7 @@ export function parseUsdcAmount(input: string): bigint {
   return subunits;
 }
 
-/** Format USDC subunits back into a human amount with trailing zeros stripped. */
+/** Trailing zeros are stripped. */
 export function formatUsdcAmount(subunits: bigint): string {
   if (subunits < 0n) {
     throw new ConfigError(

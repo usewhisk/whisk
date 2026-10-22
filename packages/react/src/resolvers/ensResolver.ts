@@ -32,15 +32,14 @@ export const DEFAULT_ENS_SEPOLIA_RPC_URLS = [
 
 export type EnsResolverOptions = {
   chain?: EnsResolverChain;
-  /** `undefined` → bundled fallback chain; string → single URL; array → viem `fallback` with latency ranking. */
+  /** One URL, or several tried by latency through viem's `fallback`. Defaults to the lists above. */
   rpcUrl?: string | string[];
   /** Reuse an existing viem client (e.g. from wagmi) instead of constructing one. */
   client?: PublicClient;
   /**
-   * When the destination coinType returns null, retry with Ethereum
-   * mainnet coinType 60. Safe for EVM (addresses are namespace-equivalent);
-   * Solana destinations stay safe via the destination regex check.
-   * Defaults to `true` — matches MetaMask / Rainbow behaviour.
+   * When the name has no address for an EVM destination's coinType, use its
+   * Ethereum (coinType 60) address. Defaults to `true`, as in MetaMask and
+   * Rainbow.
    */
   fallbackToEthAddress?: boolean;
 };
@@ -71,7 +70,7 @@ export function createEnsResolver(options: EnsResolverOptions = {}): Resolver {
 
   return {
     name,
-    // Accept any `<label>.<tld>` shape — DNS-imported TLDs work too.
+    // Any `<label>.<tld>`, since DNS-imported TLDs resolve too.
     matches: (input) => /\.[a-z0-9]{2,}$/i.test(input.trim()),
     resolve: async (input, ctx) => {
       const trimmed = input.trim();
@@ -97,7 +96,7 @@ export function createEnsResolver(options: EnsResolverOptions = {}): Resolver {
         return { address: primary, chain: ctx.chain };
       }
 
-      // EVM addresses are namespace-equivalent; Solana regex check keeps cross-ecosystem safe.
+      // An EVM address is the same account on every EVM chain.
       if (
         fallbackToEthAddress &&
         destination.ecosystem === "evm" &&

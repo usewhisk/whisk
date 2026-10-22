@@ -18,7 +18,7 @@ import {
 } from "@starknet-io/get-starknet-core";
 import type { StarknetConfig } from "../config/adapters/starknet.js";
 
-/** Combined "available (installed)" + "discovery (all known)" wallet entry. */
+/** A known Starknet wallet, installed or not. */
 export type StarknetWalletEntry = {
   id: string;
   name: string;
@@ -52,9 +52,8 @@ export type StarknetWalletProviderProps = {
 };
 
 /**
- * Starknet wallet provider — instantiates `get-starknet-core` once and
- * surfaces installed + discoverable wallets to the widget. The kit is a
- * plain object (not a React provider), so we wrap it in our own context.
+ * Holds one `get-starknet-core` instance for the life of the provider. It is
+ * a plain object with no React state, so connection state lives here.
  */
 export function StarknetWalletProvider({
   config,
@@ -91,7 +90,7 @@ export function StarknetWalletProvider({
             ...(installedWallet ? {} : { install: d }),
           };
         });
-        // Also include installed wallets not in the discovery list.
+        // Installed wallets that the discovery list does not know about.
         for (const w of installed) {
           if (!entries.some((e) => e.id === w.id)) {
             const icon =
@@ -103,7 +102,7 @@ export function StarknetWalletProvider({
           setState((prev) => ({ ...prev, supportedWallets: entries }));
         }
       } catch {
-        // Ignore — the modal shows an empty list.
+        // The modal shows an empty list instead.
       }
     })();
     return () => {
@@ -114,12 +113,10 @@ export function StarknetWalletProvider({
   const selectWallet = useCallback(
     async (entry: StarknetWalletEntry) => {
       if (!entry.wallet) {
-        // Discovery-only entry — the caller should send the user to the
-        // install link. We don't try to open new tabs from here.
+        // The caller sends the user to the install link; no tab is opened here.
         throw new Error(`Wallet "${entry.name}" is not installed.`);
       }
       const enabled = await kit.enable(entry.wallet);
-      // Fetch account address via RPC.
       const accounts = await enabled.request({
         type: "wallet_requestAccounts",
       });
@@ -136,7 +133,7 @@ export function StarknetWalletProvider({
     try {
       await kit.disconnect({ clearLastWallet: true });
     } catch {
-      /* ignore */
+      /* the address is cleared below either way */
     }
     setState((prev) => ({ ...prev, address: null, wallet: null }));
   }, [kit]);

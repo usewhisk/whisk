@@ -7,11 +7,6 @@ import type {
   WhiskThemeTokens,
 } from "./types.js";
 
-/**
- * Result of resolving a {@link WhiskThemeInput} into something the provider
- * can apply to the DOM. `null` means "auto" with nothing to override: CSS
- * `prefers-color-scheme` drives everything from `styles.css`.
- */
 export type ResolvedTheme = {
   /**
    * Drives the `data-whisk-theme` attribute on the root element. Absent for
@@ -23,12 +18,9 @@ export type ResolvedTheme = {
 };
 
 /**
- * Resolve any accepted theme input into a {@link ResolvedTheme}.
- *
- * - `undefined` or `"auto"` → `null` (defer to CSS, no inline vars).
- * - A preset name → look up in {@link themePresets}.
- * - A `WhiskTheme` object → pass through.
- * - `{ preset, tokens }` → the preset's variables, then the tokens'.
+ * Returns `null` for `undefined` or `"auto"`, which leaves everything to
+ * `prefers-color-scheme` in `styles.css`. For `{ preset, tokens }` the tokens
+ * override the preset's variables.
  */
 export function resolveTheme(
   input: WhiskThemeInput | undefined,
@@ -55,12 +47,8 @@ export function resolveTheme(
 }
 
 /**
- * Serialize a {@link WhiskTheme} into a `--whisk-*` CSS variable map. Optional
- * fields are included only when present so the styles.css fallback applies
- * everywhere else (no spurious resets).
- *
- * Pure function. Same input → same output. Safe to call during render and
- * to snapshot in tests.
+ * Optional fields are left out when unset, so the `styles.css` defaults
+ * still apply to them.
  */
 export function themeToCssVars(theme: WhiskTheme): Record<string, string> {
   return tokensToCssVars({

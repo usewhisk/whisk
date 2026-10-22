@@ -297,8 +297,13 @@ Technical shape, per
     minutes instead of waiting forever.
   - `starknet()` defaults its `rpcUrl` to the registry's endpoint.
   - starknet.js moves to `^10.8.0` in cctp, core and react.
+- Comments in the packages and examples follow Directive 6 (#92). Banners,
+  narration and history are gone, and comments that no longer matched the code
+  were corrected, among them the `createWhisk` header, the Iris timeout and 429
+  behaviour in cctp, the `rpcUrls` and `FeePolicy.bps` docs, and the example
+  providers' chain lists. No code changed.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 
-This note is updated as each Phase 1 step lands on the branch. Step 10 is verified
-once a manual run of the testnet matrix passes.
+This note is updated as each Phase 1 step lands on the branch. Step 10 was verified
+on 2026-10-22: all six pairs of the testnet matrix passed.

@@ -2,12 +2,11 @@ import { useMemo, type ReactNode } from "react";
 import { WhiskProvider, createWhiskConfig, evm, solana } from "@usewhisk/react";
 
 /**
- * Donors bring their own chain. Treasury is EVM-format so the destination
- * is pinned to Arc Testnet in <DonateCard>; sources include both EVM testnets
- * and Solana Devnet — CCTP bridges Solana → EVM cross-ecosystem.
+ * Donors pay from any listed chain, Solana Devnet included. The treasury is
+ * an EVM address, so <DonateCard> pins the destination to Optimism Sepolia.
  *
- * For production you'd list the mainnet chains your treasury monitors. The
- * network of each transfer comes from its source chain.
+ * In production, list the mainnet chains your donors use. Each transfer's
+ * network comes from its source chain.
  */
 export function Providers({ children }: { children: ReactNode }) {
   const config = useMemo(

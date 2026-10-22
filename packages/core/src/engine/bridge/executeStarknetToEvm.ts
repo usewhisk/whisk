@@ -1,15 +1,7 @@
 /**
- * Starknet → EVM bridge executor.
- *
- * Flow:
- *   1. Starknet source: multicall [approve(usdc, TMM, amount),
- *      deposit_for_burn(...)]. Starknet accounts execute multicalls
- *      atomically, so no inter-call wait is needed.
- *   2. Iris attests the burn. Iris's auto-forwarder doesn't relay
- *      Starknet-source burns — there's no `forwardState` field on the
- *      message response.
- *   3. Destination EVM wallet signs `receiveMessage(message, attestation)`
- *      on MessageTransmitter.
+ * Starknet to EVM bridge. Approve and burn go in one multicall, which
+ * Starknet accounts execute atomically. Iris reports no forwarding state for
+ * Starknet burns, so the EVM wallet signs `receiveMessage`.
  */
 import { attestationPolling } from "./polling.js";
 import {
@@ -77,11 +69,10 @@ export async function executeStarknetToEvm(
     recipientAddress: input.recipientAddress,
   };
 
-  // mintRecipient = EVM address left-padded to 32 bytes, packed into a u256.
+  // The 20-byte address left-padded to 32 bytes, as a u256.
   const evmAddrHex = input.recipientAddress.slice(2);
   const mintRecipientU256 = BigInt("0x" + evmAddrHex.padStart(64, "0"));
 
-  // Build approve + burn calls (multicall).
   let approveCall, burnIntent;
   try {
     approveCall = buildStarknetApproveCall({
@@ -129,8 +120,8 @@ export async function executeStarknetToEvm(
     );
   }
 
-  // Multicall — Starknet accounts execute atomically.
-  steps[0] = { name: "approve", state: "noop" }; // bundled with burn
+  // The approve rides in the burn's multicall.
+  steps[0] = { name: "approve", state: "noop" };
   listeners?.onStep?.(steps[0]);
 
   let burnHash: string;
@@ -189,7 +180,6 @@ export async function executeStarknetToEvm(
   steps[1] = { name: "burn", state: "success", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
 
-  // Iris poll.
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);
   let message: IrisMessage | null;
@@ -240,7 +230,6 @@ export async function executeStarknetToEvm(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Manual EVM mint.
   const destAdapter = input.destinationAdapter;
   let mintCalldata: EvmCall;
   try {

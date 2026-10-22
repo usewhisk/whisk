@@ -4,12 +4,8 @@ import type { Dispatch } from "react";
 import type { PlaygroundAction, PlaygroundEvent } from "./store";
 
 /**
- * Bottom event strip. Mirrors what `onStateChange / onSuccess / onError`
- * push into state, with timestamps + colour-coding by event kind.
- *
- * Newest event sits at the top so the tester doesn't have to scroll
- * during long sweeps. `aria-live="polite"` so screen readers announce
- * each new event without preempting current focus.
+ * Logs what `onSuccess` and `onFailure` report, newest first so a long
+ * test run needs no scrolling.
  */
 export function EventLog({
   events,

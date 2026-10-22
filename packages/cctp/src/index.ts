@@ -4,13 +4,10 @@
  * Owns the direct integration with CCTP V2 contracts and Circle's Iris
  * attestation API. Pure protocol builders and HTTP client; no wallet
  * state, no transaction submission.
- *
- * v1 is EVM-only. Non-EVM ecosystems are on the roadmap.
  */
 
 export const VERSION = "0.1.0";
 
-// Error hierarchy
 export {
   CctpError,
   InvalidInputError,
@@ -28,7 +25,6 @@ export type { CctpErrorCode } from "./errors.js";
 
 export * from "./chains/index.js";
 
-// ABIs
 export {
   tokenMessengerV2Abi,
   tokenMessengerWithFeesAbi,
@@ -36,7 +32,6 @@ export {
   usdcAbi,
 } from "./abi/index.js";
 
-// Iris API
 export {
   IRIS_MAINNET_URL,
   IRIS_SANDBOX_URL,
@@ -81,7 +76,6 @@ export type {
   UpfrontFeeType,
 } from "./iris/index.js";
 
-// JSON-RPC reads
 export {
   getBlockNumber,
   getGasPrice,
@@ -98,7 +92,6 @@ export type {
   TransactionStatus,
 } from "./rpc/index.js";
 
-// Forwarder
 export {
   ANY_DESTINATION_CALLER,
   CCTP_FORWARD_HOOK_DATA,
@@ -107,7 +100,6 @@ export {
   isForwarderHookData,
 } from "./forwarder/index.js";
 
-// Address encoding
 export {
   InvalidAddressError,
   InvalidBytes32Error,
@@ -117,7 +109,6 @@ export {
   tryFromBytes32,
 } from "./encoding/index.js";
 
-// Fee math
 export {
   computeBurnFee,
   computeMaxFee,
@@ -132,11 +123,9 @@ export type {
   GetStandardMinFeeOptions,
 } from "./fees/index.js";
 
-// CCTP message decoding
 export { decodeBurnMessage } from "./message/index.js";
 export type { DecodedBurnMessage } from "./message/index.js";
 
-// Burn intent builder
 export { buildBurnIntent, buildBurnWithFeesIntent } from "./burn/index.js";
 export type {
   BuildBurnIntentInput,
@@ -146,11 +135,9 @@ export type {
   EvmCall,
 } from "./burn/index.js";
 
-// Manual mint builder (recovery path)
 export { buildMintIntent } from "./mint/index.js";
 export type { BuildMintIntentInput, MintIntent } from "./mint/index.js";
 
-// Starknet — protocol layer
 export {
   buildStarknetApproveCall,
   buildStarknetBurnIntent,
@@ -173,7 +160,6 @@ export type {
   StarknetReceiveIntent,
 } from "./starknet/index.js";
 
-// Stellar — protocol layer
 export {
   buildStellarApproveInvocation,
   buildStellarBurnIntent,
@@ -198,7 +184,6 @@ export type {
   StellarStrkeyType,
 } from "./stellar/index.js";
 
-// Solana — protocol layer
 export {
   anchorDiscriminator,
   buildSolanaBurnIntent,

@@ -1,19 +1,8 @@
 /**
- * Solana → EVM bridge executor.
- *
- * Flow:
- *   1. Generate ephemeral keypair for `message_sent_event_data`.
- *   2. Build a Solana `deposit_for_burn_with_hook` instruction with
- *      the canonical `cctp-forward` hookData and the EVM destination
- *      address encoded as bytes32 (left-padded).
- *   3. Submit via the `SolanaAdapter`, partial-signed by the ephemeral
- *      keypair and signed by the connected wallet.
- *   4. Poll Iris for the attestation + forwarder state.
- *   5. Forwarder relays the EVM-side mint, or with forwarding off the
- *      destination EVM wallet signs `receiveMessage`.
- *
- * If the forwarder reports `FAILED`, the flow returns a typed failure
- * with the recovery snapshot.
+ * Solana to EVM bridge. The burn is signed by the wallet and a fresh
+ * keypair for `message_sent_event_data`. Circle's forwarder mints on the
+ * EVM side, or with forwarding off the EVM wallet signs `receiveMessage`.
+ * A forwarder FAILED state returns a failure with the recovery snapshot.
  */
 import { attestationPolling } from "./polling.js";
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -46,7 +35,6 @@ export type ExecuteSolanaToEvmInput = {
   network: "mainnet" | "testnet";
   source: SolanaChain;
   destination: EvmChain;
-  /** Recipient EVM 0x-address on the destination chain. */
   recipientAddress: `0x${string}`;
   burnAmount: bigint;
   maxFee: bigint;
@@ -71,8 +59,7 @@ export async function executeSolanaToEvm(
 ): Promise<SendResult> {
   const useForwarder = input.useForwarder ?? true;
   const steps: Step[] = ALL_STEPS.map((name) => ({ name, state: "pending" }));
-  // Solana doesn't have a separate approve step; the user signs the
-  // burn directly. Mark it noop right away.
+  // Solana burns need no approve.
   steps[0] = { name: "approve", state: "noop" };
   listeners?.onStep?.(steps[0]);
 
@@ -97,7 +84,6 @@ export async function executeSolanaToEvm(
     );
   }
 
-  // ---- build burn intent --------------------------------------------------
   const messageSentEventData = Keypair.generate();
   let owner: PublicKey;
   try {
@@ -114,8 +100,7 @@ export async function executeSolanaToEvm(
   const usdcMint = new PublicKey(input.source.usdc);
   const ownerUsdcAta = getAssociatedTokenAddressSync(usdcMint, owner);
 
-  // Encode EVM recipient as bytes32 — 20-byte address left-padded with
-  // 12 zero bytes. CCTP V2 messages always use 32-byte mintRecipient.
+  // CCTP mintRecipient is 32 bytes: the 20-byte address left-padded.
   const mintRecipientBytes32 = new Uint8Array(32);
   const evmAddrHex = input.recipientAddress.slice(2);
   for (let i = 0; i < 20; i++) {
@@ -145,7 +130,6 @@ export async function executeSolanaToEvm(
     return fail(steps, "burn", cause, "Failed to build burn intent.", snapshot);
   }
 
-  // ---- check cluster ------------------------------------------------------
   try {
     const cluster = await input.sourceAdapter.getCluster();
     if (cluster !== input.source.cluster) {
@@ -165,7 +149,6 @@ export async function executeSolanaToEvm(
     );
   }
 
-  // ---- submit burn -------------------------------------------------------
   let burnSignature: string;
   try {
     const result = await input.sourceAdapter.sendTransaction(
@@ -219,7 +202,6 @@ export async function executeSolanaToEvm(
   steps[1] = { name: "burn", state: "success", txHash: burnSignature };
   listeners?.onStep?.(steps[1]);
 
-  // ---- attestation -------------------------------------------------------
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);
 
@@ -272,7 +254,6 @@ export async function executeSolanaToEvm(
     );
   }
 
-  // ---- forwarder mint on EVM destination ---------------------------------
   const forwardComplete = useForwarder && isForwardDone(message);
   const forwardFailed = message.forwardState === "FAILED";
 

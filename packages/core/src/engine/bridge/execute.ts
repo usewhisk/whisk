@@ -1,19 +1,10 @@
 /**
- * Bridge executor.
+ * EVM to EVM bridge: approve and burn on the source, wait for Iris, then
+ * let Circle's forwarder mint, or mint with the user's wallet when
+ * forwarding is off or the forwarder reported FAILED.
  *
- * Drives a CCTP V2 Fast Transfer from start to finish:
- *
- *   1. switch wallet to source chain
- *   2. approve USDC + depositForBurnWithHook (one batch if the wallet
- *      supports EIP-5792, otherwise two sequential calls)
- *   3. poll Iris for attestation + forwarder state
- *   4. mint on destination — by Circle's Orbit forwarder by default,
- *      or by the user's wallet if the forwarder was disabled or
- *      reported FAILED
- *
- * The function never throws — every failure path resolves to a typed
- * {@link SendResult} with `kind: "failure"` so the UI has the full step
- * timeline plus a recovery snapshot.
+ * Never throws. Every failure resolves to a `failure` result carrying the
+ * step timeline and a recovery snapshot.
  */
 import { attestationPolling } from "./polling.js";
 import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
@@ -40,48 +31,29 @@ export type ExecuteBridgeInput = {
   network: Network;
   source: EvmChain;
   destination: EvmChain;
-  /** Recipient address on the destination chain. */
   recipientAddress: string;
-  /** USDC subunits to burn on the source chain. */
+  /** USDC subunits. */
   burnAmount: bigint;
-  /** `maxFee` cap to pack into the burn call. */
   maxFee: bigint;
-  /** Pre-computed burnFee component (informational, returned in the result). */
   burnFee: bigint;
-  /** Pre-computed forwarderFee component (informational). */
   forwarderFee: bigint;
-  /** Fee tier — preserved for re-encoding on retry. */
   tier: BurnFeeTier;
-  /** Default `true`. When `false`, the user must mint manually. */
+  /** Default `true`. When `false`, the user mints. */
   useForwarder?: boolean;
-  /**
-   * Optional integrator-fee transfer calls — prepended to the
-   * source-chain call list (merchant share first, treasury share
-   * second). Bundled with approve+burn when the wallet supports
-   * EIP-5792.
-   */
+  /** Merchant and treasury transfers, sent ahead of approve and burn. */
   customFeeCalls?: EvmCall[];
-  /** Source-chain wallet adapter (signs the burn + approve). */
   sourceAdapter: EvmAdapter;
   /** Set when the fees are paid upfront from Circle's signed quote. */
   upfront?: UpfrontFee;
-  /**
-   * Destination-chain wallet adapter — required only when `useForwarder`
-   * is `false` or the Forwarder reports `FAILED`. Same wallet typically
-   * serves both roles in v1; future versions may split them.
-   */
+  /** Signs a manual mint. Falls back to `sourceAdapter` when absent. */
   destinationAdapter?: EvmAdapter;
-  /** Iris poll interval (ms). Default 3000. */
+  /** Defaults to Circle's published attestation time for the source. */
   pollIntervalMs?: number;
-  /** Iris poll timeout (ms). Default 15 minutes. */
   pollTimeoutMs?: number;
   fetch?: typeof fetch;
 };
 
-/**
- * Snapshot stored on `SendFailure.raw` so the recovery layer can
- * reconstruct the bridge state and resume from the failed step.
- */
+/** Stored on `SendFailure.raw` so a transfer can be resumed. */
 export type BridgeRecoverySnapshot = {
   kind: "bridge";
   network: Network;
@@ -114,7 +86,6 @@ export async function executeBridge(
     recipientAddress: input.recipientAddress,
   };
 
-  // ---- build burn intent --------------------------------------------------
   let burnCalls: EvmCall[];
   try {
     burnCalls = evmBurnCalls(
@@ -139,13 +110,10 @@ export async function executeBridge(
     );
   }
 
-  // Prepend the optional integrator-fee transfers so they ship in the
-  // same batch as approve + burn.
   const customFeeCalls = input.customFeeCalls ?? [];
   const submittedCalls: EvmCall[] = [...customFeeCalls, ...burnCalls];
   const customFeeOffset = customFeeCalls.length;
 
-  // ---- switch chain -------------------------------------------------------
   try {
     const live = await input.sourceAdapter.getChainId();
     if (live !== input.source.evmChainId) {
@@ -161,10 +129,7 @@ export async function executeBridge(
     );
   }
 
-  // ---- submit approve + burn ---------------------------------------------
-  // burnCalls is [approve, burn] (or [burn] when skipApprove is true,
-  // which the engine never sets today). When customFee is set,
-  // submittedCalls is [customFee, approve, burn].
+  // burnCalls is [approve, burn], or [burn] if the approve was skipped.
   const hasApprove = burnCalls.length === 2;
   let approveHash: `0x${string}` | undefined;
   let burnHash: `0x${string}`;
@@ -188,7 +153,7 @@ export async function executeBridge(
       );
     }
     if (hashes.length === 1) {
-      // EIP-5792 batched everything into a single bundle.
+      // An EIP-5792 batch shares one hash.
       burnHash = hashes[0] as `0x${string}`;
       if (hasApprove) approveHash = burnHash;
       if (customFeeOffset > 0) customFeeHashes.push(burnHash);
@@ -214,9 +179,8 @@ export async function executeBridge(
   // Saved before any receipt wait, which can outlive the tab.
   listeners?.onBurnSubmitted?.(burnHash);
 
-  // Sequential wallets: wait for each customFee receipt before the
-  // approve step advances. Bundled wallets share `burnHash` here, so
-  // the burn-receipt wait below covers them all in one go.
+  // A bundled wallet shares `burnHash`, so the burn receipt covers the fee
+  // transfers too.
   for (const hash of customFeeHashes) {
     if (hash === burnHash) continue;
     try {
@@ -277,7 +241,6 @@ export async function executeBridge(
     listeners?.onStep?.(steps[0]);
   }
 
-  // ---- burn receipt ------------------------------------------------------
   snapshot.burnTxHash = burnHash;
   steps[1] = { name: "burn", state: "pending", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
@@ -305,7 +268,6 @@ export async function executeBridge(
   steps[1] = { name: "burn", state: "success", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
 
-  // ---- fetch attestation -------------------------------------------------
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);
   let message: IrisMessage | null;
@@ -345,7 +307,6 @@ export async function executeBridge(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // ---- mint ---------------------------------------------------------------
   const forwarderHandled = useForwarder && isForwardDone(message);
   const forwarderFailed = useForwarder && message.forwardState === "FAILED";
 
@@ -365,11 +326,9 @@ export async function executeBridge(
     };
   }
 
-  // Manual mint — either the forwarder wasn't used, or the relayer
-  // reported FAILED and we fall through to user-paid finalization.
   if (useForwarder && !forwarderFailed) {
-    // Forwarder is still pending past the timeout. Treat as a recoverable
-    // failure so the UI can offer a "wait longer / mint manually" choice.
+    // Still pending past the timeout. Recoverable, so the UI can offer to
+    // wait longer or mint manually.
     return fail(
       steps,
       "mint",
@@ -384,6 +343,7 @@ export async function executeBridge(
     );
   }
 
+  // Forwarding is off, or the forwarder reported FAILED: the user mints.
   const destAdapter = input.destinationAdapter ?? input.sourceAdapter;
   let mintCalldata: EvmCall;
   try {

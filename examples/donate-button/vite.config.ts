@@ -7,13 +7,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 /**
- * Vite config for a Whisk SPA. Aliases:
- *   - `buffer` → the browser polyfill package. `@usewhisk/cctp`
- *     transitively imports Buffer via `@solana/web3.js` /
- *     `@stellar/stellar-sdk`; Vite otherwise tags it as an external.
- *   - `@react-native-async-storage/async-storage`, `pino-pretty` →
- *     stubbed. Wagmi's transitive deps that don't ship a browser
- *     build.
+ * `buffer` points at the browser polyfill because `@usewhisk/cctp` pulls it
+ * in through `@solana/web3.js` and `@stellar/stellar-sdk`, and Vite would
+ * otherwise treat it as external. The async-storage and pino-pretty aliases
+ * stub wagmi dependencies that have no browser build.
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],

@@ -11,11 +11,7 @@ import type { WhiskThemeInput } from "../theme/types.js";
 export type WhiskContextValue = {
   engine: WhiskEngine;
   config: WhiskClientConfig;
-  /**
-   * The theme prop passed to `<WhiskProvider>`. Used by portal scopes that
-   * need to render outside the provider's DOM subtree (Radix Dialog,
-   * Tooltip, Select) and re-apply the theme on the portal root.
-   */
+  /** The theme prop passed to `<WhiskProvider>`. */
   theme: WhiskThemeInput | undefined;
 };
 

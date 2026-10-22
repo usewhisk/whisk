@@ -19,10 +19,8 @@ type PaidOrder = {
 };
 
 /**
- * Atelier Hibiscus checkout — top-level state router. The shop, checkout, and
- * success screens each live in their own module; this file only owns the step
- * machine and snapshots the cart at the moment the order settles (so the
- * confirmation keeps showing the right items after `clear()`).
+ * The cart is copied into the order when payment settles so the confirmation
+ * still lists the items after `clear()`.
  */
 export function ExampleCheckout() {
   const [step, setStep] = useState<Step>("shop");

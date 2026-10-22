@@ -6,11 +6,6 @@ import { DonateCard } from "./components/donate-card";
 import { DonorWall } from "./components/donor-wall";
 import { Projects } from "./components/projects";
 
-/**
- * OpenForest landing — composition only. The donation state (tier vs. custom,
- * confirmed receipt) lives inside DonateCard via the useDonation hook so the
- * top-level surface stays pure layout.
- */
 export function App() {
   return (
     <Providers>

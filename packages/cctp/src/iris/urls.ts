@@ -1,6 +1,3 @@
-/**
- * Iris API base URLs.
- */
 import type { Network } from "../chains/types.js";
 
 export const IRIS_MAINNET_URL = "https://iris-api.circle.com";

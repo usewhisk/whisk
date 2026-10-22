@@ -1,16 +1,6 @@
 /**
- * EVM → Starknet bridge executor.
- *
- * Iris's auto-forwarder doesn't relay to Starknet ("Forwarding Service"
- * is unsupported there). So the destination Starknet wallet signs
- * `receive_message(message, attestation)` manually after Iris attests.
- *
- * Flow:
- *   1. EVM source: depositForBurn (no hookData — no forwarder relay).
- *      mintRecipient = recipient Starknet felt zero-extended to bytes32.
- *   2. Iris attests the burn.
- *   3. Destination Starknet wallet signs `receive_message` on
- *      MessageTransmitterV2.
+ * EVM to Starknet bridge. Circle's Forwarding Service does not cover
+ * Starknet, so the Starknet wallet signs `receive_message` once Iris attests.
  */
 import { attestationPolling } from "./polling.js";
 import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
@@ -41,7 +31,6 @@ export type ExecuteEvmToStarknetInput = {
   network: Network;
   source: EvmChain;
   destination: StarknetChain;
-  /** Recipient Starknet felt. */
   recipientAddress: string;
   burnAmount: bigint;
   maxFee: bigint;
@@ -52,7 +41,7 @@ export type ExecuteEvmToStarknetInput = {
   sourceAdapter: EvmAdapter;
   /** Set when the fees are paid upfront from Circle's signed quote. */
   upfront?: UpfrontFee;
-  /** REQUIRED — signs `receive_message` on Starknet. */
+  /** Signs `receive_message` on Starknet. */
   destinationAdapter: StarknetAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
@@ -85,7 +74,6 @@ export async function executeEvmToStarknet(
     recipientAddress: input.recipientAddress,
   };
 
-  // mintRecipient = Starknet felt zero-extended to 32 bytes.
   const recipientFelt = input.recipientAddress as StarknetFelt;
   const mintRecipientBytes32 = feltToBytes32Hex(recipientFelt);
 
@@ -98,7 +86,7 @@ export async function executeEvmToStarknet(
         amount: input.burnAmount,
         mintRecipient: mintRecipientBytes32,
         fee: { tier: input.tier, maxFee: input.maxFee },
-        withForwarder: false, // no Iris forwarder for Starknet destinations
+        withForwarder: false,
       },
       input.upfront,
       input.sourceAdapter.address,
@@ -315,7 +303,6 @@ export async function executeEvmToStarknet(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Mint on Starknet via destinationAdapter.
   let receiveIntent;
   try {
     receiveIntent = buildStarknetReceiveIntent({

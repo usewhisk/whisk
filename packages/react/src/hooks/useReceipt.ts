@@ -15,9 +15,9 @@ export type UseReceiptInput = {
   sourceChain: Chain;
   sourceTxHash: string | undefined;
   destinationChain: Chain;
-  /** Optional pre-known destination tx hash (stops polling). */
+  /** Destination tx hash, when already known. Polling stops once it is set. */
   destinationTxHash?: string;
-  /** Force the failed stage — useful when the merchant already saw a `SendFailure`. */
+  /** Force the failed stage, such as when the caller already has a `SendFailure`. */
   hasError?: boolean;
   /** Iris poll interval in ms. Default 3000. */
   pollIntervalMs?: number;
@@ -31,23 +31,17 @@ export type UseReceiptResult = {
   message: IrisMessage | null;
   /** True while waiting for the first Iris poll. */
   isLoading: boolean;
-  /** Set if Iris polling throws (network error etc.). */
+  /** Set when an Iris poll throws, such as on a network error. */
   error: Error | null;
 };
 
 const TERMINAL: ReadonlyArray<IrisStatus> = ["complete"];
 
 /**
- * Poll Iris for the attestation lifecycle of a single transfer and
- * project the result through {@link deriveReceiptView}.
- *
- *   - Same-chain transfers don't poll Iris — they settle the moment
- *     the source tx is observed, so the hook returns a `settled` view
- *     immediately.
- *   - Cross-chain transfers poll until the attestation reaches a
- *     is `complete` or the timeout elapses.
- *   - Once the merchant supplies `destinationTxHash`, polling stops
- *     even if Iris hasn't reported `complete` yet.
+ * Polls Iris for one transfer and returns it as a {@link deriveReceiptView}.
+ * A same-chain transfer never polls, since the source tx is the settlement.
+ * A cross-chain one polls until Iris reports `complete`, the timeout passes,
+ * or `destinationTxHash` is given.
  */
 export function useReceipt(input: UseReceiptInput): UseReceiptResult {
   const {
@@ -66,8 +60,7 @@ export function useReceipt(input: UseReceiptInput): UseReceiptResult {
     !destinationTxHash &&
     !hasError;
 
-  // Anchor the polling deadline to the source-tx hash. New hash → new
-  // deadline; same hash → preserved across re-renders.
+  // The timeout restarts only when the source tx changes, not on re-render.
   const deadlineRef = useRef<{ key: string; startedAt: number } | null>(null);
   const key = `${sourceChain}:${sourceTxHash ?? ""}`;
   if (!deadlineRef.current || deadlineRef.current.key !== key) {

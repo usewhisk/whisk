@@ -12,11 +12,6 @@ export type InvoiceDraft = {
   memo: string;
 };
 
-/**
- * Form state + URL composer for the merchant side. Owns the four fields,
- * derives the shareable URL, and exposes copy-to-clipboard with an "ok"
- * pulse that flips back automatically.
- */
 export function useInvoiceLink(initial: Partial<InvoiceDraft> = {}) {
   const [draft, setDraft] = useState<InvoiceDraft>({
     to: initial.to ?? "",
@@ -61,7 +56,7 @@ export function useInvoiceLink(initial: Partial<InvoiceDraft> = {}) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     } catch {
-      /* clipboard blocked — quietly fail; the URL is still visible in the UI */
+      /* Clipboard access can be blocked; the URL stays on screen. */
     }
   }, [fullUrl]);
 

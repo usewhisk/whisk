@@ -62,7 +62,6 @@ describe("executeSameChainSend", () => {
       ]);
     }
 
-    // Verify the call targets USDC and encodes transfer(recipient, amount).
     expect(sendCalls).toHaveBeenCalledOnce();
     const [calls] = sendCalls.mock.calls[0] ?? [[]];
     expect(calls).toHaveLength(1);

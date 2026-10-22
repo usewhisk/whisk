@@ -4,13 +4,6 @@ import { useCallback, type Dispatch } from "react";
 import { WhiskSend, type SendFailure, type SendSuccess } from "@usewhisk/react";
 import type { PlaygroundAction, PlaygroundConfig } from "./store";
 
-/**
- * The actual `<WhiskSend>` driven by the current playground config.
- *
- * `useCallback` on the lifecycle handlers holds their identity stable
- * across renders — `dispatch` from `useReducer` is guaranteed stable,
- * so the widget's internal `useEffect` deps don't churn.
- */
 export function Stage({
   config,
   dispatch,

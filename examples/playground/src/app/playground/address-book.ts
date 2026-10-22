@@ -1,10 +1,6 @@
 /**
- * Quick-pick recipients for the controls panel. Saves the tester from
- * typing the same address into every chain during the testnet sweep.
- *
- * Swap any entry for a wallet you control if you want the destination
- * funds to be recoverable. Non-EVM entries here are shown as hints and
- * only make sense when the destination chain matches the ecosystem.
+ * Sample recipients. Funds sent to these are not recoverable; use a wallet
+ * you control if you want them back.
  */
 export type AddressEntry = {
   label: string;

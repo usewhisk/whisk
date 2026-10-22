@@ -6,10 +6,8 @@ import {
 } from "./types.js";
 
 /**
- * Validate metadata at config or call time. Throws {@link ConfigError} on
- * any rule violation so the merchant sees the problem before they sign.
- *
- * Rules enforced:
+ * Throws {@link ConfigError} on any broken rule, so the problem shows before
+ * the payer signs:
  * - Object (no arrays, no primitives, no `null`).
  * - All keys are non-empty strings.
  * - No key starts with the reserved `__` prefix.
@@ -17,7 +15,7 @@ import {
  * - Numbers are finite (no `NaN`, no `Infinity`).
  * - Serialized JSON size <= 1 KB.
  *
- * Empty objects pass — they're a valid "no metadata" signal.
+ * An empty object passes.
  */
 export function validateMetadata(
   input: unknown,
@@ -55,10 +53,9 @@ export function validateMetadata(
     }
   }
 
-  // Size check on the serialized JSON, not the raw object, because the
-  // serialized form is what we persist and what consumers will receive.
+  // Measured as UTF-8 bytes of the JSON, since that is what webhook
+  // receivers get.
   const serialized = JSON.stringify(input);
-  // UTF-8 byte length, not character length.
   const byteLength =
     typeof Buffer !== "undefined"
       ? Buffer.byteLength(serialized, "utf8")
@@ -72,9 +69,8 @@ export function validateMetadata(
 }
 
 /**
- * Merge default metadata from `WhiskConfig` with per-call metadata.
- * Per-call keys override defaults on conflict. Returns `undefined` if both
- * are empty so the engine can skip metadata plumbing entirely.
+ * Per-call keys override `WhiskConfig.defaultMetadata`. Returns `undefined`
+ * when both are empty.
  */
 export function mergeMetadata(
   defaults: WhiskMetadata | undefined,

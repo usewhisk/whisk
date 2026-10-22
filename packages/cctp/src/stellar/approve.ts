@@ -17,17 +17,16 @@ import type { StellarInvocation } from "./burn.js";
 
 export type BuildStellarApproveInvocationInput = {
   source: StellarChain;
-  /** Owner strkey (G/M/C). Wallet that's authorizing TMM to spend USDC. */
+  /** Owner strkey (G/M/C): the wallet authorizing TMM to spend USDC. */
   owner: string;
-  /** Spender — typically the chain's TMM contract (C…). */
+  /** Usually the chain's TMM contract (C...). */
   spender: string;
   /** Amount in 7-decimal Stellar USDC subunits. */
   amount: bigint;
   /**
-   * Ledger sequence at which the allowance expires. Set to `0` for a
-   * one-shot use (auto-clears after the next transfer_from), or a high
-   * value for a long-lived allowance. Whisk uses one-shot — fresh
-   * approve per burn keeps the security surface tight.
+   * Ledger sequence at which the allowance expires. The SAC rejects a
+   * nonzero allowance that expires before the current ledger, so pass the
+   * latest ledger plus a short window.
    */
   expirationLedger: number;
 };

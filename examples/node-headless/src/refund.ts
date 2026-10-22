@@ -1,9 +1,9 @@
 /**
- * Issue a refund from a viem-backed merchant wallet.
+ * Refunds a payment from the merchant wallet.
  *
- * The original tx hash, payer address, and refund amount come from your
- * order book in production. This demo accepts them via env vars so you
- * can run it against a real test transfer.
+ * In production the original tx hash, payer address and amount come from
+ * your order records. Here they come from env vars so you can refund a
+ * real testnet transfer.
  *
  * Usage:
  *   PRIVATE_KEY=0x... \
@@ -21,8 +21,8 @@ const payerAddress = env.required("PAYER_ADDRESS");
 const amount = env.required("AMOUNT");
 const reason = process.env.REASON ?? "customer_request";
 
-// The merchant received the original payment on Ethereum Sepolia,
-// refunding the buyer back to Base Sepolia.
+// The original payment landed on Ethereum Sepolia; the buyer is refunded
+// on Base Sepolia.
 const ORIGINAL_DESTINATION = "Ethereum_Sepolia";
 const REFUND_DESTINATION = "Base_Sepolia";
 

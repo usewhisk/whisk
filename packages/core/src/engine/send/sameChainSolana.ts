@@ -1,12 +1,3 @@
-/**
- * Same-chain USDC transfer on Solana.
- *
- * The sender and recipient are on the same Solana cluster — no CCTP,
- * just an SPL Token `transferChecked` instruction from the sender's
- * ATA to the recipient's ATA. If the recipient ATA doesn't exist yet,
- * the engine prepends an `createAssociatedTokenAccountIdempotent`
- * instruction so the transfer succeeds on first-touch.
- */
 import { Buffer } from "node:buffer";
 import { PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import {
@@ -25,29 +16,24 @@ import type { Step } from "../../types/step.js";
 import type { SendListeners, SendResult, SolanaAdapter } from "../types.js";
 
 export type ExecuteSameChainSolanaSendInput = {
-  /** Source chain (Solana mainnet or Devnet). */
   chain: SolanaChain;
-  /** Recipient pubkey as a base58 string. */
+  /** Base58 wallet pubkey; the USDC account is derived. */
   recipientAddress: string;
-  /** Amount in USDC subunits (6 decimals). */
+  /** USDC subunits. */
   amount: bigint;
   adapter: SolanaAdapter;
 };
 
-/** USDC's on-chain decimals — needed for `transferChecked`. */
+/** `transferChecked` checks the mint's decimals. */
 const USDC_DECIMALS = 6;
 
-/**
- * Execute a same-chain USDC transfer on Solana. Returns a typed
- * {@link SendResult} — `success` with the transfer signature or
- * `failure` with the error + step snapshot. Never throws.
- */
+/** Never throws; every failure resolves to a `failure` result. */
 export async function executeSameChainSolanaSend(
   input: ExecuteSameChainSolanaSendInput,
   listeners?: SendListeners,
 ): Promise<SendResult> {
   const steps: Step[] = [
-    { name: "approve", state: "noop" }, // SPL transfers don't need approval
+    { name: "approve", state: "noop" },
     { name: "transfer", state: "pending" },
   ];
 
@@ -72,8 +58,8 @@ export async function executeSameChainSolanaSend(
   const recipientAta = getAssociatedTokenAddressSync(mint, recipient);
 
   const instructions: TransactionInstruction[] = [
-    // Idempotent — no-op if the ATA already exists. Cheap insurance
-    // against first-touch failures.
+    // Creates the recipient's USDC account if it doesn't exist yet, and
+    // does nothing if it does.
     createAssociatedTokenAccountIdempotentInstruction(
       sender,
       recipientAta,
@@ -92,8 +78,6 @@ export async function executeSameChainSolanaSend(
     ),
   ];
 
-  // Map viem-style TransactionInstruction → the wire-format the adapter
-  // expects (engine's SolanaInstruction shape).
   const solanaInstructions: SolanaInstruction[] = instructions.map((ix) => ({
     programId: ix.programId,
     keys: ix.keys,
@@ -101,8 +85,6 @@ export async function executeSameChainSolanaSend(
     ecosystem: "solana",
   }));
 
-  // Make sure the wallet is on the right cluster. Mismatched cluster
-  // returns a clean error rather than a confusing on-chain failure.
   try {
     const cluster = await input.adapter.getCluster();
     if (cluster !== input.chain.cluster) {

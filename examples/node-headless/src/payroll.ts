@@ -1,9 +1,8 @@
 /**
- * Scheduled payouts using a viem-backed adapter over CCTP V2.
+ * Pays a list of payees one after another.
  *
- * Hardcoded payee list for demo. In production you'd read from your DB,
- * track which payees were paid this cycle (idempotency at YOUR layer,
- * not Whisk's), and write results back.
+ * In production, read payees from your database and record who was paid
+ * this cycle. Whisk does not deduplicate payouts, so idempotency is yours.
  *
  * Usage:
  *   PRIVATE_KEY=0x... pnpm payroll
@@ -15,7 +14,7 @@ import { env } from "./env.js";
 
 const PRIVATE_KEY = (env.privateKey ?? env.required("PRIVATE_KEY")) as Hex;
 
-// Replace with your own list — kept hardcoded so this script runs without a DB.
+// Hardcoded so the script runs without a database.
 const payees: Array<{ id: string; address: string; amount: string }> = [
   {
     id: "p-001",
@@ -34,8 +33,8 @@ async function main() {
     chains: ["Arc_Testnet", "Base_Sepolia"],
   });
 
-  // One adapter per source chain — in a real payroll batch you'd pick
-  // the funding chain per payee's target ecosystem.
+  // An adapter is bound to one chain. Funding from several chains needs
+  // one adapter each.
   const adapter = createEvmAdapter({
     chain: "Arc_Testnet",
     privateKey: PRIVATE_KEY,

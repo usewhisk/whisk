@@ -1,23 +1,13 @@
 /**
- * Mint-recipient encoding for cross-ecosystem bridges.
- *
- * CCTP messages carry a 32-byte `mintRecipient`. The encoding differs
- * by destination ecosystem:
- *
- *   EVM      20-byte address, left-padded with 12 zero bytes
- *   Solana   32-byte pubkey, used directly (no padding)
+ * CCTP messages carry a 32-byte `mintRecipient`. An EVM address is
+ * left-padded with 12 zero bytes; a Solana pubkey is used as is.
  */
 import { PublicKey } from "@solana/web3.js";
 import { toBytes32 } from "@usewhisk/cctp";
 import type { CctpChain } from "@usewhisk/cctp";
 import { InvalidAddressError } from "../../errors/errors.js";
 
-/**
- * Encode the recipient as bytes32 for the destination ecosystem.
- *
- * Returns a `0x`-prefixed hex string of exactly 32 bytes — the form
- * EVM `depositForBurn` and Solana `deposit_for_burn` both expect.
- */
+/** Returns `0x`-prefixed hex of exactly 32 bytes. */
 export function encodeMintRecipientBytes32(
   recipientAddress: string,
   destination: CctpChain,
@@ -31,12 +21,10 @@ export function encodeMintRecipientBytes32(
     }
     return toHex(pk.toBytes());
   }
-  // EVM — `toBytes32` handles the 20→32 byte left-pad with the right
-  // validation; throws on a malformed hex address.
   return toBytes32(recipientAddress);
 }
 
-/** Solana pubkey → 32-byte `Uint8Array`. Throws if not a valid pubkey. */
+/** Throws `InvalidAddressError` if not a valid pubkey. */
 export function solanaPubkeyToBytes32(address: string): Uint8Array {
   try {
     return new PublicKey(address).toBytes();

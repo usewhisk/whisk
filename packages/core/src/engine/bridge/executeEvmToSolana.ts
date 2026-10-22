@@ -1,28 +1,7 @@
 /**
- * EVM → Solana bridge executor.
- *
- * Flow:
- *   1. Build EVM `depositForBurn` (no Forwarder hook — destination is
- *      Solana, no Forwarder there).
- *   2. Switch sourceAdapter to the source EVM chain.
- *   3. Submit `approve` + `depositForBurn` (with optional customFee
- *      transfers prepended) via EVM sourceAdapter.
- *   4. Wait for receipts.
- *   5. Poll Iris for the attestation (no forwarderState — manual mint).
- *   6. Fetch the on-chain Solana TokenMessenger, parse `fee_recipient`,
- *      derive its USDC ATA.
- *   7. Build the Solana receive instructions:
- *        a. idempotent `create_associated_token_account` for the
- *           recipient's ATA (if not pre-created)
- *        b. `receive_message` with the Iris message + attestation
- *   8. Submit via destinationAdapter (Solana) — single tx.
- *   9. Confirm and return success.
- *
- * Notes
- *   - destinationAdapter is REQUIRED. There's no Solana-side Forwarder,
- *     so the recipient must sign (or someone signing on their behalf).
- *   - The recipient's ATA is created idempotently in the same tx as
- *     receive_message; no separate signature needed.
+ * EVM to Solana bridge. Circle does not forward to Solana, so the Solana
+ * wallet signs `receive_message` once Iris attests. The recipient's USDC
+ * account must already exist.
  */
 import { attestationPolling } from "./polling.js";
 import { evmBurnCalls, type UpfrontFee } from "./upfront.js";
@@ -57,20 +36,20 @@ export type ExecuteEvmToSolanaInput = {
   network: Network;
   source: EvmChain;
   destination: SolanaChain;
-  /** Recipient base58 pubkey on the destination Solana chain. */
+  /** The recipient's wallet; the burn names its USDC account. */
   recipientAddress: string;
   burnAmount: bigint;
   maxFee: bigint;
   burnFee: bigint;
   forwarderFee: bigint;
   tier: BurnFeeTier;
-  /** Always false in this direction — no Solana-side Forwarder. */
+  /** Circle does not forward to Solana. */
   useForwarder?: false;
   customFeeCalls?: EvmCall[];
   sourceAdapter: EvmAdapter;
   /** Set when the fees are paid upfront from Circle's signed quote. */
   upfront?: UpfrontFee;
-  /** REQUIRED — signs the Solana `receive_message`. */
+  /** Signs `receive_message` on Solana. */
   destinationAdapter: SolanaAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
@@ -105,13 +84,9 @@ export async function executeEvmToSolana(
     recipientAddress: input.recipientAddress,
   };
 
-  // ---- derive recipient ATA ----------------------------------------------
-  // CCTP V2's Solana receive_message enforces that the mintRecipient
-  // encoded in the burn message matches the destination's USDC ATA —
-  // NOT the wallet pubkey (`InvalidMintRecipient`, Anchor 6009). On EVM
-  // the recipient IS the wallet address; on Solana it's the ATA, since
-  // SPL balances live on token accounts. The user-facing Whisk API
-  // accepts the wallet, and we derive the ATA here.
+  // Solana's receive_message requires the mintRecipient to be the USDC
+  // token account, not the wallet (`InvalidMintRecipient`, Anchor 6009),
+  // since SPL balances live on token accounts.
   const destUsdcMint = new PublicKey(input.destination.usdc);
   let recipientWallet: PublicKey;
   try {
@@ -130,8 +105,6 @@ export async function executeEvmToSolana(
     recipientWallet,
   );
 
-  // ---- build burn intent (no hook, no Forwarder) --------------------------
-  // mintRecipient = recipient's USDC ATA on Solana (32-byte pubkey).
   let burnCalls: EvmCall[];
   try {
     burnCalls = evmBurnCalls(
@@ -161,7 +134,6 @@ export async function executeEvmToSolana(
   const submittedCalls: EvmCall[] = [...customFeeCalls, ...burnCalls];
   const customFeeOffset = customFeeCalls.length;
 
-  // ---- switch chain -------------------------------------------------------
   try {
     const live = await input.sourceAdapter.getChainId();
     if (live !== input.source.evmChainId) {
@@ -177,7 +149,6 @@ export async function executeEvmToSolana(
     );
   }
 
-  // ---- submit approve + burn ---------------------------------------------
   const hasApprove = burnCalls.length === 2;
   let approveHash: `0x${string}` | undefined;
   let burnHash: `0x${string}`;
@@ -286,7 +257,6 @@ export async function executeEvmToSolana(
     listeners?.onStep?.(steps[0]);
   }
 
-  // ---- burn receipt ------------------------------------------------------
   snapshot.burnTxHash = burnHash;
   steps[1] = { name: "burn", state: "pending", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
@@ -314,7 +284,6 @@ export async function executeEvmToSolana(
   steps[1] = { name: "burn", state: "success", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
 
-  // ---- fetch attestation -------------------------------------------------
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);
   let message: IrisMessage | null;
@@ -370,7 +339,6 @@ export async function executeEvmToSolana(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // ---- mint on Solana ----------------------------------------------------
   const destAdapter = input.destinationAdapter;
 
   try {
@@ -396,8 +364,8 @@ export async function executeEvmToSolana(
     );
   }
 
-  // Read TokenMessenger state to discover the fee_recipient pubkey.
-  // Required as a remaining account on `receive_message`.
+  // `receive_message` needs the TokenMessenger's fee_recipient as a
+  // remaining account.
   const tmmProgram = new PublicKey(input.destination.tokenMessengerMinter);
   const tokenMessengerPda = deriveTokenMessenger(tmmProgram);
   let feeRecipient: PublicKey;
@@ -425,18 +393,13 @@ export async function executeEvmToSolana(
     );
   }
 
-  // recipientUsdcAta + recipientWallet were already derived above for the
-  // burn-side mintRecipient encoding. Reuse them here.
   const feeRecipientUsdcAta = getAssociatedTokenAddressSync(
     destUsdcMint,
     feeRecipient,
   );
 
-  // The receive_message instruction is already at the 1232-byte legacy
-  // transaction-size cap with no headroom for a prepended ATA-create.
-  // Make sure the recipient ATA already exists; if not, the caller must
-  // pre-create it (e.g. by sending the recipient a dust SPL transfer
-  // first, or by funding the wallet directly).
+  // receive_message already fills the 1232-byte legacy transaction, leaving
+  // no room to create the account in the same transaction.
   try {
     const ataInfo = await destAdapter.getAccountInfo(
       recipientUsdcAta.toBase58(),
@@ -462,7 +425,6 @@ export async function executeEvmToSolana(
     );
   }
 
-  // Source-token bytes32 = EVM USDC address left-padded.
   let sourceTokenBytes32: Uint8Array;
   try {
     const hex = toBytes32(input.source.usdc).slice(2);
@@ -566,8 +528,6 @@ export async function executeEvmToSolana(
     steps,
   };
 }
-
-// --- helpers ---------------------------------------------------------------
 
 function hexToBytes(hex: `0x${string}` | string): Uint8Array {
   const stripped = hex.startsWith("0x") ? hex.slice(2) : hex;

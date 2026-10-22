@@ -3,12 +3,9 @@
 import dynamic from "next/dynamic";
 
 /**
- * Client-side gate that lazy-loads the playground with `ssr: false`.
- *
- * Why this exists: Next.js disallows `ssr: false` inside server
- * components. So `page.tsx` (server) renders this gate, which is a
- * client component, which dynamically imports the playground tree.
- * The wagmi + IndexedDB-touching code never runs on the server.
+ * Next.js only allows `ssr: false` in a client component, so the server
+ * page renders this gate. wagmi and the IndexedDB code then never run on
+ * the server.
  */
 const Playground = dynamic(
   () => import("./playground").then((m) => ({ default: m.Playground })),

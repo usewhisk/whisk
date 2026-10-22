@@ -1,23 +1,20 @@
 /**
- * Stellar Forwarder hookData encoder.
- *
  * For any CCTP burn whose destination is Stellar, BOTH `mintRecipient`
  * and `destinationCaller` MUST be the `CctpForwarder` contract address.
  * The actual recipient (G/M/C strkey) goes inside `hookData` in the
  * format below; the Forwarder extracts it and forwards the minted USDC
  * atomically.
  *
- * If `mintRecipient` is set to a user account or muxed address, USDC
- * is NOT sent to the Forwarder — funds become permanently stuck and
- * cannot be recovered.
+ * If `mintRecipient` is a user account or muxed address instead, the
+ * USDC never reaches the Forwarder and is stuck for good.
  *
  * Layout (per Circle's Stellar CCTP spec):
  *
- *   bytes  0–23  reserved (zero-filled magic, Circle uses for versioning)
- *   bytes 24–27  hook data version (u32 BE, currently `0`)
- *   bytes 28–31  forwardRecipient length L (u32 BE)
- *   bytes 32..   forwardRecipient encoded as UTF-8 of the strkey
- *   bytes 32+L.. optional integrator payload (omit if unused)
+ *   bytes  0..23  reserved (zero-filled magic, Circle uses for versioning)
+ *   bytes 24..27  hook data version (u32 BE, `0`)
+ *   bytes 28..31  forwardRecipient length L (u32 BE)
+ *   bytes 32..    forwardRecipient encoded as UTF-8 of the strkey
+ *   bytes 32+L..  optional integrator payload (omit if unused)
  */
 import { isValidStellarStrkey } from "./strkey.js";
 import { InvalidInputError } from "../errors.js";
@@ -29,14 +26,11 @@ const PAYLOAD_OFFSET = 32;
 const HOOK_DATA_VERSION = 0;
 
 /**
- * Build the hookData buffer for a CCTP Forwarder burn message that
- * routes USDC to a Stellar recipient.
- *
  * @param forwardRecipientStrkey - Stellar strkey of the final recipient
  *   (G…, C…, or M… address). The Forwarder will atomically transfer
  *   minted USDC to this address after the on-chain mint.
  * @param integratorPayload - Optional extra bytes appended after the
- *   strkey. Whisk doesn't use this today.
+ *   strkey. Whisk doesn't use it.
  * @returns 0x-prefixed hex string ready for the EVM/Solana burn call.
  */
 export function buildStellarForwarderHookData(
@@ -55,19 +49,15 @@ export function buildStellarForwarderHookData(
   const total = PAYLOAD_OFFSET + recipientBytes.length + payloadLength;
   const buf = new Uint8Array(total);
 
-  // bytes 0–23: reserved, zero-filled (Uint8Array is already zero).
+  // The reserved bytes are left as the zeros Uint8Array starts with.
   void RESERVED_MAGIC_LENGTH;
 
-  // bytes 24–27: version (u32 BE).
   writeU32BE(buf, VERSION_OFFSET, HOOK_DATA_VERSION);
 
-  // bytes 28–31: strkey byte length (u32 BE).
   writeU32BE(buf, LENGTH_OFFSET, recipientBytes.length);
 
-  // bytes 32..32+L-1: strkey UTF-8 bytes.
   buf.set(recipientBytes, PAYLOAD_OFFSET);
 
-  // bytes 32+L..: optional integrator payload.
   if (integratorPayload && integratorPayload.length > 0) {
     buf.set(integratorPayload, PAYLOAD_OFFSET + recipientBytes.length);
   }

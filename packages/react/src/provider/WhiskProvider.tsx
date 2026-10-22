@@ -49,16 +49,12 @@ export type WhiskProviderProps = {
 };
 
 /**
- * Root provider for every Whisk widget and hook.
+ * Root provider for every Whisk widget and hook. Each wallet ecosystem is
+ * mounted only when its factory is in `config.wallets`. An outer
+ * `WagmiProvider` or `QueryClientProvider` is reused rather than replaced.
  *
- * Composes wagmi (EVM) + Wallet Standard via `@solana/wallet-adapter-react`
- * (Solana) + TanStack Query around the engine. Each ecosystem is mounted
- * only when its factory is present in `config.wallets`, so EVM-only apps
- * don't pay for the Solana tree and vice versa.
- *
- * When an outer `WagmiProvider` or `QueryClientProvider` is already
- * mounted, this provider detects and reuses them — host-app contexts
- * always win.
+ * The engine is created once on mount; later changes to `config` do not
+ * reach it.
  */
 export function WhiskProvider({
   config,
@@ -81,7 +77,7 @@ export function WhiskProvider({
         appLabel: config.appLabel,
         inflightStore: config.inflightStore ?? createBrowserInflightStore(),
       }),
-    // Engine config is intentionally frozen for the provider's lifetime.
+    // Built once per mount on purpose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -102,9 +98,7 @@ export function WhiskProvider({
   const starknetConfig =
     (starknetFactory?.config as StarknetConfig | undefined) ?? undefined;
 
-  // `useContext` is a hook — call it unconditionally so its slot in the
-  // call tree is stable. `useQueryClient` throws when no provider is in
-  // scope, so wrap it in try/catch.
+  // `useQueryClient` throws when no provider is in scope.
   const outerWagmiConfig = useContext(WagmiContext);
   const hasOuterWagmi = !!outerWagmiConfig;
 
@@ -156,8 +150,6 @@ export function WhiskProvider({
     </div>
   );
 
-  // Starknet wallet tree — get-starknet-core is a plain kit, wrapped in
-  // our own React context.
   if (starknetConfig) {
     inner = (
       <StarknetWalletProvider config={starknetConfig}>
@@ -166,8 +158,6 @@ export function WhiskProvider({
     );
   }
 
-  // Stellar wallet tree — wraps the existing inner. The kit is a plain
-  // class, not a provider; we surface its state via React context.
   if (stellarConfig) {
     inner = (
       <StellarWalletProvider config={stellarConfig}>
@@ -176,9 +166,8 @@ export function WhiskProvider({
     );
   }
 
-  // Solana wallet tree — wraps the existing inner. Modern Solana wallets
-  // advertise via Wallet Standard, so an empty `wallets={[]}` is correct
-  // and avoids dragging in per-wallet bundles.
+  // Solana wallets announce themselves through Wallet Standard, so no
+  // per-wallet adapters are bundled.
   if (solanaConfig) {
     inner = (
       <ConnectionProvider endpoint={solanaConfig.endpoint}>

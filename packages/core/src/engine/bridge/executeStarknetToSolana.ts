@@ -1,9 +1,6 @@
 /**
- * Starknet → Solana bridge executor.
- *
- * Starknet source: approve + deposit_for_burn multicall (mintRecipient =
- * recipient's USDC ATA on Solana, packed as u256). Iris attests. Destination
- * Solana wallet signs `receive_message` directly to the recipient ATA.
+ * Starknet to Solana bridge. The burn names the recipient's USDC account,
+ * and the Solana wallet signs `receive_message` once Iris attests.
  */
 import { attestationPolling } from "./polling.js";
 import { PublicKey } from "@solana/web3.js";
@@ -81,8 +78,8 @@ export async function executeStarknetToSolana(
     recipientAddress: input.recipientAddress,
   };
 
-  // mintRecipient = recipient's USDC ATA on Solana (CCTP V2 Solana
-  // enforces recipient_token_account.key() == mint_recipient).
+  // Solana's receive_message requires the mintRecipient to be the USDC
+  // token account, not the wallet.
   let recipientUsdcAta: PublicKey;
   try {
     recipientUsdcAta = getAssociatedTokenAddressSync(
@@ -207,7 +204,6 @@ export async function executeStarknetToSolana(
   steps[1] = { name: "burn", state: "success", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
 
-  // Iris poll.
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);
   let message: IrisMessage | null;
@@ -258,7 +254,6 @@ export async function executeStarknetToSolana(
   steps[2] = { name: "fetchAttestation", state: "success" };
   listeners?.onStep?.(steps[2]);
 
-  // Solana receive — same flow as EVM→Solana.
   const destAdapter = input.destinationAdapter;
   try {
     const cluster = await destAdapter.getCluster();
@@ -333,7 +328,6 @@ export async function executeStarknetToSolana(
     feeRecipient,
   );
 
-  // Source-token bytes32 = Starknet USDC felt zero-extended.
   let sourceTokenBytes32: Uint8Array;
   try {
     const usdcFelt = feltToBigInt(input.source.usdc as StarknetFelt);

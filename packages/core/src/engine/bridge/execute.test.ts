@@ -81,7 +81,6 @@ describe("executeBridge — forwarder happy path", () => {
       expect(mint?.state).toBe("success");
       expect(mint?.forwarded).toBe(true);
     }
-    // Step order observed: approve → burn → fetchAttestation → mint.
     expect(events.map((e) => `${e.name}:${e.state}`)).toEqual([
       "approve:pending",
       "approve:success",

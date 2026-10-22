@@ -1,12 +1,3 @@
-/**
- * Same-chain Solana SPL transfer — verified with a mock adapter that
- * records the instructions submitted. We test:
- *   - 2-instruction shape (ATA-idempotent create + transferChecked)
- *   - SPL Token program target
- *   - Cluster mismatch produces a clean failure
- *   - Invalid recipient address rejected pre-flight (no wallet prompt)
- *   - confirmTransaction failure surfaces correctly
- */
 import { describe, expect, it } from "vitest";
 import { Keypair } from "@solana/web3.js";
 import { Solana, SolanaDevnet, type SolanaInstruction } from "@usewhisk/cctp";
@@ -73,7 +64,7 @@ describe("executeSameChainSolanaSend", () => {
     }
 
     expect(submitted).toHaveLength(2);
-    // Second instruction is the actual transfer to the SPL Token program.
+    // The first creates the recipient's account; the second transfers.
     expect(submitted[1]?.programId.toBase58()).toBe(
       TOKEN_PROGRAM_ID.toBase58(),
     );

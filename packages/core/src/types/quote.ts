@@ -39,7 +39,6 @@ export type Quote = {
   amountIn: string;
   /** What the recipient receives at least (display "Recipient gets"). */
   amountOut: string;
-  /** The amount burned on the source chain. */
   amountBurned: string;
   token: Token;
   fees: FeeBreakdown;

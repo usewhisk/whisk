@@ -13,22 +13,17 @@ export type FieldBoxProps = Omit<
   "size"
 > & {
   label: ReactNode;
-  /** Optional content rendered after the input (token picker, paste button, etc.). */
+  /** Rendered after the input, such as a token picker or paste button. */
   suffix?: ReactNode;
   /** Helper text shown below the field. */
   help?: ReactNode;
-  /** Error message — when set, the field is rendered in the invalid state. */
+  /** When set, the field renders as invalid and the message replaces `help`. */
   error?: ReactNode;
-  /** Visual variant — `"amount"` enlarges the input for amount entry. */
+  /** `"amount"` enlarges the input; `"mono"` uses the monospace font. */
   variant?: "default" | "amount" | "mono";
 };
 
-/**
- * Labelled input with a built-in suffix slot, optional help text, and
- * an error state. Themes via the `whisk-fieldbox` class system —
- * `--whisk-input` / `--whisk-border` track the active theme so the
- * field reads correctly in light / dark / preset modes.
- */
+/** Labelled input with a suffix slot, help text, and an error state. */
 export const FieldBox = forwardRef<HTMLInputElement, FieldBoxProps>(
   function FieldBox(
     { label, suffix, help, error, variant = "default", className, ...rest },

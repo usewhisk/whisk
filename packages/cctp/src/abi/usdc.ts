@@ -1,5 +1,5 @@
 /**
- * USDC (FiatTokenV2) ABI — only what Whisk needs.
+ * The parts of the USDC (FiatTokenV2) ABI that Whisk needs.
  *
  * Read: balanceOf, allowance, decimals, nonces, DOMAIN_SEPARATOR.
  * Write: approve, transfer, permit (EIP-2612).

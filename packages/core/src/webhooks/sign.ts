@@ -1,11 +1,10 @@
 /**
- * Webhook signing + verification using HMAC-SHA256 over the canonical
- * Stripe-style signed string: `${timestamp}.${rawBody}`. Including the
- * timestamp inside the HMAC closes the same-body replay window the timestamp
- * header alone can't.
+ * HMAC-SHA256 over the Stripe-style string `${timestamp}.${rawBody}`. Signing
+ * the timestamp too stops a replay of the same body with a fresh timestamp
+ * header.
  *
- * Runtime-agnostic — uses Web Crypto (`globalThis.crypto.subtle`), available
- * in Node 18+, Deno, Bun, Cloudflare Workers, Vercel Edge / Fluid Compute.
+ * Uses Web Crypto (`globalThis.crypto.subtle`), so it runs on Node 18+, Deno,
+ * Bun, Cloudflare Workers and Vercel's edge and Fluid runtimes.
  */
 import { ConfigError } from "../errors/errors.js";
 
@@ -13,16 +12,15 @@ import { ConfigError } from "../errors/errors.js";
 export const WHISK_SIGNATURE_HEADER = "x-whisk-signature";
 /** Lower-cased HTTP header that carries the signed timestamp (ms epoch). */
 export const WHISK_TIMESTAMP_HEADER = "x-whisk-timestamp";
-/** Current envelope version. Bump if the signing scheme changes. */
+/** Bump if the signing scheme changes. */
 export const WHISK_WEBHOOK_VERSION = "v1";
 
-/** Default replay tolerance window: 5 minutes. */
+/** Replay window: 5 minutes. */
 export const DEFAULT_TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
 
 /**
- * The signed envelope. The payload is whatever the merchant chose to send;
- * Whisk doesn't impose a shape so the same primitives work for transfer
- * receipts, refund confirmations, and any custom webhook a merchant builds.
+ * The payload has no fixed shape, so the same helpers serve transfer
+ * receipts, refund confirmations, and any custom webhook.
  */
 export type WebhookEnvelope<T = unknown> = {
   version: typeof WHISK_WEBHOOK_VERSION;
@@ -32,27 +30,24 @@ export type WebhookEnvelope<T = unknown> = {
 };
 
 export type SignWebhookOptions = {
-  /** Override the timestamp (testing / deterministic generation). */
+  /** Fixed timestamp, for tests. */
   timestamp?: number;
 };
 
 export type SignWebhookResult = {
-  /** Serialized JSON body — POST this verbatim. */
+  /** Serialized JSON body. POST it byte for byte. */
   body: string;
   /** Hex-encoded HMAC-SHA256 over `${timestamp}.${body}`. */
   signature: string;
   /** Timestamp embedded in both the envelope and the `x-whisk-timestamp` header. */
   timestamp: number;
-  /** Ready-to-spread headers for `fetch` / `node:http` / etc. */
+  /** Headers to spread into `fetch`, `node:http` and the like. */
   headers: Record<string, string>;
 };
 
 /**
- * Sign a payload for outgoing delivery.
- *
- * Returns the serialized body, the hex signature, and a `headers` object
- * with `content-type`, `x-whisk-signature`, `x-whisk-timestamp` already
- * filled in.
+ * Returns the body, the hex signature, and `headers` with `content-type`,
+ * `x-whisk-signature` and `x-whisk-timestamp` filled in.
  */
 export async function signWebhook<T>(
   payload: T,
@@ -82,7 +77,7 @@ export async function signWebhook<T>(
   };
 }
 
-/** Why a webhook verification failed. UI-safe error codes. */
+/** Safe to show in a UI. */
 export type WebhookVerifyError =
   | "missing_signature"
   | "missing_timestamp"
@@ -95,7 +90,7 @@ export type WebhookVerifyError =
 export type VerifyWebhookOptions = {
   /** Allowed clock skew between sender and receiver, in ms. Default 5 min. */
   toleranceMs?: number;
-  /** Override "now" — useful for deterministic tests. */
+  /** Fixed "now", for tests. */
   now?: number;
 };
 
@@ -104,16 +99,13 @@ export type WebhookVerifyResult<T = unknown> =
   | { ok: false; reason: WebhookVerifyError };
 
 /**
- * Verify an incoming webhook.
+ * - `rawBody` must be the exact bytes the sender signed: read the request
+ *   body before any JSON parsing.
+ * - `headers` takes the shapes Node http and Fetch return (string,
+ *   string[], or undefined). Lookup is case-insensitive.
  *
- * - `rawBody` MUST be the exact bytes the sender hashed — read the request
- *   body once, before any JSON parsing.
- * - `headers` accepts the mixed shape Node http / Fetch APIs return (string,
- *   string[], or undefined). Header lookup is case-insensitive.
- *
- * On success the parsed envelope and its payload are returned alongside
- * `ok: true`. On any failure a string `reason` describes the failure mode —
- * no thrown exceptions, so handlers can branch cleanly on the code.
+ * Failures come back as `{ ok: false, reason }` rather than thrown. Throws
+ * only on an empty secret.
  */
 export async function verifyWebhook<T = unknown>(
   rawBody: string,
@@ -158,8 +150,8 @@ export async function verifyWebhook<T = unknown>(
     return { ok: false, reason: "malformed_envelope" };
   }
   if (env.timestamp !== headerTimestamp) {
-    // Body and header must agree — otherwise a forwarder could swap one
-    // without invalidating the HMAC of the other.
+    // The replay window was checked against the header, so the envelope's
+    // own timestamp must be the same one.
     return { ok: false, reason: "timestamp_out_of_range" };
   }
   if (!("payload" in env)) {
@@ -182,8 +174,7 @@ function readHeader(
   headers: Record<string, string | string[] | undefined>,
   name: string,
 ): string | undefined {
-  // HTTP headers are case-insensitive. Node http lower-cases incoming names;
-  // some frameworks preserve original casing. Walk keys once for a match.
+  // Node http lower-cases incoming names; some frameworks keep the casing.
   const lower = name.toLowerCase();
   for (const k of Object.keys(headers)) {
     if (k.toLowerCase() === lower) {
@@ -228,13 +219,8 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 /**
- * Constant-time hex string equality. Returns `false` immediately on length
- * mismatch; otherwise XORs every byte so the runtime is independent of where
- * the first divergence falls.
- *
- * We compare hex (not raw bytes) because both sides arrive as strings and
- * decoding to bytes first would add allocation noise without changing the
- * timing guarantee.
+ * Constant time for equal lengths: every character is compared, so timing
+ * does not reveal where the first difference falls.
  */
 function timingSafeHexEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;

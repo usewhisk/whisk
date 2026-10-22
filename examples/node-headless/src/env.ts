@@ -1,6 +1,6 @@
 /**
- * Centralized env-var lookup so every script fails the same way when
- * something is missing. Throws at module load — runs once per script.
+ * Each script calls `env.required` for what it needs, so a missing variable
+ * fails with the same message everywhere.
  */
 
 function required(name: string): string {
@@ -19,10 +19,9 @@ function optional(name: string): string | undefined {
 }
 
 export const env = {
-  // For send.ts, payroll.ts, refund.ts — the merchant's signing key.
+  // The merchant's signing key, used by send.ts, payroll.ts and refund.ts.
   privateKey: optional("PRIVATE_KEY") as `0x${string}` | undefined,
 
-  // For webhook scripts
   webhookSecret: optional("WHISK_WEBHOOK_SECRET"),
   webhookEndpoint: optional("WHISK_WEBHOOK_ENDPOINT"),
 

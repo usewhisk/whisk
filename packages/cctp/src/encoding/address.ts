@@ -3,10 +3,7 @@
  *
  * CCTP uses 32-byte (`bytes32`) values for `mintRecipient` and
  * `destinationCaller` so it can carry both 20-byte EVM addresses and
- * 32-byte non-EVM addresses.
- *
- * v1: EVM only. Future ecosystems (Solana, Starknet, Stellar) will
- * add their own encoders here.
+ * 32-byte non-EVM addresses. The encoders here are EVM only.
  */
 
 import type { Address } from "../chains/types.js";
@@ -34,8 +31,8 @@ export class InvalidBytes32Error extends InvalidInputError {
  *
  *   0xabcd...1234  →  0x000000000000000000000000abcd...1234
  *
- * Output is lowercase. Input checksumming is preserved if you call
- * `getAddress(fromBytes32(value))` later.
+ * Output is lowercase; `getAddress(fromBytes32(value))` restores the
+ * checksum.
  */
 export function toBytes32(address: Address | string): `0x${string}` {
   if (!ADDRESS_REGEX.test(address)) {
@@ -75,9 +72,6 @@ export function tryFromBytes32(value: string): Address | undefined {
   }
 }
 
-/**
- * Validate that a string is a 20-byte hex EVM address.
- */
 export function isAddress(value: string): value is Address {
   return ADDRESS_REGEX.test(value);
 }

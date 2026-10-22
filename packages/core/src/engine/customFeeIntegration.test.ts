@@ -1,8 +1,3 @@
-/**
- * End-to-end customFee wiring — verifies the engine surfaces the
- * merchant-fee entry in quotes and submits the extra USDC transfer in
- * sendCalls.
- */
 import { beforeEach, describe, expect, it } from "vitest";
 import type { IrisMessage } from "@usewhisk/cctp";
 import { Base } from "@usewhisk/cctp";

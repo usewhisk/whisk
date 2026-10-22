@@ -1,14 +1,8 @@
 /**
- * Wallet adapter interface.
- *
- * The engine is signer-agnostic — it builds calldata / instructions
- * and hands them to an adapter to sign and submit. Each ecosystem has
- * its own adapter shape (EVM, Solana); the engine narrows by `kind`
- * before reaching for ecosystem-specific fields.
- *
- * Reference implementations:
- *   - EVM    `useEvmAdapter` in `@usewhisk/react` (wraps wagmi)
- *   - Solana `useSolanaAdapter` in `@usewhisk/react` (wraps Wallet Standard)
+ * The engine builds calls and hands them to an adapter to sign and submit.
+ * Each ecosystem has its own adapter shape, narrowed by `kind`. The React
+ * package ships reference implementations, such as `useEvmAdapter` (wagmi)
+ * and `useSolanaAdapter` (Wallet Standard).
  */
 
 import type {
@@ -17,14 +11,8 @@ import type {
   StellarInvocation,
 } from "@usewhisk/cctp";
 
-/* --------------------------------------------------------------------- *
- *  EVM
- * --------------------------------------------------------------------- */
-
 export type EvmCall = {
-  /** Target contract address. */
   to: `0x${string}`;
-  /** ABI-encoded calldata. */
   data: `0x${string}`;
   /** Native value in wei. CCTP calls always pass `0n`. */
   value: bigint;
@@ -62,43 +50,31 @@ export type CallReceipt = {
 };
 
 /**
- * EVM wallet adapter. Implementations are responsible for:
- *   - Surfacing the connected account address.
- *   - Reading the live chainId (the wallet, not the dapp, is the source
- *     of truth).
- *   - Switching chains when the engine asks.
- *   - Submitting one or more EVM calls. Batching via EIP-5792 is a
- *     SHOULD, not a MUST — sequential single-tx submission is fine.
- *   - Waiting for receipts.
- *   - Translating wallet / RPC failures into Whisk's typed error
- *     hierarchy. The engine will not re-classify errors.
+ * Batching through EIP-5792 is optional; sequential submission is fine.
+ * Implementations translate wallet and RPC failures into Whisk's typed
+ * errors, since the engine does not re-classify them.
  */
 export interface EvmAdapter {
   readonly kind: "evm";
 
-  /** Currently connected account address. */
   readonly address: `0x${string}`;
 
   /**
-   * Live chainId from the wallet. The engine calls this before each
-   * write to confirm the wallet hasn't drifted off-chain.
+   * Read from the wallet, which is the source of truth. The engine checks
+   * it before each write in case the wallet switched chains.
    */
   getChainId(): Promise<number>;
 
   /**
-   * Ensure the wallet is on `chainId`. Resolves when the wallet
-   * confirms; rejects with `WrongChainError` if the user declines or
-   * the chain isn't configured in the wallet.
+   * Rejects with `WrongChainError` if the user declines or the chain isn't
+   * configured in the wallet.
    */
   switchChain(chainId: number): Promise<void>;
 
   /**
-   * Submit one or more calls. Atomic batching via EIP-5792 is
-   * preferred when available; otherwise calls are submitted
-   * sequentially in array order and the implementation MUST wait for
-   * each receipt before submitting the next.
-   *
-   * Rejection contract: throw a `WhiskError` subclass.
+   * Atomic batching through EIP-5792 is preferred. Without it, calls go in
+   * array order and each receipt must land before the next is submitted.
+   * Throws a `WhiskError` subclass.
    */
   sendCalls(
     calls: EvmCall[],
@@ -106,30 +82,20 @@ export interface EvmAdapter {
   ): Promise<SendCallsResult>;
 
   /**
-   * Wait for a transaction receipt. Implementations decide the
-   * timeout; the engine treats a timed-out wait as `NetworkError`.
+   * Implementations decide the timeout; the engine treats a timed-out wait
+   * as `NetworkError`.
    */
   waitForReceipt(hash: `0x${string}`): Promise<CallReceipt>;
 }
 
-/* --------------------------------------------------------------------- *
- *  Solana
- * --------------------------------------------------------------------- */
-
 /**
- * Ephemeral signing material the engine hands to the adapter alongside
- * the connected wallet. CCTP burns require a fresh keypair for the
- * `message_sent_event_data` account; the engine generates it and the
- * adapter signs the transaction with both this keypair and the
- * connected wallet.
- *
- * Use a plain `{ publicKey, secretKey }` shape to avoid coupling to
- * any specific Solana keypair implementation; node-headless adapters
- * can supply `@solana/web3.js` `Keypair`s and react adapters can pass
- * Wallet Standard payloads.
+ * A CCTP burn on Solana needs a fresh keypair for the
+ * `message_sent_event_data` account. The engine generates it and the adapter
+ * signs with it alongside the connected wallet. The plain shape avoids
+ * coupling to any one Solana keypair type.
  */
 export type SolanaExtraSigner = {
-  /** Base58-encoded pubkey. */
+  /** Base58. */
   publicKey: string;
   /** 64-byte ed25519 secret key. */
   secretKey: Uint8Array;
@@ -137,179 +103,102 @@ export type SolanaExtraSigner = {
 
 export type SolanaTransactionReceipt = {
   status: "success" | "reverted";
-  /** Slot the transaction landed in. */
   slot: bigint;
 };
 
-/**
- * Solana wallet adapter. The engine builds the program instructions
- * via `@usewhisk/cctp`'s `buildSolanaBurnIntent` / `buildSolanaReceiveIntent`
- * and hands them off here.
- *
- * Unlike EVM, every Solana adapter call funnels into a single
- * `sendTransaction` — Solana's transaction model supports multiple
- * instructions per tx natively. CCTP burns need both the user signer
- * AND a fresh ephemeral keypair (for the `message_sent_event_data`
- * account); the engine provides the ephemeral keypair in
- * `extraSigners`.
- */
 export interface SolanaAdapter {
   readonly kind: "solana";
 
-  /** Currently connected account address — base58 pubkey. */
+  /** Base58 pubkey. */
   readonly address: string;
 
-  /** Live cluster (`mainnet-beta` or `devnet`). */
   getCluster(): Promise<"mainnet-beta" | "devnet">;
 
   /**
-   * Sign and submit a transaction. The implementation is responsible
-   * for fetching a recent blockhash, setting the connected wallet as
-   * fee payer, partial-signing with each `extraSigners` entry, then
-   * adding the user's signature.
+   * The implementation fetches a recent blockhash, sets the connected wallet
+   * as fee payer, partial-signs with each `extraSigners` entry, then adds
+   * the user's signature.
    */
   sendTransaction(
     instructions: SolanaInstruction[],
     options?: { extraSigners?: SolanaExtraSigner[] },
   ): Promise<{ signature: string }>;
 
-  /**
-   * Wait for the transaction to land at the wallet's preferred
-   * commitment (typically `confirmed`).
-   */
+  /** Waits at the wallet's preferred commitment, usually `confirmed`. */
   confirmTransaction(signature: string): Promise<SolanaTransactionReceipt>;
 
   /**
-   * Read raw account data for a base58 pubkey. Returns `null` if the
-   * account doesn't exist. The engine uses this for receive-side state
-   * reads — most notably parsing the TokenMessenger's `fee_recipient`
-   * field that `receive_message` requires as a remaining account.
+   * Returns `null` if the account doesn't exist. The engine reads the
+   * TokenMessenger's `fee_recipient` through this, since `receive_message`
+   * needs it as a remaining account.
    */
   getAccountInfo(pubkey: string): Promise<{ data: Uint8Array } | null>;
 }
 
-/* --------------------------------------------------------------------- *
- *  Stellar
- * --------------------------------------------------------------------- */
-
 export type StellarTransactionReceipt = {
   status: "success" | "reverted";
-  /** Soroban ledger sequence the transaction landed in. */
   ledger: number;
 };
 
 /**
- * Stellar wallet adapter. The engine builds Soroban contract
- * invocations via `@usewhisk/cctp`'s `buildStellarBurnIntent` /
- * `buildStellarMintIntent` (and the same-chain USDC SAC transfer
- * helper), then hands the bare invocation to the adapter. The adapter
- * is responsible for:
- *   - Picking the right Stellar RPC for the network
- *   - Assembling the operation into a `TransactionBuilder` envelope
- *   - Simulating to get the resource footprint + fees
- *   - Signing with the connected wallet
- *   - Submitting via `sendTransaction`
- *   - Polling `getTransaction` until SUCCESS / FAILED
- *
- * Errors should be converted to `WhiskError` via `toWhiskError` so the
- * engine surfaces typed categories.
+ * The engine hands over bare Soroban invocations. The adapter picks the RPC,
+ * builds the envelope, simulates for the footprint and fees, signs, submits
+ * and polls `getTransaction` until it succeeds or fails. Errors go through
+ * `toWhiskError` so the engine sees typed categories.
  */
 export interface StellarAdapter {
   readonly kind: "stellar";
 
-  /** Connected wallet address — typically a G… Ed25519 pubkey. */
+  /** Usually a G... strkey. */
   readonly address: string;
 
-  /** Live Stellar network the wallet is on (`public` or `testnet`). */
   getNetwork(): Promise<"public" | "testnet">;
 
   /**
-   * Submit one or more Soroban contract invocations. Each invocation
-   * lands as its own Soroban transaction (Soroban allows one
-   * InvokeHostFunctionOp per tx). The adapter MUST wait for each
-   * transaction to land before submitting the next so allowance and
-   * state ordering is preserved (e.g. `approve` → `deposit_for_burn`).
-   *
-   * Returns hashes in submission order; the engine treats the LAST
-   * entry as the "primary" transaction for downstream effects (Iris
-   * attestation polling, receipt display).
+   * Soroban allows one InvokeHostFunctionOp per transaction, so each
+   * invocation lands on its own. Each must land before the next is
+   * submitted, so an `approve` is in place before the `deposit_for_burn`
+   * that spends it. The engine treats the last hash as the primary one.
    */
   submitInvocation(
     invocations: StellarInvocation[],
   ): Promise<{ hashes: string[] }>;
 
-  /** Wait until the transaction lands or fails. */
   confirmTransaction(hash: string): Promise<StellarTransactionReceipt>;
 
   /**
-   * Current Soroban ledger sequence. The engine uses this to compute
-   * `expiration_ledger` for USDC SAC `approve` calls — Stellar's SAC
-   * requires `live_until_ledger >= current ledger`, so a static `0`
-   * fails. Set short windows (~360 ledgers / 30 min on testnet) to
-   * keep allowances tight.
+   * The engine sets USDC `approve` expiry from this. The SAC requires
+   * `live_until_ledger >= current ledger`, so a static `0` fails.
    */
   getLatestLedger(): Promise<number>;
 }
 
-/* --------------------------------------------------------------------- *
- *  Starknet
- * --------------------------------------------------------------------- */
-
 export type StarknetTransactionReceipt = {
   status: "success" | "reverted";
-  /** Block number the transaction landed in. */
   blockNumber: number;
 };
 
 /**
- * Starknet wallet adapter. Cairo calls funnel through this adapter as
- * `{ contractAddress, entrypoint, calldata }` `StarknetCall` records.
- * The adapter is responsible for:
- *   - Surfacing the connected account address (felt252 hex)
- *   - Reading the live chainId felt (the wallet, not the dapp, is the
- *     source of truth)
- *   - Submitting one or more Cairo calls — atomic multicall is the
- *     preferred mode (Starknet accounts natively support it), but
- *     sequential single-call submission also works
- *   - Waiting for receipts
- *   - Translating wallet / RPC failures into Whisk's typed error
- *     hierarchy
+ * Atomic multicall is preferred, since Starknet accounts support it
+ * natively, but sequential submission also works. Implementations translate
+ * wallet and RPC failures into Whisk's typed errors.
  */
 export interface StarknetAdapter {
   readonly kind: "starknet";
 
-  /** Connected account address — felt252 hex. */
+  /** felt252 hex. */
   readonly address: string;
 
-  /**
-   * Live chainId felt from the wallet. Whisk's engine compares against
-   * the configured chain before each write.
-   */
+  /** Read from the wallet; the engine checks it before each write. */
   getChainId(): Promise<string>;
 
-  /**
-   * Submit one or more Cairo calls. Atomic multicall is preferred —
-   * Starknet accounts can authorize and execute multiple calls in a
-   * single transaction.
-   *
-   * Returns the submitted tx hash(es) in submission order; the engine
-   * treats the LAST entry as the primary transaction.
-   */
+  /** The engine treats the last hash as the primary transaction. */
   submitCalls(calls: StarknetCall[]): Promise<{ hashes: string[] }>;
 
-  /** Wait until the transaction lands or fails. */
   confirmTransaction(hash: string): Promise<StarknetTransactionReceipt>;
 }
 
-/* --------------------------------------------------------------------- *
- *  Public adapter union
- * --------------------------------------------------------------------- */
-
-/**
- * v1 ships `EvmAdapter`, `SolanaAdapter`, `StellarAdapter`, and
- * `StarknetAdapter`. Discriminate on `kind` before reaching for
- * ecosystem-specific fields.
- */
+/** Discriminate on `kind` before reaching for ecosystem-specific fields. */
 export type WhiskAdapter =
   | EvmAdapter
   | SolanaAdapter

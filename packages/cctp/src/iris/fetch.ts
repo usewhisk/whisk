@@ -3,10 +3,11 @@
  *
  * Error mapping:
  *   - 4xx (except 429)        → IrisHttpError (no retry)
- *   - 5xx / 429               → retry, then IrisHttpError
+ *   - 429                     → IrisRateLimitedError (no retry)
+ *   - 5xx                     → retry, then IrisHttpError
  *   - Network failure         → retry, then IrisNetworkError
  *   - Caller-signaled abort   → IrisAbortedError
- *   - Per-request timeout     → IrisAbortedError after retries
+ *   - Per-request timeout     → retry, then IrisNetworkError
  *   - JSON parse failure      → IrisParseError (no retry)
  */
 
@@ -22,11 +23,10 @@ import { defaultIrisLimiter, type IrisLimiter } from "./limiter.js";
 export type FetchJsonOptions = {
   /** Per-request timeout in ms. Default 5000. */
   timeoutMs?: number;
-  /** Total retry budget. Default 3. */
+  /** Retries after the first attempt. Default 3. */
   maxRetries?: number;
   /** Base delay between retries in ms. Backoff multiplies by retry index. */
   baseDelayMs?: number;
-  /** Allow caller-side cancellation. */
   signal?: AbortSignal;
   /** Defaults to the global `fetch`. */
   fetch?: typeof fetch;
@@ -96,12 +96,10 @@ export async function fetchIrisJson<T>(
         throw new IrisRateLimitedError(host, limiter.standDown(host));
       }
 
-      // 4xx (excluding 429) → don't retry; surface immediately.
       if (res.status >= 400 && res.status < 500 && res.status !== 429) {
         throw new IrisHttpError(res.status, url, await safeText(res));
       }
 
-      // 5xx → record + retry.
       lastError = new IrisHttpError(res.status, url, await safeText(res));
     } catch (err) {
       // Parse errors and 4xx HTTP errors bypass the retry loop.
@@ -110,7 +108,7 @@ export async function fetchIrisJson<T>(
       if (err instanceof IrisHttpError) {
         if (err.status < 500 && err.status !== 429) throw err;
       }
-      // Disambiguate "caller aborted" from "per-request timeout fired."
+      // A timeout aborts too, but only the caller's signal stops the retries.
       if (signal?.aborted) throw new IrisAbortedError("Aborted by caller");
       lastError = err;
     } finally {

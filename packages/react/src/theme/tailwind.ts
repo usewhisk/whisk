@@ -1,13 +1,7 @@
 /**
- * Optional Tailwind preset for Whisk.
- *
- * Importing this and adding it to your `tailwind.config.{js,ts}` `presets`
- * array maps Whisk's CSS variables to Tailwind colour / radius / font
- * tokens. After the preset is applied you can write `bg-whisk-primary`,
- * `text-whisk-fg-muted`, `rounded-whisk` etc. directly in your JSX.
- *
- * The CSS variables themselves still come from the default `styles.css`
- * — the preset is purely a Tailwind ergonomic layer on top.
+ * Optional Tailwind preset. Add it to `presets` in your Tailwind config to
+ * write `bg-whisk-primary`, `text-whisk-fg-muted`, `rounded-whisk` and so on.
+ * The CSS variables still come from `styles.css`.
  *
  * @example
  *   // tailwind.config.ts
@@ -31,13 +25,9 @@ export type WhiskThemeOptions = {
 };
 
 /**
- * Whisk Tailwind preset. Returns a Tailwind config fragment with colour,
- * radius, and font-family tokens wired to Whisk's CSS variables.
- *
- * Tokens are emitted as `var(--whisk-...)` rather than HSL channels — the
- * CSS variables are stored as hex in `styles.css`, so opacity composition
- * inside Tailwind classes uses `color-mix()` instead of the channel/alpha
- * pattern shadcn relies on.
+ * Colours are emitted as `var(--whisk-...)`, not HSL channels, because the
+ * variables hold hex values. Opacity has to come from `color-mix()` rather
+ * than the channel/alpha pattern shadcn uses.
  */
 export function whiskTheme(options: WhiskThemeOptions = {}) {
   const prefix = options.prefix ?? "whisk";

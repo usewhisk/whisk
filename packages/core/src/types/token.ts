@@ -1,4 +1,4 @@
-/** Token aliases App Kit recognises. For other tokens, pass a contract address string. */
+/** Token symbols App Kit recognises. */
 export type Token =
   | "USDC"
   | "EURC"

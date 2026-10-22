@@ -1,8 +1,3 @@
-/**
- * `feeBearer` defaulting — verifies the engine resolves the public default
- * to `"sender"` and that the resolved config reflects what the engine will
- * actually apply on a bridge.
- */
 import { describe, expect, it } from "vitest";
 import { Base } from "@usewhisk/cctp";
 import type { WhiskConfig } from "../types/config.js";

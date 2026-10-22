@@ -1,3 +1,3 @@
-// Stub for downstream packages that try to import optional Node /
-// React-Native modules. Same trick the React recipes use.
+// Stands in for optional Node and React Native modules that dependencies
+// import but never use in the browser.
 export default {};

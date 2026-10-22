@@ -1,16 +1,8 @@
 /**
- * Lockdown contract for the "Powered by Whisk" badge.
- *
- * The runtime guarantee — that inline `!important` always beats
- * stylesheet `!important` — is a CSS spec rule we trust the browser to
- * enforce. What we DO test here is that the badge source-level commits
- * to the lockdown: every visibility-critical property must use
- * `setProperty(prop, value, "important")`, not the React `style` prop.
- *
- * A bare `style={{ display: "flex" }}` ships without `!important` and
- * loses to any host rule. This test reads the module's TS source and
- * fails if `style.setProperty` isn't applied to every property that
- * controls whether the badge renders.
+ * Inline `!important` beats any stylesheet `!important`, so a host page
+ * cannot hide the badge. React's `style` prop cannot set `!important`, which
+ * is why these tests read the source and check every visibility property
+ * goes through `setProperty(prop, value, "important")`.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -33,8 +25,7 @@ describe("PoweredByWhisk lockdown", () => {
 
   it("commits every visibility-critical property to !important", () => {
     for (const prop of VISIBILITY_PROPS) {
-      // Match `display: "..."` (unquoted JS key) or `"display": "..."`
-      // (quoted key, used for hyphenated CSS names like `pointer-events`).
+      // Hyphenated names like `pointer-events` need a quoted key.
       const unquoted = new RegExp(`(^|\\s)${escape(prop)}:\\s*"[^"]+"`, "m");
       const quoted = new RegExp(`"${escape(prop)}":\\s*"[^"]+"`);
       const found = unquoted.test(SOURCE) || quoted.test(SOURCE);
@@ -54,7 +45,6 @@ describe("PoweredByWhisk lockdown", () => {
   });
 
   it("does not expose an opt-out prop", () => {
-    // `function PoweredByWhisk()` with zero args is the lockdown.
     expect(SOURCE).toMatch(/export function PoweredByWhisk\(\)/);
   });
 });

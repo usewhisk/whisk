@@ -8,14 +8,11 @@ export type Theme = "auto" | "light" | "dark";
 export type EventKind = "state" | "success" | "error" | "info";
 
 export type PlaygroundConfig = {
-  /* Provider-level — drives <WhiskProvider theme=…> */
   theme: Theme;
 
-  /* Engine-level — part of createWhiskConfig. Changing it remounts the
-   * provider (the engine is built once per provider lifetime). */
+  /* The engine reads this once, so changing it remounts the provider. */
   feeBearer: FeeBearer;
 
-  /* Which WhiskSend tabs to show. */
   tabs: ReadonlyArray<"send" | "bridge">;
 };
 
@@ -37,8 +34,6 @@ export type PlaygroundAction =
   | { type: "LOG_EVENT"; event: Omit<PlaygroundEvent, "id" | "at"> }
   | { type: "CLEAR_LOG" };
 
-/* Initial config: sensible defaults. Theme stays "auto" so first
- * paint matches the OS. */
 export const INITIAL_CONFIG: PlaygroundConfig = {
   theme: "auto",
   feeBearer: "sender",
@@ -50,8 +45,6 @@ const INITIAL_STATE: PlaygroundState = {
   events: [],
 };
 
-/* Last N events kept in memory. The log is a debugging aid, not a
- * permanent record; older entries roll off. */
 const MAX_EVENTS = 30;
 
 function reducer(

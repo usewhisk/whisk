@@ -22,7 +22,6 @@ describe("ABIs are valid", () => {
         "0x636374702d666f72776172640000000000000000000000000000000000000000",
       ],
     });
-    // Selector starts the encoded call.
     expect(data).toMatch(/^0x[a-fA-F0-9]+$/);
     expect(data.length).toBeGreaterThan(10);
   });

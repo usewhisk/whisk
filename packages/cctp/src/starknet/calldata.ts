@@ -1,6 +1,4 @@
 /**
- * Starknet calldata serialization helpers.
- *
  * Starknet's `Call` envelope is `{ contractAddress, entrypoint, calldata }`
  * where `calldata` is a flat array of felt252 strings. Cairo types serialize
  * as follows:
@@ -40,13 +38,13 @@ export function feltToString(value: number | bigint | string): string {
  *     pending_word: felt252 (< 31 bytes, big-endian),
  *     pending_word_len: u32 ]
  *
- * Each 31-byte block becomes ONE felt whose value is the big-endian
+ * Each 31-byte block becomes one felt whose value is the big-endian
  * integer of those bytes. The trailing (bytes.length % 31) bytes go
- * into `pending_word` — again as a big-endian integer of exactly that
+ * into `pending_word`, again as a big-endian integer of exactly that
  * many bytes.
  *
- * DO NOT use starknet.js's `byteArray.byteArrayFromString` for this —
- * it treats the input as a UTF-8 string, which mangles raw bytes like
+ * starknet.js's `byteArray.byteArrayFromString` is no substitute: it
+ * treats the input as a UTF-8 string, which mangles raw bytes like
  * CCTP attestation blobs.
  */
 export function bytesToByteArrayFelts(bytes: Uint8Array): string[] {

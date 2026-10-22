@@ -1,12 +1,7 @@
 /**
- * Vue composable that wraps `@usewhisk/core` with Vue's reactivity.
- *
- * Same shape as the React `useWhisk` hook, just driven by `ref` instead
- * of `useReducer`. Demonstrates that Whisk's engine is framework-
- * agnostic — the React package is one client, this is another.
- *
- * The EVM adapter is built on top of the injected browser wallet
- * (`window.ethereum`) via viem. No wagmi / no adapter SDKs required.
+ * Drives `@usewhisk/core` from Vue refs, with the same flow as the React
+ * `useWhisk` hook. The EVM adapter wraps the injected `window.ethereum`
+ * wallet with viem, so no wagmi is needed.
  */
 import { ref, computed, type Ref, type ComputedRef } from "vue";
 import {
@@ -42,13 +37,10 @@ type SendState =
   | { kind: "failed"; error: WhiskError; steps: Step[] };
 
 export type UseWhiskEngineResult = {
-  /** Hex address of the connected EVM wallet, or `null` when disconnected. */
+  /** `null` when no wallet is connected. */
   account: Ref<string | null>;
-  /** Send flow state. Mirrors the React state machine shape. */
   state: Ref<SendState>;
-  /** True between the connect-button click and the wallet handshake. */
   isConnecting: Ref<boolean>;
-  /** Convenience boolean for the UI. */
   isReady: ComputedRef<boolean>;
   connect: () => Promise<void>;
   quote: (input: QuoteInput) => Promise<void>;
@@ -83,10 +75,8 @@ const engine: WhiskEngine = createWhisk({
 });
 
 /**
- * Build a Whisk EvmAdapter from an injected `window.ethereum` provider.
- * The adapter uses viem's `custom()` transport for signing and an HTTP
- * transport for reads (the injected provider is not reliable for
- * receipt polling).
+ * Signs through the injected wallet but polls receipts over the chain's
+ * public RPC, because injected providers are unreliable for polling.
  */
 function makeAdapter(
   provider: EthereumProvider,

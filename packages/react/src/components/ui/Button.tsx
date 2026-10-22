@@ -9,17 +9,13 @@ export type ButtonSize = "sm" | "md";
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
-  /** Optional leading icon — rendered to the left of `children`. */
+  /** Rendered before `children`. */
   iconStart?: ReactNode;
-  /** Optional trailing icon — rendered to the right of `children`. */
+  /** Rendered after `children`. */
   iconEnd?: ReactNode;
 };
 
-/**
- * Base button primitive. Routes every visual property through the
- * `whisk-button` CSS class system so the theme tokens take effect
- * without prop drilling.
- */
+/** Defaults to `type="button"` so it never submits a surrounding form. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
     {

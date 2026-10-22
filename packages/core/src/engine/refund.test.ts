@@ -1,9 +1,3 @@
-/**
- * End-to-end refund — verifies the engine validates input, stamps the
- * Whisk-internal correlation keys (`__refundOfTxHash`, `__refundReason`)
- * onto the result, and dispatches through the same Send / Bridge path
- * as a regular transfer.
- */
 import { beforeEach, describe, expect, it } from "vitest";
 import type { IrisMessage } from "@usewhisk/cctp";
 import { Base } from "@usewhisk/cctp";

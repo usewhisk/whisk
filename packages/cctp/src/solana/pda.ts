@@ -62,7 +62,7 @@ export function deriveSenderAuthority(
 }
 
 /**
- * `remote_token_messenger` PDA — keyed by the **destination domain**
+ * `remote_token_messenger` PDA, keyed by the **destination domain**
  * as its decimal string representation (Circle's convention).
  */
 export function deriveRemoteTokenMessenger(
@@ -75,7 +75,7 @@ export function deriveRemoteTokenMessenger(
   )[0];
 }
 
-/** `local_token` PDA — keyed by the local USDC SPL mint. */
+/** `local_token` PDA, keyed by the local USDC SPL mint. */
 export function deriveLocalToken(
   tokenMessengerMinterProgram: PublicKey,
   mint: PublicKey,
@@ -87,7 +87,7 @@ export function deriveLocalToken(
 }
 
 /**
- * `token_pair` PDA — used on the receive (mint) side to map a
+ * `token_pair` PDA, used on the receive (mint) side to map a
  * (source domain, source token) pair to the local mint. Source token
  * is 32 bytes (left-padded for EVM sources).
  */
@@ -107,7 +107,7 @@ export function deriveTokenPair(
   )[0];
 }
 
-/** `custody` token account PDA — keyed by the local USDC mint. */
+/** `custody` token account PDA, keyed by the local USDC mint. */
 export function deriveCustodyTokenAccount(
   tokenMessengerMinterProgram: PublicKey,
   mint: PublicKey,
@@ -119,7 +119,7 @@ export function deriveCustodyTokenAccount(
 }
 
 /**
- * `denylist_account` PDA — owner-keyed. Burn fails if this PDA exists
+ * `denylist_account` PDA, owner-keyed. Burn fails if this PDA exists
  * with data; the user's denylist record is "absence of data."
  */
 export function deriveDenylistAccount(
@@ -143,7 +143,7 @@ export function deriveMessageTransmitter(
 }
 
 /**
- * `message_transmitter_authority` PDA — keyed by the *receiver*
+ * `message_transmitter_authority` PDA, keyed by the *receiver*
  * program. For CCTP burns, the receiver is the TokenMessengerMinter.
  */
 export function deriveMessageTransmitterAuthority(
@@ -157,9 +157,9 @@ export function deriveMessageTransmitterAuthority(
 }
 
 /**
- * `used_nonce` PDA — message nonce is 32 bytes from a known offset in
- * the raw CCTP message body. The slice is `message[12..44]` per
- * Circle's `Message::NONCE_INDEX` / `Message::SENDER_INDEX` layout.
+ * `used_nonce` PDA, seeded by the 32-byte nonce in the CCTP message
+ * header: `message[12..44]` per Circle's `Message::NONCE_INDEX` /
+ * `Message::SENDER_INDEX` layout.
  */
 export function deriveUsedNonce(
   messageTransmitterProgram: PublicKey,
@@ -177,7 +177,7 @@ export function deriveUsedNonce(
   )[0];
 }
 
-/** `__event_authority` PDA — emitted by Anchor's `#[event_cpi]`. */
+/** `__event_authority` PDA, used by Anchor's `#[event_cpi]`. */
 export function deriveEventAuthority(programId: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync([SEEDS.eventAuthority], programId)[0];
 }

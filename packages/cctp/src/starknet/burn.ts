@@ -19,10 +19,9 @@
  *     hook_data: ByteArray,
  *   )
  *
- * USDC on Starknet behaves like ERC-20 — burn pulls funds via
- * `transferFrom`, so the caller must `approve(TMM, amount)` first. The
- * engine handles that approve invocation; this builder only produces
- * the burn Call.
+ * USDC on Starknet behaves like ERC-20: burn pulls funds via
+ * `transferFrom`, so the caller must `approve(TMM, amount)` first with
+ * `buildStarknetApproveCall`.
  */
 import type { StarknetChain, StarknetFelt } from "../chains/types.js";
 import type { FinalityThreshold } from "../iris/types.js";
@@ -35,7 +34,6 @@ import {
 import { assertStarknetFelt } from "./address.js";
 
 export type StarknetCall = {
-  /** Contract being called — felt-formatted address. */
   contractAddress: StarknetFelt;
   /** Cairo function name (snake_case). */
   entrypoint: string;
@@ -46,12 +44,12 @@ export type StarknetCall = {
 export type BuildStarknetBurnIntentInput = {
   source: StarknetChain;
   destinationDomain: number;
-  /** USDC subunits (6 decimals) — the canonical CCTP amount. */
+  /** USDC subunits (6 decimals), the canonical CCTP amount. */
   amount: bigint;
   /** `maxFee` cap in 6-decimal subunits. */
   maxFee: bigint;
   /**
-   * 32-byte mintRecipient — Starknet packs into a single u256 felt. The
+   * 32-byte mintRecipient, packed by Starknet into a single u256. The
    * caller is responsible for encoding correctly:
    *   - EVM     20-byte address left-padded to 32 bytes
    *   - Solana  recipient USDC ATA pubkey (32 bytes raw)
@@ -147,8 +145,8 @@ export function buildStarknetBurnIntent(
 }
 
 /**
- * Build the USDC SAC `approve` Call. Starknet's USDC follows the
- * standard ERC-20 / SNIP-2 interface: `approve(spender, amount: u256)`.
+ * Starknet's USDC follows the standard ERC-20 / SNIP-2 interface:
+ * `approve(spender, amount: u256)`.
  */
 export function buildStarknetApproveCall(args: {
   source: StarknetChain;

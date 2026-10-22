@@ -10,9 +10,9 @@ export type PaymentAsideProps = {
 };
 
 /**
- * Payment side-rail. All four `<WhiskSend>` props are pinned at this step —
- * the customer can't edit the amount, recipient, or chain. That's the safe
- * default for a checkout: every value comes from your cart, not from input.
+ * Amount, recipient and both chains are locked, so every value comes from
+ * the cart and none from customer input. That is the safe default for a
+ * checkout.
  */
 export function PaymentAside({ totalStr, onPaid }: PaymentAsideProps) {
   return (

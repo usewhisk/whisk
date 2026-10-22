@@ -80,21 +80,19 @@ export type BuildSolanaBurnIntentInput = {
    * EVM addresses are left-padded; Solana addresses pass through.
    */
   mintRecipientBytes32: Uint8Array;
-  /** USDC subunits — caps the protocol + forwarder fees. */
+  /** USDC subunits; caps the protocol + forwarder fees. */
   maxFee: bigint;
-  /** Owner pubkey (signer). */
   owner: PublicKey;
   /** Fresh keypair pubkey for `message_sent_event_data`. */
   messageSentEventDataKey: PublicKey;
   /** User's USDC ATA on the source chain. */
   ownerUsdcAta: PublicKey;
-  /** Optional `destinationCaller` (bytes32) — defaults to "any caller". */
+  /** `destinationCaller` as bytes32. Defaults to any caller. */
   destinationCallerBytes32?: Uint8Array;
   /**
-   * Optional `hookData`. Pass non-empty bytes (e.g. the canonical
-   * `cctp-forward` magic) to use `deposit_for_burn_with_hook`.
-   * Whisk doesn't run Solana through the Forwarder today; leave
-   * unset for the plain burn.
+   * Non-empty bytes (the `cctp-forward` hookData, or the Stellar
+   * Forwarder's) select `deposit_for_burn_with_hook`. Leave unset for
+   * the plain burn.
    */
   hookData?: Uint8Array;
   /** Take it from the fee tier. */
@@ -105,7 +103,6 @@ export type SolanaInstruction = {
   programId: PublicKey;
   keys: AccountMeta[];
   data: Buffer;
-  /** Diagnostic — same shape as EVM's `EvmCall` for log lines. */
   ecosystem: "solana";
 };
 
@@ -176,7 +173,6 @@ export function buildSolanaBurnIntent(
   const mtProgram = new PublicKey(input.source.messageTransmitter);
   const burnTokenMint = new PublicKey(input.source.usdc);
 
-  // PDAs
   const senderAuthorityPda = deriveSenderAuthority(tmmProgram);
   const denylistAccount = deriveDenylistAccount(tmmProgram, input.owner);
   const messageTransmitter = deriveMessageTransmitter(mtProgram);
@@ -214,9 +210,8 @@ export function buildSolanaBurnIntent(
     { pubkey: tmmProgram, isSigner: false, isWritable: false },
   ];
 
-  // Encode params. Field order matches Rust DepositForBurnParams /
-  // DepositForBurnWithHookParams exactly — repr(C), so the layout is
-  // stable across the two variants.
+  // Field order matches Rust DepositForBurnParams and
+  // DepositForBurnWithHookParams; the hook variant only appends hook_data.
   const writer = createWriter(96);
   writeU64LE(writer, input.amount);
   writeU32LE(writer, input.destinationDomain);
@@ -265,10 +260,6 @@ export function burnIntentToTransactionInstruction(
   });
 }
 
-// Re-export for tests so consumers can inspect the suppressing-default
-// destinationCaller pubkey without recomputing it.
 export { ANY_DESTINATION_CALLER as SOLANA_ANY_DESTINATION_CALLER };
 
-// `finalize` is imported by the tests; re-export the local symbol so
-// the test file can build raw writers without re-importing borsh.
 export { finalize as __finalizeBorshWriter };

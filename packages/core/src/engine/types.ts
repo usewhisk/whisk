@@ -1,9 +1,3 @@
-/**
- * Public engine types for `@usewhisk/core`.
- *
- * v1 surface — Send (same-chain), Bridge via CCTP V2 Forwarder, Refund.
- * Gateway / Swap / Unified Balance are deferred to roadmap.
- */
 import type { Chain } from "../types/chain.js";
 import type { Token } from "../types/token.js";
 import type { Quote } from "../types/quote.js";
@@ -36,7 +30,7 @@ export type QuoteParams = {
   sourceChain: Chain;
   destinationChain: Chain;
   recipient: ResolvedRecipient;
-  /** Human-readable amount (e.g. `"1.50"`). */
+  /** Human amount, e.g. `"1.50"`. */
   amount: string;
   adapter: WhiskAdapter;
   /**
@@ -45,7 +39,7 @@ export type QuoteParams = {
    * wallet signs it.
    */
   destinationAdapter?: WhiskAdapter;
-  /** Bridges always use USDC regardless (CCTP V2 is USDC-only). */
+  /** Bridges always move USDC, the only token CCTP carries. */
   token?: Token;
 };
 
@@ -121,12 +115,9 @@ export type ResumeFromTxParams = ResumeOptions & {
 };
 
 /**
- * Public-facing params for `engine.refund`. `merchantAdapter` is the wallet
- * that holds the funds being refunded — typically the destination wallet from
- * the original transfer.
- *
- * `destinationAdapter` is only required when the refund crosses ecosystems
- * to a Solana destination (the only route that needs a second signature).
+ * `merchantAdapter` holds the funds being refunded, usually the destination
+ * wallet of the original transfer. `destinationAdapter` is needed when
+ * Circle does not forward the refund's mint, as in {@link SendParams}.
  */
 export type RefundParams = RefundInput & {
   merchantAdapter: WhiskAdapter;
@@ -134,9 +125,8 @@ export type RefundParams = RefundInput & {
 };
 
 /**
- * Refund result mirrors {@link SendResult} since a refund IS a send under the
- * hood. The `metadata` field carries the merchant's keys plus Whisk's
- * `__refundOfTxHash` (and `__refundReason` if provided) correlation values.
+ * A refund is a send, so it returns a {@link SendResult}. Its `metadata`
+ * adds `__refundOfTxHash`, and `__refundReason` when given.
  */
 export type RefundResult = SendResult;
 
@@ -146,8 +136,8 @@ export interface WhiskEngine {
   quote(params: QuoteParams): Promise<Quote>;
   send(params: SendParams, listeners?: SendListeners): Promise<SendResult>;
   /**
-   * The USDC `address` holds on `chain`, in subunits. `null` where Whisk does
-   * not read balances yet: Solana, Stellar and Starknet.
+   * The USDC `address` holds on `chain`, in subunits. `null` on Solana,
+   * Stellar and Starknet, where Whisk does not read balances.
    */
   balance(params: { chain: Chain; address: string }): Promise<bigint | null>;
   /**
@@ -179,12 +169,10 @@ export interface WhiskEngine {
     listeners?: SendListeners,
   ): Promise<SendResult>;
   /**
-   * Send funds back to the original payer of a previous transfer. Mechanically
-   * a regular send from the merchant's adapter on `originalDestinationChain`
-   * to the original sender's address on `refundDestinationChain`; the engine
-   * stamps `__refundOfTxHash` (and `__refundReason` if provided) on the
-   * resulting `metadata` so receipts and webhooks can correlate the refund
-   * back to the original transfer.
+   * Sends funds back to the payer of an earlier transfer: a regular send
+   * from the merchant's adapter on `originalDestinationChain` to the payer
+   * on `refundDestinationChain`. The result's `metadata` carries
+   * `__refundOfTxHash` so receipts and webhooks can tie it to the original.
    */
   refund(
     params: RefundParams,

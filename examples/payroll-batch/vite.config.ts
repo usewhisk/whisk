@@ -10,7 +10,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      // See `donate-button/vite.config.ts` for context.
+      // Browser `buffer` polyfill, plus stubs for wagmi deps with no browser build.
       buffer: resolve(__dirname, "node_modules/buffer/index.js"),
       "@react-native-async-storage/async-storage": "/src/stub-empty.ts",
       "pino-pretty": "/src/stub-empty.ts",

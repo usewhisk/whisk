@@ -1,10 +1,3 @@
-/**
- * Same-chain USDC transfer on Starknet.
- *
- * USDC on Starknet exposes the standard ERC-20-style `transfer(recipient,
- * amount: u256)` Cairo function. Whisk builds a single Starknet Call
- * and submits via the connected wallet adapter.
- */
 import {
   assertStarknetFelt,
   u256ToFelts,
@@ -21,9 +14,9 @@ import type { SendListeners, SendResult, StarknetAdapter } from "../types.js";
 
 export type ExecuteSameChainStarknetSendInput = {
   chain: StarknetChain;
-  /** Recipient address (Starknet felt252 hex). */
+  /** felt252 hex. */
   recipientAddress: string;
-  /** Amount in 6-decimal canonical USDC subunits. */
+  /** 6-decimal subunits. */
   amount: bigint;
   adapter: StarknetAdapter;
 };

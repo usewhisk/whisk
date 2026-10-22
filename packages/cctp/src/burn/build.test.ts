@@ -56,7 +56,6 @@ describe("buildBurnIntent — happy path", () => {
     expect(intent.calls[1]?.to).toBe(Base.tokenMessenger);
     // approve selector
     expect(intent.calls[0]?.data.slice(0, 10)).toBe("0x095ea7b3");
-    // depositForBurnWithHook starts with its own selector
     expect(intent.calls[1]?.data.length).toBeGreaterThan(10);
   });
 
@@ -268,9 +267,8 @@ describe("buildBurnIntent — validation", () => {
 
 describe("buildBurnIntent — non-EVM ecosystem guard", () => {
   it("throws UnsupportedError on non-EVM source", () => {
-    // Cast through unknown — the registry today only contains EVM
-    // chains, so the type narrows them all to ecosystem='evm'. v1.1+
-    // adds non-EVM rows; until then we exercise the guard via cast.
+    // An EVM-shaped chain tagged Solana, so only the ecosystem check can
+    // reject it.
     const fakeSolanaChain = {
       ...Base,
       ecosystem: "solana",
@@ -296,8 +294,7 @@ describe("buildBurnIntent — destinationCaller", () => {
       mintRecipient: RECIPIENT,
       fee: { tier: FAST_TIER },
     });
-    // We can't easily decode the calldata in a unit test, but verify
-    // the call doesn't differ when we explicitly pass ANY.
+    // Passing ANY explicitly must encode the same call.
     const sameWithExplicit = buildBurnIntent({
       source: Base,
       destination: Arbitrum,
@@ -319,7 +316,6 @@ describe("buildBurnIntent — forwarder hookData", () => {
       mintRecipient: RECIPIENT,
       fee: { tier: FAST_TIER },
     });
-    // The hookData appears at the end of the calldata. Check it's present.
     const callData = intent.calls[1]?.data ?? "";
     expect(callData.toLowerCase()).toContain(
       CCTP_FORWARD_HOOK_DATA.slice(2).toLowerCase(),

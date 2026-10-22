@@ -1,12 +1,7 @@
 /**
- * Pure derivation of a "receipt" view for an existing Whisk transfer.
- *
- * Used by `<WhiskReceipt>` (drop-in settlement-status widget) and by any
- * caller that has the source-chain tx hash of a transfer and wants to render
- * its lifecycle without re-running the full engine flow.
- *
- * No I/O, no React, no App Kit. The React hook (`useReceipt`) handles the
- * Iris polling and feeds the latest result through this function.
+ * The status of a past transfer from its source-chain tx hash, without
+ * running the engine. No I/O: `useReceipt` polls Iris and feeds each result
+ * through here.
  */
 import type { Chain } from "../types/chain.js";
 import type { Step } from "../types/step.js";
@@ -15,17 +10,14 @@ import { explorerTxUrl } from "../chains/index.js";
 import type { IrisStatus } from "./iris.js";
 
 /**
- * High-level lifecycle stages a Whisk transfer can be in, derived from the
- * combination of Iris attestation status + whether a destination tx is known.
+ * Derived from the Iris status and whether a destination tx is known.
  *
- * - `"submitted"`: source tx submitted; Iris hasn't seen it yet.
- * - `"awaiting_attestation"` — burn confirmed, waiting on Circle Iris to
- *   sign the cross-chain message.
- * - `"attested"` — attestation complete, but no destination tx observed yet
- *   (either the mint is in flight or the caller has not yet supplied the
- *   destination tx hash).
- * - `"settled"` — destination tx hash present (or same-chain transfer
- *   submitted with no further stages required).
+ * - `"submitted"`: source tx sent; Iris has not seen it yet.
+ * - `"awaiting_attestation"`: Iris is waiting on source-chain confirmations
+ *   before signing the message.
+ * - `"attested"`: attestation ready, no destination tx known yet. The mint
+ *   may be in flight, or the caller has not passed its hash.
+ * - `"settled"`: destination tx hash present, or a same-chain transfer.
  * - `"failed"`: the caller passed `hasError`.
  */
 export type ReceiptStage =
@@ -38,40 +30,28 @@ export type ReceiptStage =
 export type ReceiptInput = {
   sourceChain: Chain;
   sourceTxHash: string;
-  /** Destination chain. For same-chain sends, equal to `sourceChain`. */
+  /** Equal to `sourceChain` for a same-chain send. */
   destinationChain: Chain;
-  /** Mint tx hash on the destination chain, if known. */
   destinationTxHash?: string;
-  /**
-   * Latest Iris attestation status, if known. Pass `undefined` while the
-   * first request is still pending.
-   */
+  /** `undefined` until the first Iris response arrives. */
   irisStatus?: IrisStatus;
-  /**
-   * Set to `true` to force the `"failed"` stage — useful when the caller
-   * already saw a `SendFailure` from the engine.
-   */
+  /** Forces the `"failed"` stage, for a caller that already saw a `SendFailure`. */
   hasError?: boolean;
 };
 
 export type ReceiptView = {
   stage: ReceiptStage;
   /**
-   * Ordered step list suitable for `<StepRail>`. For same-chain sends the
-   * list has a single `transfer` step. For CCTP bridges it has
-   * `burn → fetchAttestation → mint`.
+   * A single `transfer` step for a same-chain send, otherwise `burn`,
+   * `fetchAttestation`, `mint`.
    */
   steps: Step[];
-  /** `true` when source ≠ destination (CCTP path). */
   isCrossChain: boolean;
   sourceExplorerUrl: string;
   destinationExplorerUrl?: string;
 };
 
-/**
- * Map an input snapshot to a {@link ReceiptView}. Pure — call it again with
- * a fresher `irisStatus` to update the rendered state.
- */
+/** Pure: call it again with a fresher `irisStatus` to update the view. */
 export function deriveReceiptView(input: ReceiptInput): ReceiptView {
   const { sourceChain, sourceTxHash, destinationChain, destinationTxHash } =
     input;
@@ -83,8 +63,7 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
 
   const isCrossChain = sourceChain !== destinationChain;
 
-  // Same-chain transfer: there's no CCTP burn / Iris attestation / mint —
-  // the source tx IS the settlement.
+  // A same-chain transfer settles in the source tx itself.
   if (!isCrossChain) {
     const stage: ReceiptStage = input.hasError ? "failed" : "settled";
     return {
@@ -103,7 +82,6 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
     };
   }
 
-  // Cross-chain transfer: derive stage from Iris + destinationTxHash.
   if (input.hasError) {
     return {
       stage: "failed",
@@ -124,8 +102,7 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
 
   const status = input.irisStatus;
 
-  // Iris reported a hard failure — render error.
-  // We have a destination tx — settled regardless of Iris state.
+  // A known mint tx means settled, whatever Iris last said.
   if (destinationTxHash) {
     return {
       stage: "settled",
@@ -144,8 +121,6 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
     };
   }
 
-  // Attestation complete but no destination tx — mint is either in flight or
-  // the merchant hasn't supplied the hash yet.
   if (status === "complete") {
     return {
       stage: "attested",
@@ -164,7 +139,6 @@ export function deriveReceiptView(input: ReceiptInput): ReceiptView {
     };
   }
 
-  // Iris is actively confirming.
   if (status === "pending_confirmations") {
     return {
       stage: "awaiting_attestation",
@@ -234,10 +208,7 @@ function buildCrossChainSteps(args: {
   ];
 }
 
-/**
- * Human-readable label for a {@link ReceiptStage}. UI-layer code is free to
- * override these for translation; this is the default English copy.
- */
+/** Default English labels. Override them in the UI to translate. */
 export const RECEIPT_STAGE_LABELS: Record<ReceiptStage, string> = {
   submitted: "Submitted",
   awaiting_attestation: "Confirming on source chain",
@@ -246,7 +217,6 @@ export const RECEIPT_STAGE_LABELS: Record<ReceiptStage, string> = {
   failed: "Failed",
 };
 
-/** Friendly secondary copy paired with the stage label. */
 export const RECEIPT_STAGE_HELP: Record<ReceiptStage, string> = {
   submitted: "We're waiting for the burn to be picked up.",
   awaiting_attestation:
@@ -256,7 +226,6 @@ export const RECEIPT_STAGE_HELP: Record<ReceiptStage, string> = {
   failed: "Something went wrong. Check the source tx for the full revert.",
 };
 
-/** Chain labels for the receipt UI. */
 export function describeReceiptChains(view: ReceiptView, input: ReceiptInput) {
   return {
     sourceLabel: getChain(input.sourceChain).label,

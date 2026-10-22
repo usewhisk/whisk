@@ -1,17 +1,9 @@
 /**
- * `createWhisk` — engine factory.
- *
- * The engine owns no chain knowledge — it asks `@usewhisk/cctp` to
- * build burn / mint calldata (or Solana instructions) and hands them
- * to the user-supplied adapter. Dispatch flows on the source
- * ecosystem:
- *
- *   EVM source     → `EvmAdapter`     → `executeSameChainSend` / `executeBridge`
- *   Solana source  → `SolanaAdapter`  → `executeSameChainSolanaSend` / cross-ecosystem bridge
- *
- * Cross-ecosystem bridges (EVM ↔ Solana) require two adapters and
- * arrive in S5 alongside live Devnet verification. The engine returns
- * a clean failure for those routes today.
+ * The engine owns no chain knowledge. It asks `@usewhisk/cctp` for the burn
+ * and mint calls and hands them to the caller's adapters to sign. `send`
+ * picks an executor from the source and destination ecosystems (EVM, Solana,
+ * Stellar, Starknet). A route whose mint Circle does not forward needs a
+ * `destinationAdapter` for the destination wallet.
  */
 
 import {
@@ -633,7 +625,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       const forwarded = plan.mint.kind === "forwarder";
       const bridge = await bindBridgeQuote(input.quote, plan, input);
 
-      // --- EVM → EVM (the original path) -----------------------------------
       if (source.ecosystem === "evm" && destination.ecosystem === "evm") {
         const evmSource = source as EvmChain;
         const evmDestination = destination as EvmChain;
@@ -660,7 +651,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Solana → EVM (Forwarder relays the mint, or the EVM wallet mints) -
       if (source.ecosystem === "solana" && destination.ecosystem === "evm") {
         const solSource = source as SolanaChain;
         const evmDestination = destination as EvmChain;
@@ -689,7 +679,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- EVM → Starknet (manual receive_message via destAdapter) --------
       if (source.ecosystem === "evm" && destination.ecosystem === "starknet") {
         const evmSource = source as EvmChain;
         const starknetDest = destination as StarknetChain;
@@ -725,7 +714,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Starknet → EVM (manual receive on EVM, no Iris forward) --------
       if (source.ecosystem === "starknet" && destination.ecosystem === "evm") {
         const starknetSource = source as StarknetChain;
         const evmDestination = destination as EvmChain;
@@ -761,7 +749,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- EVM → Stellar (Stellar Forwarder mints on signed call from destAdapter) -
       if (source.ecosystem === "evm" && destination.ecosystem === "stellar") {
         const evmSource = source as EvmChain;
         const stellarDest = destination as StellarChain;
@@ -796,7 +783,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Stellar → EVM (manual receiveMessage via destAdapter) -----------
       // Iris's auto-forwarder doesn't relay Stellar-source burns, so the
       // destination EVM wallet must sign receiveMessage manually.
       if (source.ecosystem === "stellar" && destination.ecosystem === "evm") {
@@ -834,7 +820,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Solana → Starknet ----------------------------------------------
       if (
         source.ecosystem === "solana" &&
         destination.ecosystem === "starknet"
@@ -870,7 +855,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Starknet → Solana ----------------------------------------------
       if (
         source.ecosystem === "starknet" &&
         destination.ecosystem === "solana"
@@ -909,7 +893,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Stellar → Starknet ---------------------------------------------
       if (
         source.ecosystem === "stellar" &&
         destination.ecosystem === "starknet"
@@ -948,7 +931,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Starknet → Stellar ---------------------------------------------
       if (
         source.ecosystem === "starknet" &&
         destination.ecosystem === "stellar"
@@ -987,7 +969,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Solana → Stellar (Stellar Forwarder mints) ----------------------
       if (
         source.ecosystem === "solana" &&
         destination.ecosystem === "stellar"
@@ -1023,7 +1004,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- Stellar → Solana (Solana receive_message via destAdapter) -------
       if (
         source.ecosystem === "stellar" &&
         destination.ecosystem === "solana"
@@ -1062,7 +1042,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         );
       }
 
-      // --- EVM → Solana (manual mint on Solana — needs destinationAdapter) -
       if (source.ecosystem === "evm" && destination.ecosystem === "solana") {
         const evmSource = source as EvmChain;
         const solDestination = destination as SolanaChain;
