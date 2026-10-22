@@ -1,17 +1,17 @@
 {
   "name": "@usewhisk/core",
   "version": "0.1.0",
-  "description": "Whisk core — framework-agnostic engine, types, errors, and state machine for the Whisk USDC widget.",
+  "description": "Framework-agnostic Whisk engine: quote, send, bridge and resume USDC transfers over Circle CCTP V2 on EVM, Solana, Stellar and Starknet.",
   "license": "MIT",
   "author": "SignorDev (https://github.com/Signor1)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Signor1/whisk.git",
+    "url": "git+https://github.com/usewhisk/whisk.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/Signor1/whisk#readme",
+  "homepage": "https://github.com/usewhisk/whisk/tree/main/packages/core#readme",
   "bugs": {
-    "url": "https://github.com/Signor1/whisk/issues"
+    "url": "https://github.com/usewhisk/whisk/issues"
   },
   "keywords": [
     "whisk",
@@ -76,7 +76,7 @@
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.95.0",
     "@stellar/stellar-sdk": "^14.1.1",
-    "@usewhisk/cctp": "workspace:*",
+    "@usewhisk/cctp": "workspace:^",
     "bs58": "^6.0.0",
     "starknet": "^10.8.0"
   },

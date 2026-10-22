@@ -6,7 +6,7 @@
 [![license MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](./LICENSE)
 
 Framework-agnostic engine that powers the Whisk USDC widget. No
-React, no wagmi, no wallet-adapter dependencies — just the state
+React, no wagmi, no wallet-adapter dependencies: just the state
 machine, per-ecosystem adapter interfaces, resolvers, chain
 registry, fees, and error model. Built directly on
 [`@usewhisk/cctp`](https://www.npmjs.com/package/@usewhisk/cctp) for
@@ -21,28 +21,39 @@ the CCTP V2 protocol layer.
 const engine = createWhisk({
   chains: ["Base_Sepolia", "Ethereum_Sepolia"],
 });
-const recipient = await engine.resolve("alice.eth", "Ethereum_Sepolia");
-const quote = await engine.quote({ ..., recipient, amount: "10" });
-const result = await engine.send({ ..., quote, adapter });
+const recipient = await engine.resolve(
+  "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1",
+  "Ethereum_Sepolia",
+);
+const quote = await engine.quote({
+  sourceChain: "Base_Sepolia",
+  destinationChain: "Ethereum_Sepolia",
+  recipient,
+  amount: "10",
+  adapter,
+});
+const result = await engine.send({ quote, adapter });
 ```
 
-> **Status:** Live-tested on testnet across all four ecosystems.
-> Mainnet support is next.
+> **Status:** tested on testnet across all four ecosystems (EVM,
+> Solana, Stellar, Starknet). Mainnet and testnet use the same API;
+> the network comes from the chains you pass.
 
 ## Install
 
 ```bash
-pnpm add @usewhisk/core @usewhisk/cctp
+pnpm add @usewhisk/core viem
 ```
 
-`@usewhisk/cctp` ships as a direct dependency. This is where the
-protocol layer lives (chain registry, ABIs, Iris client, burn +
-mint builders across EVM, Solana, Stellar, Starknet).
+`viem` is a peer dependency. `@usewhisk/cctp` ships as a direct
+dependency. This is where the protocol layer lives (chain registry,
+ABIs, Iris client, burn and mint builders across EVM, Solana,
+Stellar, Starknet).
 
 ## Runtime support
 
 `@usewhisk/core` runs on Node 20+, Deno, Bun, Cloudflare Workers,
-and Vercel Edge / Fluid Compute. Almost every export is universal —
+and Vercel Edge / Fluid Compute. Almost every export is universal:
 the engine, fees, chains, errors, resolvers, metadata, refund,
 webhook, settlement-status (`deriveReceiptView`), Iris polling, and
 manual mint helpers all work anywhere `fetch` exists.
@@ -58,11 +69,7 @@ runtime out of the box.
 ## Quick tour
 
 ```ts
-import {
-  createWhisk,
-  addressResolver,
-  composeResolvers,
-} from "@usewhisk/core";
+import { createWhisk, addressResolver, composeResolvers } from "@usewhisk/core";
 
 const engine = createWhisk({
   chains: [
@@ -74,8 +81,7 @@ const engine = createWhisk({
   ],
   defaultSourceChain: "Base_Sepolia",
   resolver: composeResolvers([addressResolver]),
-  // "sender" grosses up the burn so the recipient nets the exact amount.
-  // Default "receiver" deducts the bridge fees from the transfer.
+  // The default. Use "receiver" to deduct the bridge fees from the transfer.
   feeBearer: "sender",
   appLabel: "my-checkout",
 });
@@ -86,7 +92,7 @@ const recipient = await engine.resolve(
   "Ethereum_Sepolia",
 );
 
-// 2. Quote a transfer (same-chain or cross-chain — auto-routed).
+// 2. Quote a transfer (same-chain or cross-chain, auto-routed).
 const quote = await engine.quote({
   sourceChain: "Base_Sepolia",
   destinationChain: "Ethereum_Sepolia",
@@ -95,16 +101,9 @@ const quote = await engine.quote({
   adapter, // see "Building an adapter" below
 });
 
-// 3. Send, with per-step progress callbacks.
+// 3. Send the quote the payer confirmed, with per-step progress.
 const result = await engine.send(
-  {
-    recipient,
-    amount: "10",
-    sourceChain: "Base_Sepolia",
-    destinationChain: "Ethereum_Sepolia",
-    adapter,
-    quote,
-  },
+  { quote, adapter },
   { onStep: (step) => console.log(step.name, step.state) },
 );
 
@@ -115,6 +114,11 @@ if (result.kind === "success") {
 }
 ```
 
+`send` takes the chains, recipient and amounts from the quote. It
+throws `QuoteExpiredError` once the quote is past `expiresAt`, and
+`QuoteChangedError` (carrying the fresh `quote`) if fees rose past what
+the payer confirmed. Nothing is signed in either case.
+
 ## Engine surface
 
 `createWhisk(config)` returns a `WhiskEngine`:
@@ -124,16 +128,35 @@ interface WhiskEngine {
   readonly config: WhiskConfig;
   resolve(input: string, chain: Chain): Promise<ResolvedRecipient>;
   quote(params: QuoteParams): Promise<Quote>;
-  send(params: SendParams, listeners?: SendListeners):
-    Promise<SendSuccess | SendFailure>;
-  refund(params: RefundParams, listeners?: SendListeners):
-    Promise<SendSuccess | SendFailure>;
+  send(params: SendParams, listeners?: SendListeners): Promise<SendResult>;
+  balance(params: { chain: Chain; address: string }): Promise<bigint | null>;
+  maxSendable(params: Omit<QuoteParams, "amount">): Promise<MaxSendable | null>;
+  inflight(): Promise<readonly InflightRecord[]>;
+  dismiss(id: string): Promise<void>;
+  resume(
+    record: InflightRecord,
+    options?: ResumeOptions,
+    listeners?: SendListeners,
+  ): Promise<SendResult>;
+  resumeFromTx(
+    params: ResumeFromTxParams,
+    listeners?: SendListeners,
+  ): Promise<SendResult>;
+  refund(
+    params: RefundParams,
+    listeners?: SendListeners,
+  ): Promise<RefundResult>;
 }
 ```
 
-The `SendSuccess | SendFailure` return type is a discriminated union
-— branch on `result.kind` and TypeScript narrows the rest of the
-shape.
+`SendResult` is `SendSuccess | SendFailure`, a discriminated union:
+branch on `result.kind` and TypeScript narrows the rest of the shape.
+
+`balance` and `maxSendable` read EVM USDC balances and return `null`
+elsewhere. Bridges are recorded in the `inflightStore` from the moment
+the burn is signed. After a reload, `inflight()` lists them and
+`resume(record)` finishes one without signing the burn again;
+`resumeFromTx({ sourceChain, txHash })` does the same from a burn hash.
 
 ## Building an adapter
 
@@ -151,7 +174,7 @@ import type {
 } from "@usewhisk/core";
 ```
 
-Each interface is small (5–6 methods). Here's the EVM shape:
+Each interface is small. Here's the EVM shape:
 
 ```ts
 interface EvmAdapter {
@@ -159,35 +182,40 @@ interface EvmAdapter {
   readonly address: `0x${string}`;
   getChainId(): Promise<number>;
   switchChain(chainId: number): Promise<void>;
-  sendCalls(calls: EvmCall[]): Promise<SendCallsResult>;
+  sendCalls(
+    calls: EvmCall[],
+    options?: SendCallsOptions,
+  ): Promise<SendCallsResult>;
   waitForReceipt(hash: `0x${string}`): Promise<CallReceipt>;
 }
 ```
 
-Wrap whatever you have — a wagmi connector, a viem `WalletClient`, a
-Node signing key — into this shape and pass it to `engine.send`. The
-React package builds these for you via `useEvmAdapter()`,
-`useSolanaAdapter()`, `useStellarAdapter()`, `useStarknetAdapter()`.
+Wrap whatever you have (a wagmi connector, a viem `WalletClient`, a
+Node signing key) into this shape and pass it to `engine.quote` and
+`engine.send`. The React package builds these for you via
+`useEvmAdapter()`, `useSolanaAdapter()`, `useStellarAdapter()`,
+`useStarknetAdapter()`.
 
 For server-side flows, see
-[`examples/node-headless`](https://github.com/Signor1/whisk/tree/main/examples/node-headless)
+[`examples/node-headless`](https://github.com/usewhisk/whisk/tree/main/examples/node-headless)
 for a runnable viem-backed adapter.
 
 ## Cross-ecosystem: the destination adapter
 
-Bridges to non-EVM destinations (Solana, Stellar, Starknet) need a
-`destinationAdapter` on `engine.send` to sign the mint on the target
-chain, because Circle's Iris auto-forwarder only relays to EVM. For
-EVM→EVM and Solana→EVM, the Forwarder auto-mints and
-`destinationAdapter` is unused.
+Circle's forwarder submits the mint only for burns from EVM or Solana
+into an EVM chain that supports forwarding. Every other bridge (into
+Solana, Stellar or Starknet, out of Stellar or Starknet, or into an EVM
+chain without forwarding) needs a wallet to sign the mint on the
+destination. Pass it as `destinationAdapter` to both `quote` and
+`send`. For an EVM to EVM mint, the source adapter signs it.
 
 ```ts
-await engine.send({
-  ...,
-  adapter,             // signs the burn on the source
-  destinationAdapter,  // signs the mint on Stellar / Starknet / Solana
-});
+const quote = await engine.quote({ ...params, adapter, destinationAdapter });
+await engine.send({ quote, adapter, destinationAdapter });
 ```
+
+Without it, `quote` throws `RouteUnavailableError` with
+`reason: "destination_adapter_required"`.
 
 ## Resolvers
 
@@ -207,7 +235,10 @@ import {
 const ensResolver: Resolver = {
   name: "ens",
   matches: (input) => input.endsWith(".eth"),
-  resolve: async (input, chain) => /* your lookup */,
+  resolve: async (input, { chain }) => {
+    const address = await lookupEns(input);
+    return address ? { address, chain, displayName: input } : null;
+  },
 };
 
 const resolver = composeResolvers([addressResolver, ensResolver]);
@@ -218,26 +249,38 @@ tagged with the resolver's name for clean error reporting.
 
 ## Errors
 
-Every failure path returns a `WhiskError` or subclass. Branch on
+Every error is a `WhiskError` or subclass. `quote` and `send` throw
+when they refuse before anything is signed; once the wallet is
+involved, `send` returns `{ kind: "failure", error }`. Branch on
 `code` in your UI:
 
-| Code                    | Class                       | Retryable |
-| ----------------------- | --------------------------- | --------- |
-| `NO_ADAPTER`            | `NoAdapterError`            | no        |
-| `WRONG_CHAIN`           | `WrongChainError`           | yes       |
-| `INSUFFICIENT_BALANCE`  | `InsufficientBalanceError`  | no        |
-| `INVALID_ADDRESS`       | `InvalidAddressError`       | no        |
-| `RESOLVER_FAILED`       | `ResolverError`             | yes       |
-| `BRIDGE_STEP_FAILED`    | `BridgeStepError`           | yes       |
-| `USER_REJECTED`         | `UserRejectedError`         | yes       |
-| `NETWORK_ERROR`         | `NetworkError`              | yes       |
-| `WALLET_CAPABILITY`     | `WalletCapabilityError`     | no        |
-| `ONCHAIN_REVERT`        | `OnchainRevertError`        | no        |
-| `CONFIG_ERROR`          | `ConfigError`               | no        |
-| `UNKNOWN`               | `WhiskError`                | no        |
+| Code                   | Class                      | Retryable |
+| ---------------------- | -------------------------- | --------- |
+| `NO_ADAPTER`           | `NoAdapterError`           | no        |
+| `WRONG_CHAIN`          | `WrongChainError`          | yes       |
+| `INSUFFICIENT_BALANCE` | `InsufficientBalanceError` | no        |
+| `INVALID_ADDRESS`      | `InvalidAddressError`      | no        |
+| `RESOLVER_FAILED`      | `ResolverError`            | yes       |
+| `BRIDGE_STEP_FAILED`   | `BridgeStepError`          | yes       |
+| `USER_REJECTED`        | `UserRejectedError`        | yes       |
+| `NETWORK_ERROR`        | `NetworkError`             | yes       |
+| `WALLET_CAPABILITY`    | `WalletCapabilityError`    | no        |
+| `ONCHAIN_REVERT`       | `OnchainRevertError`       | no        |
+| `CONFIG_ERROR`         | `ConfigError`              | no        |
+| `NETWORK_MISMATCH`     | `NetworkMismatchError`     | no        |
+| `ROUTE_UNAVAILABLE`    | `RouteUnavailableError`    | no        |
+| `QUOTE_EXPIRED`        | `QuoteExpiredError`        | yes       |
+| `QUOTE_CHANGED`        | `QuoteChangedError`        | yes       |
+| `UNKNOWN`              | `WhiskError`               | no        |
+
+`RouteUnavailableError.reason` is one of `same_chain`,
+`source_adapter_required`, `destination_adapter_required` or
+`recipient_account_missing` (a Solana recipient without a USDC account).
+`NetworkMismatchError` means the source and destination are not both
+mainnet or both testnet.
 
 `toWhiskError(unknown)` wraps any thrown value into the right
-subclass — drop it in a top-level try/catch and you always get a
+subclass. Drop it in a top-level try/catch and you always get a
 typed error back.
 
 ## Chain registry
@@ -251,10 +294,10 @@ import {
   getChain,
 } from "@usewhisk/core";
 
-getChain("Base_Sepolia").label;             // "Base Sepolia"
-chainsByNetwork("testnet").length;          // every supported testnet
-chainByEvmChainId(8453).id;                 // "Base"
-explorerTxUrl("Solana_Devnet", "sig123");   // includes ?cluster=devnet
+getChain("Base_Sepolia").label; // "Base Sepolia"
+chainsByNetwork("testnet").length; // every supported testnet
+chainByEvmChainId(8453).id; // "Base"
+explorerTxUrl("Solana_Devnet", "sig123"); // includes ?cluster=devnet
 ```
 
 The registry lives in `@usewhisk/cctp`; core re-exports it, and `Chain` is
@@ -268,11 +311,10 @@ Typos fail the build, not the user:
 ```ts
 import type { Chain, Token } from "@usewhisk/core";
 
-const chain: Chain = "Base_Sepolia"; // ✓
-const token: Token = "USDC";         // ✓
+const chain: Chain = "Base_Sepolia";
+const token: Token = "USDC";
 
 const bad: Chain = "Mainnet";
-//                   ^^^^^^^^^
 // Type '"Mainnet"' is not assignable to type 'Chain'.
 ```
 
@@ -282,16 +324,17 @@ const bad: Chain = "Mainnet";
 pnpm --filter @usewhisk/core test
 ```
 
-271 tests across 27 files — the engine, state machine, resolvers,
-address resolvers per ecosystem, fee math, routing, error mapping,
-chain registry, and recovery primitives. Runs in under 3 s.
+Covers the engine routes, state machine, resolvers, address
+resolvers per ecosystem, fee math, routing, error mapping, chain
+registry, and recovery primitives.
 
 ## Docs and examples
 
 - **Full docs:** <https://www.usewhisk.xyz/docs>
 - **React widget:** [`@usewhisk/react`](https://www.npmjs.com/package/@usewhisk/react)
 - **CCTP protocol layer:** [`@usewhisk/cctp`](https://www.npmjs.com/package/@usewhisk/cctp)
-- **Source:** <https://github.com/Signor1/whisk>
+- **Source:** <https://github.com/usewhisk/whisk>
+- **Issues:** <https://github.com/usewhisk/whisk/issues>
 
 ## License
 

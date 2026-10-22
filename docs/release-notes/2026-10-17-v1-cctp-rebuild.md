@@ -309,6 +309,16 @@ Technical shape, per
   were corrected, among them the `createWhisk` header, the Iris timeout and 429
   behaviour in cctp, the `rpcUrls` and `FeePolicy.bps` docs, and the example
   providers' chain lists. No code changed.
+- Release (#74).
+  - Changesets publish `@usewhisk/cctp@0.1.0`, `@usewhisk/core@0.2.0` and
+    `@usewhisk/react@0.2.0`. Core and react depend on each other with a `^`
+    range.
+  - `docs/migration/0.1-to-0.2.mdx` covers every breaking change from the App Kit
+    `0.1.0`, ready for the `usewhisk/docs` site.
+  - The release workflow runs for the `usewhisk` organization, publishes
+    through Trusted Publishing with provenance, and skips the dependency cache.
+  - Package metadata points to `usewhisk/whisk`, cctp ships its LICENSE, and
+    the four READMEs match the 0.2 API.
 - `.gitleaks.toml` allows public Stellar and EVM addresses and the fixture webhook
   secrets in tests, which gitleaks reads as generic API keys.
 

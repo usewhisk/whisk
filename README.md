@@ -24,12 +24,12 @@ hood:
 
 - **Send** USDC to any address on the same chain
 - **Bridge** USDC across chains and ecosystems via CCTP V2
-- Pay through **any wallet** — MetaMask, Phantom, Freighter,
+- Pay through **any wallet**: MetaMask, Phantom, Freighter,
   Argent X, and dozens more
 - See a **transparent fee breakdown** before confirming
-- Watch the transfer progress through every step (`authorize` → `burn` → `attest` → `mint`)
+- Watch the transfer progress through every step (`approve` → `burn` → `fetchAttestation` → `mint`)
 
-Whisk speaks CCTP V2 natively — no third-party SDKs, no adapter
+Whisk speaks CCTP V2 natively: no third-party SDKs, no adapter
 layers to keep up to date. When Circle ships a new CCTP chain, we
 add it in one file and everyone gets it.
 
@@ -54,7 +54,7 @@ Building USDC payments from scratch means:
 - Per-ecosystem address validation
 - Fee math across burn fees, forwarder fees, and gas
 - Iris polling with retry and recovery
-- Manual mint on Stellar and Starknet (Iris only auto-forwards to EVM)
+- Manual mint into Solana, Stellar and Starknet (Circle only forwards mints into EVM chains)
 - The Cairo `ByteArray` encoding for Starknet destinations
 - The Stellar CctpForwarder pattern for inbound Stellar mints
 
@@ -83,7 +83,12 @@ import {
 import "@usewhisk/react/styles.css";
 
 const config = createWhiskConfig({
-  wallets: [evm({ projectId: process.env.WALLETCONNECT_PROJECT_ID! })],
+  wallets: [
+    evm({
+      chains: ["Base_Sepolia", "Ethereum_Sepolia"],
+      projectId: process.env.WALLETCONNECT_PROJECT_ID!,
+    }),
+  ],
   chains: ["Base_Sepolia", "Ethereum_Sepolia"],
   defaultDestinationChain: "Ethereum_Sepolia",
 });
@@ -101,9 +106,9 @@ That's the entire integration.
 
 ### Add other ecosystems
 
-Whisk mounts each ecosystem's stack only when its factory is present
-in `wallets`, so EVM-only apps don't pay for Solana or Starknet code
-they won't run.
+Whisk mounts each ecosystem's provider only when its factory is
+present in `wallets`. Every pair of ecosystems can bridge in both
+directions.
 
 ```tsx
 import { evm, solana, stellar, starknet } from "@usewhisk/react";
@@ -119,36 +124,39 @@ const config = createWhiskConfig({
 });
 ```
 
-### Custom theme via CSS variables
+### Pick a theme
 
-```css
-[data-whisk] {
-  --whisk-primary: 142 71% 45%;
-  --whisk-radius: 0.75rem;
-  --whisk-font: "Inter", system-ui, sans-serif;
-}
+```tsx
+<WhiskProvider config={config} theme="auto">
+  <WhiskSend />
+</WhiskProvider>
 ```
+
+`"light"` (the default), `"dark"` and `"auto"` are built in, alongside a
+few named palettes. See [Theming](#theming).
 
 ---
 
 ## Features
 
-| Capability               | Notes                                                                       |
-| ------------------------ | --------------------------------------------------------------------------- |
-| **Send (same-chain)**    | Direct ERC-20 (EVM), SPL (Solana), Stellar Asset (Stellar), or Cairo transfer (Starknet). |
-| **Bridge (cross-chain)** | CCTP V2 Fast Transfer. Approve → burn → attestation → mint, all automatic. |
-| **Cross-ecosystem**      | Every pair of the four ecosystems, both directions.                        |
-| **Smart routing**        | Whisk picks same-chain vs bridge from the source/destination chains.       |
-| **Multi-wallet**         | Ecosystem-first connect modal — EVM (wagmi connectors), Solana (Wallet Standard), Stellar (Stellar Wallets Kit), Starknet (get-starknet-core). |
-| **Recipient resolvers**  | Address + ENSIP-11 multichain ENS built in; bring your own.                |
-| **Fee transparency**     | Burn + forwarder + gas, displayed before confirm.                          |
-| **Fee bearer**           | `feeBearer: "sender"` grosses up the burn so the recipient nets the exact amount; `"receiver"` deducts fees from the transfer. |
-| **Progress streaming**   | Live step events over the whole `authorize → burn → attest → mint` lifecycle. |
-| **Mid-flight recovery**  | Burn-but-no-mint failures: in-tab retry, cross-refresh persistence (localStorage, 48h), manual-mint via `MessageTransmitter.receiveMessage`. |
-| **Mode-aware**           | `testnet` / `mainnet` first-class. Visible Testnet pill, Sepolia-first ENS, mode-namespaced persistence. |
-| **Headless mode**        | `useWhisk()` hook for full UI control, or import `@usewhisk/core` for server flows. |
-| **Theming**              | CSS variables (override `--whisk-*` for full rebrand) + optional Tailwind preset. |
-| **Open source**          | MIT. Read every line, fork it, ship your own.                              |
+| Capability                 | Notes                                                                                                                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Send (same-chain)**      | Direct ERC-20 (EVM), SPL (Solana), Stellar Asset (Stellar), or Cairo transfer (Starknet).                                                                                                    |
+| **Bridge (cross-chain)**   | CCTP V2 Fast Transfer where the source offers it, Standard otherwise. Approve → burn → attestation → mint, all automatic.                                                                    |
+| **Cross-ecosystem**        | Every pair of the four ecosystems, both directions.                                                                                                                                          |
+| **Smart routing**          | Whisk picks same-chain vs bridge from the source/destination chains.                                                                                                                         |
+| **Multi-wallet**           | Ecosystem-first connect modal: EVM (wagmi connectors), Solana (Wallet Standard), Stellar (Stellar Wallets Kit), Starknet (get-starknet-core).                                                |
+| **Recipient resolvers**    | Address + ENSIP-11 multichain ENS built in; bring your own.                                                                                                                                  |
+| **Bound quotes**           | Burn + forwarder + gas shown before confirm. `send` takes the quote the payer saw and refuses it if it expired or fees rose.                                                                 |
+| **Fee bearer**             | `feeBearer: "sender"` (default) grosses up the burn so the recipient nets the exact amount; `"receiver"` deducts fees from the transfer.                                                     |
+| **Max button**             | Fills in the largest amount the wallet can send after fees, when the balance can be read.                                                                                                    |
+| **Progress streaming**     | Live step events over the whole `approve → burn → fetchAttestation → mint` lifecycle.                                                                                                        |
+| **Mid-flight recovery**    | Every bridge is saved from the moment the burn is signed (localStorage by default) and kept until dismissed. After a reload the widget lists it and finishes the mint without a second burn. |
+| **Network from the chain** | Mainnet or testnet always follows the source chain. Mixing the two is refused with `NetworkMismatchError`.                                                                                   |
+| **Typed errors**           | `RouteUnavailableError`, `QuoteExpiredError`, `QuoteChangedError`, `InsufficientBalanceError` and more, each with a stable `code`.                                                           |
+| **Headless mode**          | `useWhisk()` hook for full UI control, or import `@usewhisk/core` for server flows.                                                                                                          |
+| **Theming**                | `light`, `dark` and `auto` presets, `--whisk-*` CSS variables, optional Tailwind preset.                                                                                                     |
+| **Open source**            | MIT. Read every line, fork it, ship your own.                                                                                                                                                |
 
 ---
 
@@ -159,9 +167,9 @@ Whisk is a small monorepo. Three packages, one architecture.
 ```
 whisk/
 ├── packages/
-│   ├── cctp/         # @usewhisk/cctp   — CCTP V2 protocol layer (chains, ABIs, Iris, builders)
-│   ├── core/         # @usewhisk/core   — framework-agnostic engine
-│   └── react/        # @usewhisk/react  — components, hooks, provider
+│   ├── cctp/         # @usewhisk/cctp: CCTP V2 protocol layer (chains, ABIs, Iris, builders)
+│   ├── core/         # @usewhisk/core: framework-agnostic engine
+│   └── react/        # @usewhisk/react: components, hooks, provider
 ├── examples/
 │   ├── playground/         # Every-prop showcase + control panel
 │   ├── ecommerce-checkout/ # Next.js storefront
@@ -175,89 +183,94 @@ whisk/
     └── docs/         # Documentation site (Fumadocs)
 ```
 
-- **`@usewhisk/cctp`** — CCTP V2 protocol layer. Chain registry
+- **`@usewhisk/cctp`**: CCTP V2 protocol layer. Chain registry
   (EVM + Solana + Stellar + Starknet), TokenMessengerV2 /
   MessageTransmitterV2 ABIs, Iris client, burn intent builders,
   manual mint builders. No engine logic, no UI.
-- **`@usewhisk/core`** — the engine. Pure TypeScript, no React, no
+- **`@usewhisk/core`**: the engine. Pure TypeScript, no React, no
   DOM. Exports `createWhisk()`, the adapter interfaces, the state
   machine, resolver composition, fee logic, and error classes.
-- **`@usewhisk/react`** — components, hooks, and the provider. Wraps
+- **`@usewhisk/react`**: components, hooks, and the provider. Wraps
   wagmi (EVM), Wallet Standard (Solana), Stellar Wallets Kit, and
   `get-starknet-core`. Ships `<WhiskSend>` (drop-in) and
   `useWhisk()` (headless).
 
-Deeper design docs — engine boundary, state machine, fee model,
-resolvers, errors — live on [the documentation site](https://www.usewhisk.xyz/docs).
+Deeper design docs (engine boundary, state machine, fee model,
+resolvers, errors) live on [the documentation site](https://www.usewhisk.xyz/docs).
 
 ---
 
 ## Recipes
 
 Five reference integrations, each a themed mini-app. All run on
-testnet — grab test USDC from the [Circle faucet](https://faucet.circle.com).
+testnet. Grab test USDC from the [Circle faucet](https://faucet.circle.com).
 
-| Recipe                  | What it shows                                                       | Live demo                                                  |
-| ----------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- |
-| **E-commerce checkout** | Cart total + merchant address locked; the widget is confirm-and-pay | [demo](https://whisk-ecommerce-checkout.vercel.app/)       |
-| **Donate button**       | Pinned treasury + preset amounts that seed `defaultAmount`         | [demo](https://whisk-donate-button.vercel.app/)            |
-| **Themed SaaS**         | `--whisk-*` overrides repaint the widget into a dark dashboard      | [demo](https://whisk-themed-saas.vercel.app/)              |
-| **Payroll batch**       | Widget remounts per payee, bridging treasury USDC to each one's chain | [demo](https://whisk-payroll-batch.vercel.app/)          |
-| **Invoice link**        | A shareable URL opens a pre-filled, locked checkout                | [demo](https://whisk-invoice-link.vercel.app/)             |
+| Recipe                  | What it shows                                                         | Live demo                                            |
+| ----------------------- | --------------------------------------------------------------------- | ---------------------------------------------------- |
+| **E-commerce checkout** | Cart total + merchant address locked; the widget is confirm-and-pay   | [demo](https://whisk-ecommerce-checkout.vercel.app/) |
+| **Donate button**       | Pinned treasury + preset amounts that seed `defaultAmount`            | [demo](https://whisk-donate-button.vercel.app/)      |
+| **Themed SaaS**         | `--whisk-*` overrides repaint the widget into a dark dashboard        | [demo](https://whisk-themed-saas.vercel.app/)        |
+| **Payroll batch**       | Widget remounts per payee, bridging treasury USDC to each one's chain | [demo](https://whisk-payroll-batch.vercel.app/)      |
+| **Invoice link**        | A shareable URL opens a pre-filled, locked checkout                   | [demo](https://whisk-invoice-link.vercel.app/)       |
 
-Two headless examples — `node-headless` for server flows and
-`vue-headless` for a non-React UI — cover the engine-only path.
+Two headless examples, `node-headless` for server flows and
+`vue-headless` for a non-React UI, cover the engine-only path.
 
 ---
 
 ## Supported chains
 
-CCTP V2 domains as of shipping v1:
+A selection of the supported chains. The full list, with domains and
+Fast Transfer support, is in the
+[`@usewhisk/cctp` README](packages/cctp/README.md#supported-chains).
 
-| Ecosystem  | Testnet chain           | Mainnet chain     |
-| ---------- | ----------------------- | ----------------- |
-| **EVM**    | `Ethereum_Sepolia`      | `Ethereum`        |
-|            | `Base_Sepolia`          | `Base`            |
-|            | `Arbitrum_Sepolia`      | `Arbitrum`        |
-|            | `Optimism_Sepolia`      | `Optimism`        |
-|            | `Polygon_Amoy_Testnet`  | `Polygon`         |
-|            | `Avalanche_Fuji`        | `Avalanche`       |
-|            | `Linea_Sepolia`         | `Linea`           |
-|            | `Unichain_Sepolia`      | `Unichain`        |
-|            | `World_Chain_Sepolia`   | `World_Chain`     |
-| **Solana** | `Solana_Devnet`         | `Solana`          |
-| **Stellar** | `Stellar_Testnet`      | `Stellar`         |
-| **Starknet** | `Starknet_Sepolia`    | `Starknet`        |
+| Ecosystem    | Testnet chain          | Mainnet chain |
+| ------------ | ---------------------- | ------------- |
+| **EVM**      | `Ethereum_Sepolia`     | `Ethereum`    |
+|              | `Base_Sepolia`         | `Base`        |
+|              | `Arbitrum_Sepolia`     | `Arbitrum`    |
+|              | `Optimism_Sepolia`     | `Optimism`    |
+|              | `Polygon_Amoy_Testnet` | `Polygon`     |
+|              | `Avalanche_Fuji`       | `Avalanche`   |
+|              | `Linea_Sepolia`        | `Linea`       |
+|              | `Unichain_Sepolia`     | `Unichain`    |
+|              | `World_Chain_Sepolia`  | `World_Chain` |
+|              | `Arc_Testnet`          | `Arc`         |
+| **Solana**   | `Solana_Devnet`        | `Solana`      |
+| **Stellar**  | `Stellar_Testnet`      | `Stellar`     |
+| **Starknet** | `Starknet_Sepolia`     | `Starknet`    |
 
-Adding a chain = a single new entry in
-`packages/cctp/src/chains/` + `packages/core/src/chains/registry.ts`.
+Adding a chain is a new entry in `packages/cctp/src/chains/`. An EVM
+chain also needs its viem chain in
+`packages/react/src/config/adapters/evm.ts`.
 
 ---
 
 ## Theming
 
-Whisk ships with a default theme driven by `--whisk-*` CSS
-variables on `[data-whisk]`. Override any of them in your own
-stylesheet to retune the whole widget — light mode, dark mode,
-accent, border radius, fonts, the lot.
+Pick a preset on the provider: `"light"` (the default), `"dark"`,
+`"wine"`, `"indigo"`, `"emerald"`, `"monochrome"`, or `"auto"`, which
+follows `prefers-color-scheme` in CSS alone. To change some colors,
+pass a preset with `tokens`:
+
+```tsx
+<WhiskProvider
+  config={config}
+  theme={{ preset: "dark", tokens: { primary: "#6366f1", radius: "0.625rem" } }}
+>
+  <WhiskSend />
+</WhiskProvider>
+```
+
+Everything is driven by `--whisk-*` CSS variables on `[data-whisk]`.
+With `"light"`, `"dark"` or `"auto"`, a rule in your own stylesheet
+(loaded after `styles.css`) overrides any of them. The other presets set
+their colors inline, so change those with `tokens`:
 
 ```css
 [data-whisk] {
-  --whisk-bg: #f5f6fc;
-  --whisk-fg: #1e1b4b;
-  --whisk-fg-muted: #4f4d80;
-  --whisk-border: #c0c4ea;
-  --whisk-card: #ffffff;
-  --whisk-primary: #6366f1;
-  --whisk-primary-fg: #ffffff;
   --whisk-radius: 0.625rem;
   --whisk-font: "Inter", system-ui, sans-serif;
-}
-
-[data-whisk][data-whisk-theme="dark"] {
-  --whisk-bg: #1a1c3d;
-  --whisk-fg: #e2e2f5;
-  /* … */
 }
 ```
 
@@ -281,8 +294,8 @@ export default {
 - **Open source under MIT.** Audit every line. Fork it. Ship your own.
 - **Type-safe end to end.** No `any` casts in the source. Every ecosystem's adapter is a discriminated union member.
 - **Branch protection.** `main` is protected; every change goes through PR review including changes from the maintainer.
-- **CodeQL on every PR.** Static analysis catches injection, XSS, prototype pollution, weak crypto, hardcoded credentials.
-- **Live-tested on every CCTP V2 domain we ship.** Every ecosystem pair (EVM ↔ EVM, EVM ↔ Solana, EVM ↔ Stellar, EVM ↔ Starknet, Solana ↔ Stellar, Solana ↔ Starknet, Stellar ↔ Starknet) has been verified end-to-end on public testnet.
+- **CI on every PR.** Format, lint, typecheck, tests, production build and a dependency audit.
+- **Nightly testnet matrix.** `pnpm test:testnet` sends real testnet USDC through `createWhisk()` across EVM, Solana, Stellar and Starknet routes, plus a burn-then-resume scenario.
 
 ---
 
@@ -290,9 +303,9 @@ export default {
 
 Whisk is community-maintained. Anyone can:
 
-- File a bug or feature request → [open an issue](https://github.com/Signor1/whisk/issues)
-- Improve the code → fork the repo, branch off `main`, open a pull request
-- Improve the docs → same flow; small docs PRs are very welcome
+- File a bug or feature request: [open an issue](https://github.com/usewhisk/whisk/issues)
+- Improve the code: fork the repo, branch off `main`, open a pull request
+- Improve the docs: same flow; small docs PRs are very welcome
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup,
 project layout, PR conventions, and the security-disclosure flow.
@@ -300,7 +313,7 @@ project layout, PR conventions, and the security-disclosure flow.
 ### Local development
 
 ```bash
-git clone https://github.com/Signor1/whisk.git
+git clone https://github.com/usewhisk/whisk.git
 cd whisk
 pnpm install
 pnpm -r build       # build all packages
@@ -312,9 +325,9 @@ pnpm -r test        # run all package tests
 
 ## Acknowledgements
 
-- Built directly on [Circle's CCTP V2](https://developers.circle.com/cctp) — the protocol doing the underlying settlement.
+- Built directly on [Circle's CCTP V2](https://developers.circle.com/cctp), the protocol doing the underlying settlement.
 - Inspired by [Uniswap Widgets](https://github.com/Uniswap/widgets), [shadcn/ui](https://ui.shadcn.com/) for the theming approach, and [wagmi](https://wagmi.sh/) for the config-driven adapter pattern.
-- Not affiliated with Circle in any official sense — Whisk is a community-built widget over Circle's public protocol.
+- Not affiliated with Circle. Whisk is a community-built widget over Circle's public protocol.
 
 ---
 
