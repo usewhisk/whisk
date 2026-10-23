@@ -94,7 +94,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "starknet": "^10.8.0",
-    "wagmi": "^2.13.0"
+    "wagmi": "^3.7.7"
   },
   "devDependencies": {
     "@tanstack/react-query": "^5.59.0",
