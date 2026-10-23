@@ -75,6 +75,10 @@ jobs:
           publish: pnpm release
           commit: "chore: version packages"
           title: "chore: version packages"
+          # Commits and tags go through the GitHub API, signed by GitHub. The
+          # runner has no gitleaks for the pre-commit hook, and the pre-push hook
+          # rejects the changeset-release/main branch name.
+          commitMode: github-api
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No NPM_TOKEN: this repo publishes via Trusted Publishing (OIDC),
