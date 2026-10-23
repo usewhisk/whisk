@@ -74,14 +74,14 @@
   "dependencies": {
     "@noble/hashes": "^1.4.0",
     "@solana/web3.js": "^1.95.0",
-    "@solana/spl-token": "^0.4.0",
+    "@solana/spl-token": "^0.4.15",
     "@stellar/stellar-sdk": "^14.1.1",
     "starknet": "^10.8.0",
     "viem": ">=2.57.5 <3"
   },
   "devDependencies": {
     "tsup": "^8.3.5",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.2",
     "vitest": "^4.1.11"
   }

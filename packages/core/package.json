@@ -73,7 +73,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@solana/spl-token": "^0.4.0",
+    "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.95.0",
     "@stellar/stellar-sdk": "^14.1.1",
     "@usewhisk/cctp": "workspace:^",
@@ -82,7 +82,7 @@
   },
   "devDependencies": {
     "tsup": "^8.3.5",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.2",
     "viem": "^2.57.5",
     "vitest": "^4.1.11"
