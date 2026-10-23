@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { Keypair as StellarKeypair } from "@stellar/stellar-sdk";
+import {
+  Keypair as StellarKeypair,
+  MuxedAccount,
+  Account as StellarAccount,
+  StrKey,
+} from "@stellar/stellar-sdk";
 import {
   Base,
   CCTP_FORWARD_HOOK_DATA,
@@ -631,6 +636,213 @@ describe("into Solana, the recipient is checked before the burn", () => {
       expect(result.kind).toBe("failure");
       expect(sender.burned()).toEqual([]);
       expect(solana.mints).toEqual([]);
+    },
+  );
+});
+
+describe("into Stellar, the recipient is checked before the burn", () => {
+  // mint_and_forward pays the recipient through the USDC contract, which
+  // fails for a classic account without an authorized trustline.
+  const sources = [
+    {
+      source: "Base" as const,
+      domain: Base.cctpDomain,
+      wallet: () => {
+        const wallet = baseWallet();
+        return { adapter: wallet.adapter, burned: () => wallet.batches };
+      },
+    },
+    {
+      source: "Solana" as const,
+      domain: Solana.cctpDomain,
+      wallet: () => {
+        const wallet = createFakeSolanaWallet(Solana);
+        return { adapter: wallet.adapter, burned: () => wallet.burns };
+      },
+    },
+    {
+      source: "Starknet" as const,
+      domain: Starknet.cctpDomain,
+      wallet: () => {
+        const wallet = createFakeStarknetWallet(Starknet);
+        return { adapter: wallet.adapter, burned: () => wallet.burns };
+      },
+    },
+  ];
+
+  const sendToStellar = (
+    source: (typeof sources)[number],
+    recipient: string,
+    destinationAdapter: WhiskAdapter,
+  ) => {
+    const sender = source.wallet();
+    return send({
+      source: source.source,
+      destination: "Stellar",
+      recipient,
+      sourceAdapter: sender.adapter,
+      destinationAdapter,
+      message: attested(source.domain, Stellar.cctpDomain),
+    }).then(({ result }) => ({ result, burned: sender.burned() }));
+  };
+
+  it.each(sources)(
+    "$source to Stellar: no USDC trustline for the recipient burns nothing",
+    async (source) => {
+      const stellar = createFakeStellarWallet(Stellar);
+      stellar.noTrustline.add(STELLAR_RECIPIENT);
+      const { result, burned } = await sendToStellar(
+        source,
+        STELLAR_RECIPIENT,
+        stellar.adapter,
+      );
+      expect(result.kind).toBe("failure");
+      expect(result.kind === "failure" && result.error).toMatchObject({
+        code: "ROUTE_UNAVAILABLE",
+        reason: "recipient_account_missing",
+      });
+      expect(burned).toEqual([]);
+      expect(stellar.invocations).toEqual([]);
+    },
+  );
+
+  it.each(sources)(
+    "$source to Stellar: a trustline the issuer has not authorized burns nothing",
+    async (source) => {
+      const stellar = createFakeStellarWallet(Stellar);
+      stellar.unauthorized.add(STELLAR_RECIPIENT);
+      const { result, burned } = await sendToStellar(
+        source,
+        STELLAR_RECIPIENT,
+        stellar.adapter,
+      );
+      expect(result.kind).toBe("failure");
+      expect(result.kind === "failure" && result.error).toMatchObject({
+        code: "ROUTE_UNAVAILABLE",
+        reason: "recipient_account_missing",
+      });
+      expect(burned).toEqual([]);
+    },
+  );
+
+  it.each(sources)(
+    "$source to Stellar: a Stellar wallet on the wrong network burns nothing",
+    async (source) => {
+      const stellar = createFakeStellarWallet(Stellar);
+      const { result, burned } = await sendToStellar(
+        source,
+        STELLAR_RECIPIENT,
+        { ...stellar.adapter, getNetwork: async () => "testnet" },
+      );
+      expect(result.kind).toBe("failure");
+      expect(result.kind === "failure" && result.error).toMatchObject({
+        code: "WRONG_CHAIN",
+      });
+      expect(burned).toEqual([]);
+      expect(stellar.invocations).toEqual([]);
+    },
+  );
+
+  it.each(sources)(
+    "$source to Stellar: a muxed recipient is checked on its base account",
+    async (source) => {
+      const stellar = createFakeStellarWallet(Stellar);
+      const muxed = new MuxedAccount(
+        new StellarAccount(STELLAR_RECIPIENT, "0"),
+        "7",
+      ).accountId();
+      stellar.noTrustline.add(STELLAR_RECIPIENT);
+      const { result, burned } = await sendToStellar(
+        source,
+        muxed,
+        stellar.adapter,
+      );
+      expect(result.kind).toBe("failure");
+      expect(stellar.trustlineReads).toEqual([STELLAR_RECIPIENT]);
+      expect(burned).toEqual([]);
+    },
+  );
+
+  it.each(sources)(
+    "$source to Stellar: a contract recipient needs no trustline",
+    async (source) => {
+      const stellar = createFakeStellarWallet(Stellar);
+      const contract = StrKey.encodeContract(Buffer.alloc(32, 7));
+      const { result } = await sendToStellar(source, contract, stellar.adapter);
+      expect(result.kind).toBe("success");
+      expect(stellar.trustlineReads).toEqual([]);
+    },
+  );
+
+  it.each(sources)(
+    "$source to Stellar: a wallet that cannot read trustlines burns nothing",
+    async (source) => {
+      const stellar = createFakeStellarWallet(Stellar);
+      const { getTrustline: _unused, ...withoutReader } = stellar.adapter;
+      const { result, burned } = await sendToStellar(
+        source,
+        STELLAR_RECIPIENT,
+        withoutReader,
+      );
+      expect(result.kind).toBe("failure");
+      expect(result.kind === "failure" && result.error).toMatchObject({
+        code: "CONFIG_ERROR",
+      });
+      expect(burned).toEqual([]);
+    },
+  );
+});
+
+describe("into Starknet, the destination wallet is checked before the burn", () => {
+  const sources = [
+    {
+      source: "Base" as const,
+      domain: Base.cctpDomain,
+      wallet: () => {
+        const wallet = baseWallet();
+        return { adapter: wallet.adapter, burned: () => wallet.batches };
+      },
+    },
+    {
+      source: "Solana" as const,
+      domain: Solana.cctpDomain,
+      wallet: () => {
+        const wallet = createFakeSolanaWallet(Solana);
+        return { adapter: wallet.adapter, burned: () => wallet.burns };
+      },
+    },
+    {
+      source: "Stellar" as const,
+      domain: Stellar.cctpDomain,
+      wallet: () => {
+        const wallet = createFakeStellarWallet(Stellar);
+        return { adapter: wallet.adapter, burned: () => wallet.burns };
+      },
+    },
+  ];
+
+  it.each(sources)(
+    "$source to Starknet: a Starknet wallet on the wrong chain burns nothing",
+    async ({ source, domain, wallet }) => {
+      const sender = wallet();
+      const starknet = createFakeStarknetWallet(Starknet);
+      const { result } = await send({
+        source,
+        destination: "Starknet",
+        recipient: STARKNET_RECIPIENT,
+        sourceAdapter: sender.adapter,
+        destinationAdapter: {
+          ...starknet.adapter,
+          getChainId: async () => "0x534e5f5345504f4c4941",
+        },
+        message: attested(domain, Starknet.cctpDomain),
+      });
+      expect(result.kind).toBe("failure");
+      expect(result.kind === "failure" && result.error).toMatchObject({
+        code: "WRONG_CHAIN",
+      });
+      expect(sender.burned()).toEqual([]);
+      expect(starknet.entrypoints).toEqual([]);
     },
   );
 });
