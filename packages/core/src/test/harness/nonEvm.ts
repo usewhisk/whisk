@@ -164,7 +164,7 @@ export function createFakeStellarWallet(chain: StellarChain) {
 }
 
 export function createFakeStarknetWallet(chain: StarknetChain) {
-  const address = `0x${"0".repeat(60)}beef` as Hex;
+  const address = `0x05${"be".repeat(31)}` as Hex;
   const burns: DecodedBurn[] = [];
   const entrypoints: string[] = [];
   let submitted = 0;

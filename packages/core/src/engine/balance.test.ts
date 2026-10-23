@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ArcTestnet, Base } from "@usewhisk/cctp";
+import { ArcTestnet, Base, Solana, Starknet } from "@usewhisk/cctp";
 import { createMemoryInflightStore } from "../inflight/index.js";
 import { createWhisk } from "./createWhisk.js";
 import {
   createFakeEvmWallet,
   createFakeIris,
+  createFakeSolanaWallet,
+  createFakeStarknetWallet,
   type FakeIris,
 } from "../test/harness/index.js";
 
@@ -123,4 +125,29 @@ describe("balance check before signing", () => {
     ).rejects.toMatchObject({ code: "INSUFFICIENT_BALANCE" });
     expect(fake.batches).toEqual([]);
   });
+
+  it.each([
+    ["Starknet", () => createFakeStarknetWallet(Starknet).adapter],
+    ["Solana", () => createFakeSolanaWallet(Solana).adapter],
+  ] as const)(
+    "works out a bridge to %s before a recipient is entered",
+    async (destination, destinationWallet) => {
+      iris.setUsdcBalance(PAYER, 10_000_000n);
+      const engine = createWhisk({
+        chains: ["Base", destination],
+        fetch: iris.fetch,
+      });
+      // The widget stands the payer in for the recipient, since fees do not
+      // depend on who receives.
+      const max = await engine.maxSendable({
+        sourceChain: "Base",
+        destinationChain: destination,
+        recipient: { address: PAYER, chain: destination },
+        adapter: wallet(Base.evmChainId),
+        destinationAdapter: destinationWallet(),
+      });
+      expect(max?.balance).toBe(10_000_000n);
+      expect(BigInt(max!.amount.replace(".", ""))).toBeGreaterThan(0n);
+    },
+  );
 });

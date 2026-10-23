@@ -33,7 +33,7 @@ import {
 
 const EVM_RECIPIENT = "0x0000000000000000000000000000000000000020";
 const STELLAR_RECIPIENT = StellarKeypair.random().publicKey();
-const STARKNET_RECIPIENT = `0x${"0".repeat(61)}abc`;
+const STARKNET_RECIPIENT = `0x04${"ab".repeat(31)}`;
 const ZERO32: `0x${string}` = `0x${"0".repeat(64)}`;
 const NONCE = `0x${"cd".repeat(32)}`;
 
@@ -845,4 +845,147 @@ describe("into Starknet, the destination wallet is checked before the burn", () 
       expect(starknet.entrypoints).toEqual([]);
     },
   );
+});
+
+describe("a Starknet recipient is checked when quoting", () => {
+  const ETH_ADDRESS = `0x${"ab".repeat(20)}`;
+
+  function quoteInto(
+    recipient: string,
+    options: {
+      starknet?: ReturnType<typeof createFakeStarknetWallet>;
+      allowUndeployedRecipient?: boolean;
+      fetch?: typeof fetch;
+    } = {},
+  ) {
+    const wallet = baseWallet();
+    const starknet = options.starknet ?? createFakeStarknetWallet(Starknet);
+    const engine = createWhisk({
+      chains: ["Base", "Starknet"],
+      fetch: options.fetch ?? iris.fetch,
+    });
+    const quote = engine.quote({
+      sourceChain: "Base",
+      destinationChain: "Starknet",
+      recipient: { address: recipient, chain: "Starknet" },
+      amount: "5",
+      adapter: wallet.adapter,
+      destinationAdapter: starknet.adapter,
+      ...(options.allowUndeployedRecipient && {
+        allowUndeployedRecipient: true,
+      }),
+    });
+    return { engine, quote, wallet, starknet };
+  }
+
+  it.each([
+    ["an Ethereum address", ETH_ADDRESS],
+    [
+      "an Ethereum address padded to 32 bytes",
+      `0x${"0".repeat(24)}${"ab".repeat(20)}`,
+    ],
+  ])("refuses %s", async (_, address) => {
+    const { quote, wallet } = quoteInto(address);
+    await expect(quote).rejects.toMatchObject({
+      code: "INVALID_ADDRESS",
+      message: expect.stringMatching(/Ethereum address/),
+    });
+    expect(wallet.batches).toEqual([]);
+  });
+
+  it("refuses a value past the end of Starknet's address range", async () => {
+    const { quote } = quoteInto(`0x08${"0".repeat(62)}`);
+    await expect(quote).rejects.toMatchObject({ code: "INVALID_ADDRESS" });
+  });
+
+  it("refuses an address with no deployed account", async () => {
+    iris.setStarknetUndeployed(STARKNET_RECIPIENT);
+    const { quote, wallet } = quoteInto(STARKNET_RECIPIENT);
+    await expect(quote).rejects.toMatchObject({
+      code: "ROUTE_UNAVAILABLE",
+      reason: "recipient_not_deployed",
+      ecosystem: "starknet",
+    });
+    expect(wallet.batches).toEqual([]);
+  });
+
+  it("bridges to an undeployed account once the payer confirms it", async () => {
+    iris.setStarknetUndeployed(STARKNET_RECIPIENT);
+    const { engine, quote, wallet, starknet } = quoteInto(STARKNET_RECIPIENT, {
+      allowUndeployedRecipient: true,
+    });
+    iris.replyToMessages({
+      message: attested(Base.cctpDomain, Starknet.cctpDomain),
+    });
+    const result = await engine.send({
+      adapter: wallet.adapter,
+      destinationAdapter: starknet.adapter,
+      quote: await quote,
+    });
+    expect(result.kind).toBe("success");
+    expect(wallet.feeBurns[0]).toMatchObject({
+      mintRecipient: `0x${word(STARKNET_RECIPIENT)}`,
+    });
+  });
+
+  it("asks to confirm new fees, not the account again, when fees rise", async () => {
+    iris.setStarknetUndeployed(STARKNET_RECIPIENT);
+    const { engine, quote, wallet, starknet } = quoteInto(STARKNET_RECIPIENT, {
+      allowUndeployedRecipient: true,
+    });
+    const confirmed = await quote;
+    iris.replyToQuote({ fee: 600_000n });
+    await expect(
+      engine.send({
+        adapter: wallet.adapter,
+        destinationAdapter: starknet.adapter,
+        quote: confirmed,
+      }),
+    ).rejects.toMatchObject({ code: "QUOTE_CHANGED" });
+    expect(wallet.batches).toEqual([]);
+  });
+
+  it("takes the connected Starknet wallet's own address without asking", async () => {
+    const starknet = createFakeStarknetWallet(Starknet);
+    iris.setStarknetUndeployed(starknet.address);
+    const unpadded = `0x${BigInt(starknet.address).toString(16)}`;
+    const { quote } = quoteInto(unpadded, { starknet });
+    await expect(quote).resolves.toMatchObject({
+      recipient: { address: unpadded },
+    });
+  });
+
+  it("refuses to quote when the Starknet RPC cannot say", async () => {
+    const down: typeof fetch = async (input, init) => {
+      if (String(init?.body).includes("starknet_getClassHashAt")) {
+        return new Response("unavailable", { status: 503 });
+      }
+      return iris.fetch(input, init);
+    };
+    const { quote, wallet } = quoteInto(STARKNET_RECIPIENT, { fetch: down });
+    await expect(quote).rejects.toMatchObject({
+      message: expect.stringMatching(/starknet_getClassHashAt/),
+    });
+    expect(wallet.batches).toEqual([]);
+  });
+
+  it("checks a same-chain Starknet send the same way", async () => {
+    iris.setStarknetUndeployed(STARKNET_RECIPIENT);
+    const starknet = createFakeStarknetWallet(Starknet);
+    const engine = createWhisk({ chains: ["Starknet"], fetch: iris.fetch });
+    const quote = (recipient: string) =>
+      engine.quote({
+        sourceChain: "Starknet",
+        destinationChain: "Starknet",
+        recipient: { address: recipient, chain: "Starknet" },
+        amount: "5",
+        adapter: starknet.adapter,
+      });
+    await expect(quote(ETH_ADDRESS)).rejects.toMatchObject({
+      code: "INVALID_ADDRESS",
+    });
+    await expect(quote(STARKNET_RECIPIENT)).rejects.toMatchObject({
+      reason: "recipient_not_deployed",
+    });
+  });
 });
