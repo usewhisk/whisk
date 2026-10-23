@@ -79,6 +79,7 @@ export type {
 export {
   getBlockNumber,
   getGasPrice,
+  getStarknetClassHashAt,
   getStarknetTransactionStatus,
   getTransactionStatus,
   getUsdcBalance,
