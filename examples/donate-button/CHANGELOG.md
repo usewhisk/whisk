@@ -1,5 +1,13 @@
 # @usewhisk/example-donate-button
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [843ca6d]
+  - @usewhisk/core@0.2.0
+  - @usewhisk/react@0.2.0
+
 ## 0.0.4
 
 ### Patch Changes
