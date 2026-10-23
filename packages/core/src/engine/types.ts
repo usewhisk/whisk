@@ -42,6 +42,12 @@ export type QuoteParams = {
   destinationAdapter?: WhiskAdapter;
   /** Bridges always move USDC, the only token CCTP carries. */
   token?: Token;
+  /**
+   * Quote to a Starknet address with no account deployed yet. USDC sent
+   * there waits for whoever deploys the account, so set this only once the
+   * payer has confirmed the address is their own new wallet.
+   */
+  allowUndeployedRecipient?: boolean;
 };
 
 /**

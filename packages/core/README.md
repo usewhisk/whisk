@@ -274,8 +274,17 @@ involved, `send` returns `{ kind: "failure", error }`. Branch on
 | `UNKNOWN`              | `WhiskError`               | no        |
 
 `RouteUnavailableError.reason` is one of `same_chain`,
-`source_adapter_required`, `destination_adapter_required` or
-`recipient_account_missing` (a Solana recipient without a USDC account).
+`source_adapter_required`, `destination_adapter_required`,
+`recipient_account_missing` (a Solana recipient without a USDC account,
+or a Stellar one without a USDC trustline) or `recipient_not_deployed`
+(a Starknet address with no account deployed). For the last, ask the
+payer to confirm the address is their own new wallet, then quote again
+with `allowUndeployedRecipient: true`. The connected Starknet wallet's
+own address never needs the confirmation.
+
+A Starknet recipient that fits in 20 bytes is refused with
+`InvalidAddressError`, since it is almost always an Ethereum address
+pasted by mistake.
 `NetworkMismatchError` means the source and destination are not both
 mainnet or both testnet.
 

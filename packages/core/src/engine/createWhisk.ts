@@ -204,7 +204,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       for (let i = 0; i < 6 && amount > 0n; i++) {
         const { quote } = await buildQuote(
           { ...params, amount: formatUsdcAmount(amount) },
-          { config: resolvedConfig },
+          { config: resolvedConfig, skipRecipientChecks: true },
         );
         const left = available - quote.subunits.amountIn;
         if (left >= 0n && amount > best) best = amount;
@@ -415,6 +415,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
   ): Promise<QuoteChangedError> {
     const fresh = await buildQuote(quoteParams(quote, adapters), {
       config: resolvedConfig,
+      skipRecipientChecks: true,
     });
     return new QuoteChangedError(quote, fresh.quote);
   }

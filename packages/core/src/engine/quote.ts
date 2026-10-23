@@ -22,11 +22,20 @@ import {
 } from "./bridge/quote.js";
 import { stampQuote } from "./quoteStamp.js";
 import type { Chain } from "../types/chain.js";
+import {
+  starknetAddressProblem,
+  starknetDeployProblem,
+} from "./bridge/starknetRecipient.js";
 
 const SEND_DURATION_MS = 15_000;
 
 export type BuildQuoteOptions = {
   config: WhiskConfig;
+  /**
+   * For quotes that only work out fees, and for a re-quote of a recipient
+   * the payer already confirmed.
+   */
+  skipRecipientChecks?: boolean;
 };
 
 export function rpcUrlsFor(
@@ -46,26 +55,7 @@ export async function buildQuote(
   const route = decideRoute(params.sourceChain, params.destinationChain);
   const token = params.token ?? DEFAULT_TOKEN;
 
-  // Checked at quote time so a bad address is refused before anything is
-  // signed.
-  const destination = getChain(params.destinationChain);
-  if (destination.ecosystem === "solana") {
-    try {
-      new PublicKey(params.recipient.address);
-    } catch {
-      throw new InvalidAddressError(params.recipient.address);
-    }
-  } else if (destination.ecosystem === "stellar") {
-    if (!isValidStellarStrkey(params.recipient.address)) {
-      throw new InvalidAddressError(params.recipient.address);
-    }
-  } else if (destination.ecosystem === "starknet") {
-    if (!isValidStarknetFelt(params.recipient.address)) {
-      throw new InvalidAddressError(params.recipient.address);
-    }
-  } else if (!viemIsAddress(params.recipient.address)) {
-    throw new InvalidAddressError(params.recipient.address);
-  }
+  if (!options.skipRecipientChecks) await checkRecipient(params, options);
 
   if (route.kind === "send") {
     const customFeeEntries = buildCustomFeeEntries(
@@ -137,4 +127,49 @@ export async function buildQuote(
   });
 
   return { quote: result.quote, bridge: result };
+}
+
+// Checked at quote time so a bad address is refused before anything is
+// signed.
+async function checkRecipient(
+  params: QuoteParams,
+  options: BuildQuoteOptions,
+): Promise<void> {
+  const destination = getChain(params.destinationChain);
+  if (destination.ecosystem === "solana") {
+    try {
+      new PublicKey(params.recipient.address);
+    } catch {
+      throw new InvalidAddressError(params.recipient.address);
+    }
+  } else if (destination.ecosystem === "stellar") {
+    if (!isValidStellarStrkey(params.recipient.address)) {
+      throw new InvalidAddressError(params.recipient.address);
+    }
+  } else if (destination.ecosystem === "starknet") {
+    if (!isValidStarknetFelt(params.recipient.address)) {
+      throw new InvalidAddressError(params.recipient.address);
+    }
+    const shape = starknetAddressProblem(params.recipient.address);
+    if (shape) throw shape;
+    const destinationRpcUrls = rpcUrlsFor(
+      options.config,
+      params.destinationChain,
+    );
+    const deploy = await starknetDeployProblem(
+      destination,
+      params.recipient.address,
+      {
+        connected: [params.adapter, params.destinationAdapter].flatMap((a) =>
+          a?.kind === "starknet" ? [a.address] : [],
+        ),
+        allowUndeployed: params.allowUndeployedRecipient ?? false,
+        ...(destinationRpcUrls && { rpcUrls: destinationRpcUrls }),
+        ...(options.config.fetch && { fetch: options.config.fetch }),
+      },
+    );
+    if (deploy) throw deploy;
+  } else if (!viemIsAddress(params.recipient.address)) {
+    throw new InvalidAddressError(params.recipient.address);
+  }
 }
