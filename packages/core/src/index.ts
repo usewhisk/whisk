@@ -20,6 +20,7 @@ export type {
   StarknetTransactionReceipt,
   StellarAdapter,
   StellarTransactionReceipt,
+  StellarTrustline,
   QuoteParams,
   SendParams,
   SendListeners,

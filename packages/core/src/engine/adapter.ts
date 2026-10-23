@@ -140,6 +140,14 @@ export type StellarTransactionReceipt = {
   ledger: number;
 };
 
+export type StellarTrustline = {
+  /** Stroops, 7 decimals. */
+  balance: bigint;
+  limit: bigint;
+  /** The issuer's AUTHORIZED flag. Without it the account cannot receive. */
+  authorized: boolean;
+};
+
 /**
  * The engine hands over bare Soroban invocations. The adapter picks the RPC,
  * builds the envelope, simulates for the footprint and fees, signs, submits
@@ -171,6 +179,16 @@ export interface StellarAdapter {
    * `live_until_ledger >= current ledger`, so a static `0` fails.
    */
   getLatestLedger(): Promise<number>;
+
+  /**
+   * The account's trustline for `asset`, or `null` when it has none. Before a
+   * burn into Stellar the engine reads the recipient's USDC trustline through
+   * this, and refuses to bridge to a classic account when it is missing.
+   */
+  getTrustline?(
+    account: string,
+    asset: { code: string; issuer: string },
+  ): Promise<StellarTrustline | null>;
 }
 
 export type StarknetTransactionReceipt = {

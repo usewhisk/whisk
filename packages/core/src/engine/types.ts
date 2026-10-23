@@ -23,6 +23,7 @@ export type {
   StarknetTransactionReceipt,
   StellarAdapter,
   StellarTransactionReceipt,
+  StellarTrustline,
   WhiskAdapter,
 } from "./adapter.js";
 

@@ -30,6 +30,7 @@ import type {
   StellarAdapter,
 } from "../types.js";
 import type { BridgeRecoverySnapshot } from "./execute.js";
+import { stellarRecipientProblem } from "./stellarRecipient.js";
 
 export type ExecuteSolanaToStellarInput = {
   network: Network;
@@ -159,6 +160,22 @@ export async function executeSolanaToStellar(
       "burn",
       cause,
       "Failed to read Solana cluster.",
+      snapshot,
+    );
+  }
+
+  const destinationProblem = await stellarRecipientProblem(
+    input.destination,
+    input.destinationAdapter,
+    input.recipientAddress,
+    input.burnAmount,
+  );
+  if (destinationProblem) {
+    return fail(
+      steps,
+      "burn",
+      destinationProblem,
+      destinationProblem.message,
       snapshot,
     );
   }

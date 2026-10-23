@@ -28,6 +28,7 @@ import type {
   StarknetAdapter,
 } from "../types.js";
 import type { BridgeRecoverySnapshot } from "./execute.js";
+import { starknetRecipientProblem } from "./starknetRecipient.js";
 
 export type ExecuteSolanaToStarknetInput = {
   network: Network;
@@ -137,6 +138,20 @@ export async function executeSolanaToStarknet(
       "burn",
       cause,
       "Failed to read Solana cluster.",
+      snapshot,
+    );
+  }
+
+  const destinationProblem = await starknetRecipientProblem(
+    input.destination,
+    input.destinationAdapter,
+  );
+  if (destinationProblem) {
+    return fail(
+      steps,
+      "burn",
+      destinationProblem,
+      destinationProblem.message,
       snapshot,
     );
   }

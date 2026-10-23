@@ -29,6 +29,7 @@ import type {
   StellarAdapter,
 } from "../types.js";
 import type { BridgeRecoverySnapshot } from "./execute.js";
+import { stellarRecipientProblem } from "./stellarRecipient.js";
 
 export type ExecuteStarknetToStellarInput = {
   network: Network;
@@ -134,6 +135,22 @@ export async function executeStarknetToStellar(
       "burn",
       cause,
       "Failed to read Starknet chainId.",
+      snapshot,
+    );
+  }
+
+  const destinationProblem = await stellarRecipientProblem(
+    input.destination,
+    input.destinationAdapter,
+    input.recipientAddress,
+    input.burnAmount,
+  );
+  if (destinationProblem) {
+    return fail(
+      steps,
+      "burn",
+      destinationProblem,
+      destinationProblem.message,
       snapshot,
     );
   }
