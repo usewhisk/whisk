@@ -92,7 +92,7 @@
     "@wagmi/core": "^2.16.3",
     "@web3icons/react": "^4.1.17",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.460.0",
+    "lucide-react": "^1.60.0",
     "starknet": "^10.8.0",
     "wagmi": "^2.13.0"
   },
