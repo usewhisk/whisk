@@ -30,6 +30,7 @@ import type {
   StellarAdapter,
 } from "../types.js";
 import type { BridgeRecoverySnapshot } from "./execute.js";
+import { stellarRecipientProblem } from "./stellarRecipient.js";
 
 export type ExecuteEvmToStellarInput = {
   network: Network;
@@ -127,6 +128,22 @@ export async function executeEvmToStellar(
       "approve",
       cause,
       "Failed to build burn intent.",
+      snapshot,
+    );
+  }
+
+  const destinationProblem = await stellarRecipientProblem(
+    input.destination,
+    input.destinationAdapter,
+    input.recipientAddress,
+    input.burnAmount,
+  );
+  if (destinationProblem) {
+    return fail(
+      steps,
+      "approve",
+      destinationProblem,
+      destinationProblem.message,
       snapshot,
     );
   }

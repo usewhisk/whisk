@@ -26,6 +26,7 @@ import type {
   StarknetAdapter,
 } from "../types.js";
 import type { BridgeRecoverySnapshot } from "./execute.js";
+import { starknetRecipientProblem } from "./starknetRecipient.js";
 
 export type ExecuteEvmToStarknetInput = {
   network: Network;
@@ -97,6 +98,20 @@ export async function executeEvmToStarknet(
       "approve",
       cause,
       "Failed to build burn intent.",
+      snapshot,
+    );
+  }
+
+  const destinationProblem = await starknetRecipientProblem(
+    input.destination,
+    input.destinationAdapter,
+  );
+  if (destinationProblem) {
+    return fail(
+      steps,
+      "approve",
+      destinationProblem,
+      destinationProblem.message,
       snapshot,
     );
   }

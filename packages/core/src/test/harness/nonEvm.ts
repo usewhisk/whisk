@@ -92,10 +92,17 @@ export function createFakeSolanaWallet(chain: SolanaChain) {
   return { adapter, address, burns, mints, missing };
 }
 
+/**
+ * Every account it is asked about holds an authorized USDC trustline unless
+ * listed in `noTrustline` or `unauthorized`.
+ */
 export function createFakeStellarWallet(chain: StellarChain) {
   const address = StellarKeypair.random().publicKey();
   const burns: DecodedBurn[] = [];
   const invocations: string[] = [];
+  const noTrustline = new Set<string>();
+  const unauthorized = new Set<string>();
+  const trustlineReads: string[] = [];
   let submitted = 0;
 
   const adapter: StellarAdapter = {
@@ -132,8 +139,28 @@ export function createFakeStellarWallet(chain: StellarChain) {
     async getLatestLedger() {
       return 1;
     },
+    async getTrustline(account, asset) {
+      trustlineReads.push(account);
+      if (asset.code !== "USDC" || asset.issuer !== chain.usdcIssuer) {
+        return null;
+      }
+      if (noTrustline.has(account)) return null;
+      return {
+        balance: 0n,
+        limit: 9_223_372_036_854_775_807n,
+        authorized: !unauthorized.has(account),
+      };
+    },
   };
-  return { adapter, address, burns, invocations };
+  return {
+    adapter,
+    address,
+    burns,
+    invocations,
+    noTrustline,
+    unauthorized,
+    trustlineReads,
+  };
 }
 
 export function createFakeStarknetWallet(chain: StarknetChain) {
