@@ -1,6 +1,6 @@
 {
   "name": "@usewhisk/example-invoice-link",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "private": true,
   "description": "Invoice payment links. The merchant shares /pay?to=…&amount=…&chain=…; Whisk reads the params and pre-fills.",
   "type": "module",
