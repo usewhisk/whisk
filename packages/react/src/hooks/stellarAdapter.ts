@@ -1,7 +1,10 @@
 import {
+  Asset,
   BASE_FEE,
+  Keypair,
   TransactionBuilder,
   rpc as sorobanRpc,
+  xdr,
 } from "@stellar/stellar-sdk";
 import type { StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { toWhiskError, type StellarAdapter } from "@usewhisk/core";
@@ -34,6 +37,31 @@ export function createStellarAdapter(
         return info.sequence;
       } catch (cause) {
         throw toWhiskError(cause, "Failed to read Stellar latest ledger.");
+      }
+    },
+
+    // Read the ledger entry directly: the SDK's getTrustline reports an RPC
+    // failure as a missing trustline.
+    async getTrustline(account, asset) {
+      try {
+        const key = xdr.LedgerKey.trustline(
+          new xdr.LedgerKeyTrustLine({
+            accountId: Keypair.fromPublicKey(account).xdrAccountId(),
+            asset: new Asset(asset.code, asset.issuer).toTrustLineXDRObject(),
+          }),
+        );
+        const { entries } = await rpcServer.getLedgerEntries(key);
+        const entry = entries[0];
+        if (!entry) return null;
+        const line = entry.val.trustLine();
+        return {
+          balance: BigInt(line.balance().toString()),
+          limit: BigInt(line.limit().toString()),
+          authorized:
+            (line.flags() & xdr.TrustLineFlags.authorizedFlag().value) !== 0,
+        };
+      } catch (cause) {
+        throw toWhiskError(cause, "Failed to read the Stellar USDC trustline.");
       }
     },
 
