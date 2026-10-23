@@ -1,5 +1,13 @@
 # @usewhisk/example-node-headless
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [bf91a52]
+  - @usewhisk/cctp@0.1.1
+  - @usewhisk/core@0.2.2
+
 ## 0.0.3
 
 ### Patch Changes
