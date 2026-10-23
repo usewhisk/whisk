@@ -1,6 +1,6 @@
 {
   "name": "@usewhisk/example-payroll-batch",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "description": "Vite + React admin tool. A list of payees, click one, the same Whisk widget repopulates with their address + amount.",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@usewhisk/docs",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "description": "Whisk marketing landing + fumadocs documentation. Served at usewhisk.vercel.app (marketing) and usewhisk.vercel.app/docs (docs).",
   "type": "module",

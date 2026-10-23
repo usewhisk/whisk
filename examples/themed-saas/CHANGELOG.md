@@ -1,5 +1,13 @@
 # @usewhisk/example-themed-saas
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [bf91a52]
+  - @usewhisk/core@0.2.2
+  - @usewhisk/react@0.2.2
+
 ## 0.0.6
 
 ### Patch Changes
