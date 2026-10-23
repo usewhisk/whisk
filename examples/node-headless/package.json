@@ -22,7 +22,7 @@
     "viem": "^2.57.5"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.5",
     "tsx": "^4.19.0",
     "typescript": "^5.7.2"
   }
