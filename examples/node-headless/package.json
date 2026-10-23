@@ -1,6 +1,6 @@
 {
   "name": "@usewhisk/example-node-headless",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "description": "Node script that drives @usewhisk/core directly via viem. Demonstrates the headless flow: server-side send/bridge, refund, receipt polling, webhook signing.",
   "type": "module",
