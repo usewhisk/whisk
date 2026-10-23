@@ -1,5 +1,13 @@
 # @usewhisk/example-invoice-link
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [b9013e3]
+  - @usewhisk/core@0.2.1
+  - @usewhisk/react@0.2.1
+
 ## 0.0.5
 
 ### Patch Changes

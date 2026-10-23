@@ -1,6 +1,6 @@
 {
   "name": "@usewhisk/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Framework-agnostic Whisk engine: quote, send, bridge and resume USDC transfers over Circle CCTP V2 on EVM, Solana, Stellar and Starknet.",
   "license": "MIT",
   "author": "SignorDev (https://github.com/Signor1)",
