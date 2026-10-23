@@ -17,6 +17,7 @@ import {
   isSendRoute,
   QuoteChangedError,
   QuoteExpiredError,
+  RouteUnavailableError,
   toWhiskError,
   type Chain,
   type ChainKind,
@@ -181,6 +182,11 @@ export function WhiskSend({
     null,
   );
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  // Starknet addresses with no account yet, as asked about and as confirmed.
+  const [undeployed, setUndeployed] = useState<string | null>(null);
+  const [confirmedUndeployed, setConfirmedUndeployed] = useState<string | null>(
+    null,
+  );
   const [refreshTick, setRefreshTick] = useState(0);
   const [feeRise, setFeeRise] = useState<Quote | null>(null);
   const [sendError, setSendError] = useState<WhiskError | null>(null);
@@ -350,10 +356,22 @@ export function WhiskSend({
           amount,
           adapter,
           ...(destinationAdapter && { destinationAdapter }),
+          ...(confirmedUndeployed === resolved.address && {
+            allowUndeployedRecipient: true,
+          }),
         });
-        if (!cancelled) setQuoted({ key: quoteKey, quote: q });
+        if (cancelled) return;
+        setQuoted({ key: quoteKey, quote: q });
+        setUndeployed(null);
       } catch (err) {
-        if (!cancelled) {
+        if (cancelled) return;
+        if (
+          err instanceof RouteUnavailableError &&
+          err.reason === "recipient_not_deployed"
+        ) {
+          setUndeployed(resolved.address);
+        } else {
+          setUndeployed(null);
           setQuoteError(
             err instanceof Error ? err.message : "Could not build a quote.",
           );
@@ -366,6 +384,7 @@ export function WhiskSend({
   }, [
     adapter,
     amount,
+    confirmedUndeployed,
     destinationAdapter,
     destinationForTab,
     engine,
@@ -558,6 +577,27 @@ export function WhiskSend({
           quoteError={quoteError}
         />
       )}
+
+      {undeployed &&
+      undeployed === resolved?.address &&
+      undeployed !== confirmedUndeployed ? (
+        <Banner
+          variant="warning"
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmedUndeployed(undeployed)}
+            >
+              It&apos;s my wallet, continue
+            </Button>
+          }
+        >
+          No Starknet account is deployed at {shortenAddress(undeployed)} yet.
+          USDC sent there waits until the account is deployed. Continue only if
+          this is your own new wallet.
+        </Banner>
+      ) : null}
 
       {result ? <ResultPanel result={result} /> : null}
       {sendError ? (

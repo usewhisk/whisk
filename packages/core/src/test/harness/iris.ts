@@ -57,6 +57,8 @@ export type FakeIris = {
    * Owners not set hold 1,000,000 USDC.
    */
   setUsdcBalance(owner: `0x${string}`, subunits: bigint): void;
+  /** Starknet addresses with no contract. Every other address is deployed. */
+  setStarknetUndeployed(address: string): void;
 };
 
 /**
@@ -106,6 +108,7 @@ export function createFakeIris(): FakeIris {
   const reattestReplies: IrisReply[] = [];
   const usedNonces = new Set<string>();
   const usdcBalances = new Map<string, bigint>();
+  const undeployed = new Set<bigint>();
   let standardMinFee = 0n;
   const quoteRequests: QuoteRequest[] = [];
   const quoteReplies: QuoteReply[] = [];
@@ -187,6 +190,23 @@ export function createFakeIris(): FakeIris {
           jsonrpc: "2.0",
           id: rpc.id ?? 1,
           result: [usedNonces.has(nonce) ? "0x1" : "0x0"],
+        });
+      }
+      if (rpc.method === "starknet_getClassHashAt") {
+        const { contract_address } = rpc.params as unknown as {
+          contract_address: string;
+        };
+        if (undeployed.has(BigInt(contract_address))) {
+          return json(200, {
+            jsonrpc: "2.0",
+            id: rpc.id ?? 1,
+            error: { code: 20, message: "Contract not found" },
+          });
+        }
+        return json(200, {
+          jsonrpc: "2.0",
+          id: rpc.id ?? 1,
+          result: `0x${"7a".repeat(31)}`,
         });
       }
       const callData = rpc.params?.[0]?.data;
@@ -327,6 +347,9 @@ export function createFakeIris(): FakeIris {
     },
     setUsdcBalance(owner, subunits) {
       usdcBalances.set(owner.toLowerCase(), subunits);
+    },
+    setStarknetUndeployed(address) {
+      undeployed.add(BigInt(address));
     },
     setFees(sourceDomain, destinationDomain, rows) {
       fees.set(`${sourceDomain}:${destinationDomain}`, rows);

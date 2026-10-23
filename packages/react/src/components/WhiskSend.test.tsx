@@ -7,7 +7,14 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { PAYER, RECIPIENT, WithWhisk, fakeEngine } from "../test/widget.js";
+import { RouteUnavailableError } from "@usewhisk/core";
+import {
+  PAYER,
+  RECIPIENT,
+  WithWhisk,
+  fakeEngine,
+  sameChainQuote,
+} from "../test/widget.js";
 
 vi.mock("wagmi", () => ({
   useAccount: () => ({
@@ -106,5 +113,51 @@ describe("WhiskSend balance", () => {
         destinationChain: "Base",
       }),
     );
+  });
+});
+
+describe("WhiskSend undeployed Starknet recipient", () => {
+  it("asks the payer to confirm the address before it quotes", async () => {
+    const engine = fakeEngine();
+    engine.quote.mockImplementation(
+      async (params: {
+        amount: string;
+        allowUndeployedRecipient?: boolean;
+      }) => {
+        if (!params.allowUndeployedRecipient) {
+          throw new RouteUnavailableError(
+            "recipient_not_deployed",
+            "No Starknet account is deployed at this address.",
+            "starknet",
+          );
+        }
+        return sameChainQuote(params.amount);
+      },
+    );
+    render(
+      <WithWhisk engine={engine}>
+        <WhiskSend defaultRecipient={RECIPIENT} defaultAmount="5" />
+      </WithWhisk>,
+    );
+
+    const send = await screen.findByRole("button", { name: "Send USDC" });
+    const confirm = await screen.findByRole("button", {
+      name: "It's my wallet, continue",
+    });
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect((send as HTMLButtonElement).disabled).toBe(false),
+    );
+    expect(engine.quote).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        recipient: expect.objectContaining({ address: RECIPIENT }),
+        allowUndeployedRecipient: true,
+      }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "It's my wallet, continue" }),
+    ).toBeNull();
   });
 });

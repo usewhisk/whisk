@@ -216,6 +216,11 @@ Errors are typed `WhiskError` subclasses re-exported from
 `RouteUnavailableError` (with a `reason` such as
 `recipient_account_missing`) and `NetworkMismatchError`. Branch on
 `error.code`, which also covers `QUOTE_EXPIRED` and `QUOTE_CHANGED`.
+
+`<WhiskSend>` handles `recipient_not_deployed` itself: it asks the payer
+to confirm a Starknet address with no account deployed before it quotes
+the transfer. A custom UI quotes again with `allowUndeployedRecipient:
+true` once the payer confirms.
 See the [core README](https://www.npmjs.com/package/@usewhisk/core#errors)
 for the full table.
 

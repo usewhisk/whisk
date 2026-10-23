@@ -105,10 +105,11 @@ export class InvalidAddressError extends WhiskError {
   constructor(
     public readonly input: string,
     cause?: unknown,
+    message = `"${input}" is not a recognised address or supported recipient format.`,
   ) {
     super({
       code: "INVALID_ADDRESS",
-      message: `"${input}" is not a recognised address or supported recipient format.`,
+      message,
       retryable: false,
       cause,
     });
@@ -246,7 +247,8 @@ export type RouteUnavailableReason =
   | "same_chain"
   | "source_adapter_required"
   | "destination_adapter_required"
-  | "recipient_account_missing";
+  | "recipient_account_missing"
+  | "recipient_not_deployed";
 
 export class RouteUnavailableError extends WhiskError {
   constructor(
