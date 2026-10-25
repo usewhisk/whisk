@@ -18,6 +18,7 @@ import {
 } from "../test/harness/index.js";
 
 const RECIPIENT = "0x0000000000000000000000000000000000000020";
+const MERCHANT = "0x000000000000000000000000000000000000bEEF";
 const NONCE = `0x${"ab".repeat(32)}` as const;
 const FORWARD_HOOK = `0x636374702d666f7277617264${"00".repeat(20)}` as const;
 
@@ -199,6 +200,66 @@ describe("in-flight transfers", () => {
       ),
     ).toBe(true);
     expect((await engine.inflight()).map((r) => r.step)).toEqual(["minted"]);
+  });
+
+  it("records the merchant fee and reports it on resume without asking for it", async () => {
+    const engine = createWhisk({
+      chains: ["Base", "Arbitrum"],
+      feePolicy: { value: "1", recipient: MERCHANT },
+    });
+    const quote = await engine.quote({
+      sourceChain: "Base",
+      destinationChain: "Arbitrum",
+      recipient: { address: RECIPIENT, chain: "Arbitrum" },
+      amount: "5",
+      adapter: wallet.adapter,
+    });
+    wallet.dropNextReceipt();
+    const sent = await engine.send({ adapter: wallet.adapter, quote });
+    expect(sent.customFee).toEqual({ status: "unpaid", amount: "1" });
+    const [record] = await engine.inflight();
+    expect(record?.customFee).toEqual({ amount: "1000000", status: "unpaid" });
+    const batches = wallet.batches.length;
+
+    iris.replyToMessages({ message: FORWARDED });
+    const resumed = await createWhisk({
+      chains: ["Base", "Arbitrum"],
+      feePolicy: { value: "1", recipient: MERCHANT },
+    }).resume(record as InflightRecord);
+    expect(resumed.kind).toBe("success");
+    expect(resumed.customFee).toEqual({ status: "unpaid", amount: "1" });
+    expect(wallet.batches).toHaveLength(batches);
+
+    const paid = `0x${"12".repeat(32)}` as const;
+    const again = await createWhisk({ chains: ["Base", "Arbitrum"] }).resume({
+      ...(record as InflightRecord),
+      customFee: { amount: "1000000", status: "paid", txHashes: [paid] },
+    });
+    expect(again.customFee).toEqual({
+      status: "paid",
+      amount: "1",
+      txHashes: [paid],
+    });
+  });
+
+  it("saves the fee as paid once it lands", async () => {
+    const engine = createWhisk({
+      chains: ["Base", "Arbitrum"],
+      feePolicy: { value: "1", recipient: MERCHANT },
+    });
+    iris.replyToMessages({ message: FORWARDED });
+    const quote = await engine.quote({
+      sourceChain: "Base",
+      destinationChain: "Arbitrum",
+      recipient: { address: RECIPIENT, chain: "Arbitrum" },
+      amount: "5",
+      adapter: wallet.adapter,
+    });
+    const result = await engine.send({ adapter: wallet.adapter, quote });
+    expect(result.customFee?.status).toBe("paid");
+    const [record] = await engine.inflight();
+    expect(record?.customFee).toMatchObject({ status: "paid" });
+    expect(record?.customFee?.txHashes).toHaveLength(2);
   });
 
   it("mints an unforwarded transfer with the destination wallet, and only once", async () => {
