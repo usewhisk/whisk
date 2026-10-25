@@ -7,7 +7,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { RouteUnavailableError } from "@usewhisk/core";
+import { RouteUnavailableError, UserRejectedError } from "@usewhisk/core";
 import {
   PAYER,
   RECIPIENT,
@@ -86,6 +86,34 @@ describe("WhiskSend errors", () => {
 });
 
 describe("WhiskSend balance", () => {
+  it("says when the transfer went through but the merchant fee was not paid", async () => {
+    const engine = fakeEngine();
+    engine.send.mockResolvedValue({
+      kind: "success",
+      finalTxHash: `0x${"ab".repeat(32)}`,
+      steps: [],
+      customFee: {
+        status: "unpaid",
+        amount: "1",
+        error: new UserRejectedError(),
+      },
+    });
+    render(
+      <WithWhisk engine={engine}>
+        <WhiskSend defaultRecipient={RECIPIENT} defaultAmount="5" />
+      </WithWhisk>,
+    );
+    const button = await screen.findByRole("button", { name: "Send USDC" });
+    await waitFor(() =>
+      expect((button as HTMLButtonElement).disabled).toBe(false),
+    );
+    fireEvent.click(button);
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain("Sent.");
+    expect(status.textContent).toContain("The 1 USDC fee was not paid");
+    expect(status.textContent).toContain("User rejected");
+  });
+
   it("shows the payer's USDC and fills Max from the engine", async () => {
     const engine = fakeEngine();
     engine.balance.mockResolvedValue(12_500_000n);
