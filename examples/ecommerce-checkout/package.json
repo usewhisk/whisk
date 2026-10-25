@@ -1,6 +1,6 @@
 {
   "name": "@usewhisk/example-ecommerce-checkout",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "description": "E-commerce checkout. Whisk locked to a fixed price + merchant address — the widget is just the confirm-and-pay surface.",
   "type": "module",
