@@ -841,6 +841,15 @@ function ResultPanel({ result }: { result: SendSuccess | SendFailure }) {
         {result.finalTxHash
           ? `Tx ${shortenHash(result.finalTxHash)}.`
           : "Transfer submitted."}
+        {result.customFee?.status === "unpaid" ? (
+          <>
+            {" "}
+            The {result.customFee.amount} USDC fee was not paid
+            {result.customFee.error
+              ? `: ${result.customFee.error.message}`
+              : "."}
+          </>
+        ) : null}
       </div>
     );
   }
