@@ -22,6 +22,7 @@ import {
 import { PublicKey } from "@solana/web3.js";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { ConfigError, toWhiskError, WhiskError } from "../../errors/errors.js";
+import { settleFee, submitWithFee, type FeeCharge } from "../customFee.js";
 import type { Step, StepName } from "../../types/step.js";
 import type {
   EvmAdapter,
@@ -46,7 +47,8 @@ export type ExecuteEvmToSolanaInput = {
   tier: BurnFeeTier;
   /** Circle does not forward to Solana. */
   useForwarder?: false;
-  customFeeCalls?: EvmCall[];
+  /** The merchant fee, sent with the burn or once it has landed. */
+  customFee?: FeeCharge;
   sourceAdapter: EvmAdapter;
   /** Set when the fees are paid upfront from Circle's signed quote. */
   upfront?: UpfrontFee;
@@ -140,10 +142,6 @@ export async function executeEvmToSolana(
     return fail(steps, "approve", problem, problem.message, snapshot);
   }
 
-  const customFeeCalls = input.customFeeCalls ?? [];
-  const submittedCalls: EvmCall[] = [...customFeeCalls, ...burnCalls];
-  const customFeeOffset = customFeeCalls.length;
-
   try {
     const live = await input.sourceAdapter.getChainId();
     if (live !== input.source.evmChainId) {
@@ -162,16 +160,14 @@ export async function executeEvmToSolana(
   const hasApprove = burnCalls.length === 2;
   let approveHash: `0x${string}` | undefined;
   let burnHash: `0x${string}`;
-  const customFeeHashes: `0x${string}`[] = [];
   try {
-    const { hashes } = await input.sourceAdapter.sendCalls(submittedCalls, {
-      // The burn is the last call, or the whole batch when it shares a hash.
-      onSubmitted: (hash, index) => {
-        if (index === submittedCalls.length - 1) {
-          listeners?.onBurnSubmitted?.(hash);
-        }
-      },
-    });
+    const hashes = await submitWithFee(
+      input.sourceAdapter,
+      input.source.evmChainId,
+      burnCalls,
+      input.customFee,
+      (hash) => listeners?.onBurnSubmitted?.(hash),
+    );
     if (hashes.length === 0) {
       return fail(
         steps,
@@ -181,19 +177,9 @@ export async function executeEvmToSolana(
         snapshot,
       );
     }
-    if (hashes.length === 1) {
-      burnHash = hashes[0] as `0x${string}`;
-      if (hasApprove) approveHash = burnHash;
-      if (customFeeOffset > 0) customFeeHashes.push(burnHash);
-    } else {
-      for (let i = 0; i < customFeeOffset; i++) {
-        customFeeHashes.push(hashes[i] as `0x${string}`);
-      }
-      if (hasApprove) {
-        approveHash = hashes[customFeeOffset] as `0x${string}`;
-      }
-      burnHash = hashes[hashes.length - 1] as `0x${string}`;
-    }
+    // One hash per call, or one for a whole batch. The burn is last.
+    burnHash = hashes[hashes.length - 1] as `0x${string}`;
+    if (hasApprove) approveHash = hashes[0] as `0x${string}`;
   } catch (cause) {
     return fail(
       steps,
@@ -206,31 +192,6 @@ export async function executeEvmToSolana(
 
   // Saved before any receipt wait, which can outlive the tab.
   listeners?.onBurnSubmitted?.(burnHash);
-
-  for (const hash of customFeeHashes) {
-    if (hash === burnHash) continue;
-    try {
-      const receipt = await input.sourceAdapter.waitForReceipt(hash);
-      if (receipt.status === "reverted") {
-        return fail(
-          steps,
-          "approve",
-          new Error(`Merchant fee transfer reverted on-chain (${hash}).`),
-          "Merchant fee transfer reverted on-chain.",
-          snapshot,
-          "reverted_onchain",
-        );
-      }
-    } catch (cause) {
-      return fail(
-        steps,
-        "approve",
-        cause,
-        "Failed waiting for merchant fee receipt.",
-        snapshot,
-      );
-    }
-  }
 
   if (hasApprove && approveHash) {
     if (approveHash === burnHash) {
@@ -293,6 +254,7 @@ export async function executeEvmToSolana(
   }
   steps[1] = { name: "burn", state: "success", txHash: burnHash };
   listeners?.onStep?.(steps[1]);
+  await settleFee(input.sourceAdapter, input.customFee);
 
   steps[2] = { name: "fetchAttestation", state: "pending" };
   listeners?.onStep?.(steps[2]);

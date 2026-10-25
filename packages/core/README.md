@@ -151,6 +151,9 @@ interface WhiskEngine {
 
 `SendResult` is `SendSuccess | SendFailure`, a discriminated union:
 branch on `result.kind` and TypeScript narrows the rest of the shape.
+With a `feePolicy`, both carry `customFee`: `paid` with the fee's
+transaction hashes, or `unpaid`, with the wallet's error when the payer
+rejected the fee or it reverted after the transfer had landed.
 
 `balance` and `maxSendable` read EVM USDC balances and return `null`
 elsewhere. Bridges are recorded in the `inflightStore` from the moment
@@ -182,6 +185,7 @@ interface EvmAdapter {
   readonly address: `0x${string}`;
   getChainId(): Promise<number>;
   switchChain(chainId: number): Promise<void>;
+  supportsAtomicBatch?(chainId: number): Promise<boolean>;
   sendCalls(
     calls: EvmCall[],
     options?: SendCallsOptions,
@@ -189,6 +193,13 @@ interface EvmAdapter {
   waitForReceipt(hash: `0x${string}`): Promise<CallReceipt>;
 }
 ```
+
+`supportsAtomicBatch` is optional. When it says yes for the source chain, a
+transfer that carries a `feePolicy` fee sends the burn and the fee in one
+`sendCalls` with `atomic: true`, and the adapter must land all of them or none.
+An adapter that cannot throws `WalletCapabilityError("atomic_unsupported")`
+before sending anything, and the engine sends the calls separately instead.
+Without it, the fee is a separate request once the burn has landed.
 
 Wrap whatever you have (a wagmi connector, a viem `WalletClient`, a
 Node signing key) into this shape and pass it to `engine.quote` and

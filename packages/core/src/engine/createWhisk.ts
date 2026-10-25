@@ -70,9 +70,14 @@ import { executeSolanaToStarknet } from "./bridge/executeSolanaToStarknet.js";
 import { executeStarknetToSolana } from "./bridge/executeStarknetToSolana.js";
 import { executeStellarToStarknet } from "./bridge/executeStellarToStarknet.js";
 import { executeStarknetToStellar } from "./bridge/executeStarknetToStellar.js";
-import { buildCustomFee } from "./customFee.js";
+import {
+  buildCustomFee,
+  createFeeCharge,
+  type FeeCharge,
+} from "./customFee.js";
 import { buildRefundMetadata, validateRefundInput } from "../refund/index.js";
 import type {
+  CustomFeeOutcome,
   EvmAdapter,
   QuoteParams,
   RefundParams,
@@ -157,7 +162,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         throw new QuoteExpiredError(params.quote);
       }
       await assertCanPay(params.quote, params.adapter);
-      const result = await tracked(params.quote, listeners, (tracking) =>
+      const result = await tracked(params.quote, listeners, (tracking, fee) =>
         runRoute(
           {
             quote: params.quote,
@@ -167,6 +172,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             }),
           },
           tracking,
+          fee,
         ),
       );
       return attachMetadata(result, metadata);
@@ -224,13 +230,14 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       return store.remove(id);
     },
 
-    resume(record, options = {}, listeners) {
-      return resumeTransfer(
+    async resume(record, options = {}, listeners) {
+      const result = await resumeTransfer(
         record,
         ruledOptions(options),
         resumeContext,
         listeners,
       );
+      return withRecordedFee(result, record);
     },
 
     async resumeFromTx(params, listeners) {
@@ -247,7 +254,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
           resolvedConfig.fetch,
         ));
       if (!known) await store.put(record);
-      return resumeTransfer(
+      const result = await resumeTransfer(
         record,
         ruledOptions({
           ...(params.destinationAdapter && {
@@ -257,6 +264,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         resumeContext,
         listeners,
       );
+      return withRecordedFee(result, record);
     },
 
     async refund(
@@ -289,8 +297,8 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         },
         { config: resolvedConfig },
       );
-      const result = await tracked(quote, listeners, (tracking) =>
-        runRoute({ quote, ...adapters }, tracking),
+      const result = await tracked(quote, listeners, (tracking, fee) =>
+        runRoute({ quote, ...adapters }, tracking, fee),
       );
       return attachMetadata(result, refundMetadata);
     },
@@ -304,10 +312,20 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
   async function tracked(
     quote: Quote,
     listeners: SendListeners | undefined,
-    run: (listeners: SendListeners) => Promise<SendResult>,
+    run: (listeners: SendListeners, fee?: FeeCharge) => Promise<SendResult>,
   ): Promise<SendResult> {
+    const fee = customFeeFor(quote);
+    let onFeeSettled: ((outcome: CustomFeeOutcome) => void) | undefined;
+    const charge = fee
+      ? createFeeCharge(fee, (outcome) => onFeeSettled?.(outcome))
+      : undefined;
+    const withFee = (result: SendResult): SendResult =>
+      charge ? { ...result, customFee: charge.outcome() } : result;
+
     const plan = quote.plan;
-    if (quote.route.kind !== "bridge" || !plan) return run(listeners ?? {});
+    if (quote.route.kind !== "bridge" || !plan) {
+      return withFee(await run(listeners ?? {}, charge));
+    }
     const now = Date.now();
     let record: InflightRecord = {
       version: 2,
@@ -320,6 +338,9 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       amountBurned: quote.subunits.burnAmount.toString(),
       recipient: quote.recipient.address,
       step: "signing",
+      ...(fee && {
+        customFee: { amount: fee.totalAmount.toString(), status: "unpaid" },
+      }),
       createdAt: now,
       updatedAt: now,
     };
@@ -330,6 +351,16 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
       record = { ...record, ...patch, updatedAt: Date.now() };
       const snapshot = record;
       writes = writes.then(() => store.put(snapshot));
+    };
+    onFeeSettled = (outcome) => {
+      if (!fee) return;
+      save({
+        customFee: {
+          amount: fee.totalAmount.toString(),
+          status: outcome.status,
+          ...(outcome.txHashes && { txHashes: outcome.txHashes }),
+        },
+      });
     };
     const tracking: SendListeners = {
       onBurnSubmitted: (txHash) => {
@@ -346,7 +377,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
 
     let result: SendResult;
     try {
-      result = await run(tracking);
+      result = await run(tracking, charge);
     } catch (err) {
       await writes;
       if (!record.sourceTxHash) await store.remove(record.id);
@@ -362,7 +393,16 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
     } else if (!record.sourceTxHash) {
       await store.remove(record.id);
     }
-    return result;
+    return withFee(result);
+  }
+
+  function customFeeFor(quote: Quote) {
+    const route = quote.route;
+    const source = getChain(
+      route.kind === "bridge" ? route.sourceChain : route.chain,
+    );
+    if (source.ecosystem !== "evm") return null;
+    return buildCustomFee(resolvedConfig.feePolicy, source as EvmChain);
   }
 
   /**
@@ -538,6 +578,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
   async function runRoute(
     given: Adapters & { quote: Quote },
     listeners?: SendListeners,
+    customFee?: FeeCharge,
   ): Promise<SendResult> {
     const input = {
       ...given,
@@ -595,14 +636,13 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
 
       const evmSendChain = cctpChain as EvmChain;
       const adapter = expectEvmAdapter(input.adapter, evmSendChain);
-      const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSendChain);
       return executeSameChainSend(
         {
           chain: evmSendChain,
           recipientAddress: recipient.address,
           amount,
           adapter,
-          ...(customFee && { customFeeCalls: customFee.calls }),
+          ...(customFee && { customFee }),
         },
         listeners,
       );
@@ -630,7 +670,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
         const evmSource = source as EvmChain;
         const evmDestination = destination as EvmChain;
         const evmAdapter = expectEvmAdapter(input.adapter, evmSource);
-        const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
         return executeBridge(
           {
             ...(bridge.upfront && { upfront: bridge.upfront }),
@@ -646,7 +685,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             tier: bridge.tier,
             useForwarder: forwarded,
             sourceAdapter: evmAdapter,
-            ...(customFee && { customFeeCalls: customFee.calls }),
+            ...(customFee && { customFee }),
           },
           listeners,
         );
@@ -693,7 +732,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
           input.destinationAdapter,
           starknetDest,
         );
-        const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
         return executeEvmToStarknet(
           {
             ...(bridge.upfront && { upfront: bridge.upfront }),
@@ -709,7 +747,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             tier: bridge.tier,
             sourceAdapter: evmAdapter,
             destinationAdapter: destAdapter,
-            ...(customFee && { customFeeCalls: customFee.calls }),
+            ...(customFee && { customFee }),
           },
           listeners,
         );
@@ -763,7 +801,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
           input.destinationAdapter,
           stellarDest,
         );
-        const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
         return executeEvmToStellar(
           {
             network,
@@ -778,7 +815,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             tier: bridge.tier,
             sourceAdapter: evmAdapter,
             destinationAdapter: destAdapter,
-            ...(customFee && { customFeeCalls: customFee.calls }),
+            ...(customFee && { customFee }),
           },
           listeners,
         );
@@ -1056,7 +1093,6 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
           input.destinationAdapter,
           solDestination,
         );
-        const customFee = buildCustomFee(resolvedConfig.feePolicy, evmSource);
         return executeEvmToSolana(
           {
             ...(bridge.upfront && { upfront: bridge.upfront }),
@@ -1072,7 +1108,7 @@ export function createWhisk(config: WhiskConfig): WhiskEngine {
             tier: bridge.tier,
             sourceAdapter: evmAdapter,
             destinationAdapter: destAdapter,
-            ...(customFee && { customFeeCalls: customFee.calls }),
+            ...(customFee && { customFee }),
           },
           listeners,
         );
@@ -1139,6 +1175,22 @@ function expectStarknetAdapter(
  * failure carry it through so receipts and webhook deliveries can
  * correlate either outcome back to the same request.
  */
+/** A resumed transfer reports the fee from its record. */
+function withRecordedFee(
+  result: SendResult,
+  record: InflightRecord,
+): SendResult {
+  const fee = record.customFee;
+  if (!fee) return result;
+  const amount = formatUsdcAmount(BigInt(fee.amount));
+  const txHashes = fee.txHashes as `0x${string}`[] | undefined;
+  const customFee: CustomFeeOutcome =
+    fee.status === "paid"
+      ? { status: "paid", txHashes: txHashes ?? [], amount }
+      : { status: "unpaid", amount, ...(txHashes && { txHashes }) };
+  return { ...result, customFee };
+}
+
 function attachMetadata(
   result: SendResult,
   metadata: WhiskMetadata | undefined,
