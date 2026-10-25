@@ -17,7 +17,7 @@
     "typecheck": "pnpm -r typecheck",
     "typecheck:packages": "pnpm -r --filter './packages/*' typecheck",
     "typecheck:examples": "pnpm -r --filter './examples/*' typecheck",
-    "test": "pnpm -r test",
+    "test": "node --test scripts/*.test.mjs && pnpm -r test",
     "test:testnet": "pnpm --filter @usewhisk/core test:testnet",
     "lint": "pnpm -r lint",
     "format": "prettier --write .",
@@ -60,13 +60,8 @@
       "source-map-js@<1.2.2": "^1.2.2",
       "toml@<5.0.1": "^5.0.1",
       "ws@>=7.0.0 <7.5.11": "^7.5.11",
-      "ws@>=8.0.0 <8.21.0": "^8.21.0"
-    },
-    "auditConfig": {
-      "ignoreGhsas": [
-        "GHSA-vfj7-8cjw-p6xm",
-        "GHSA-3gc7-fjrx-p6mg"
-      ]
+      "ws@>=8.0.0 <8.21.0": "^8.21.0",
+      "zod@>=4.0.0 <4.6.6": "^4.6.7"
     }
   }
 }
