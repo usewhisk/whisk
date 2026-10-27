@@ -3,21 +3,35 @@
     "ghsa": "GHSA-mrhx-c7xc-m3w5",
     "package": "zod",
     "version": "3.22.4",
-    "path": "packages__react>wagmi>@wagmi/connectors>@walletconnect/ethereum-provider>@reown/appkit>@reown/appkit-wallet>zod",
+    "dependent": "@reown/appkit-wallet",
     "reason": "No fixed release: @reown/appkit-wallet pins zod 3.22.4 up to its latest version, 1.8.24. It uses zod only to parse postMessage events for the embedded email and social login wallet frame, which the WalletConnect connector Whisk uses never starts. A page able to post such a message already runs script in the payer's tab, so the worst case is that script crashing its own tab."
   },
   {
     "ghsa": "GHSA-mrhx-c7xc-m3w5",
     "package": "zod",
+    "version": "3.22.4",
+    "dependent": "abitype",
+    "reason": "abitype takes zod as an optional peer and imports it only from its abitype/zod entry. viem and Whisk never import that entry; the only installed package that does is @coinbase/cdp-sdk, accepted separately. pnpm links whichever zod 3 sits next to abitype in the wallet connector tree, here the one @reown/appkit-wallet pins."
+  },
+  {
+    "ghsa": "GHSA-mrhx-c7xc-m3w5",
+    "package": "zod",
     "version": "3.25.76",
-    "path": "packages__react>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>zod",
+    "dependent": "abitype",
+    "reason": "abitype takes zod as an optional peer and imports it only from its abitype/zod entry. viem and Whisk never import that entry; the only installed package that does is @coinbase/cdp-sdk, accepted separately. pnpm links whichever zod 3 sits next to abitype in the wallet connector tree, here the one @coinbase/cdp-sdk needs."
+  },
+  {
+    "ghsa": "GHSA-mrhx-c7xc-m3w5",
+    "package": "zod",
+    "version": "3.25.76",
+    "dependent": "@coinbase/cdp-sdk",
     "reason": "No fixed release: @coinbase/cdp-sdk depends on zod ^3.25.76 up to its latest version, 1.60.0. @base-org/account loads it only in charge and getOrCreateSubscriptionOwnerWallet, which are exported from its Node entry alone and need Coinbase CDP API keys. Whisk never imports @base-org/account and does not configure wagmi's baseAccount connector, so this code never runs in a Whisk app."
   },
   {
     "ghsa": "GHSA-3gc7-fjrx-p6mg",
     "package": "bigint-buffer",
     "version": "1.1.5",
-    "path": "packages__cctp>@solana/spl-token>@solana/buffer-layout-utils>bigint-buffer",
-    "reason": "No fixed release of bigint-buffer exists. Whisk imports only getAssociatedTokenAddressSync and TOKEN_PROGRAM_ID from @solana/spl-token and never decodes token account data, which is where toBigIntLE runs."
+    "dependent": "@solana/buffer-layout-utils",
+    "reason": "No fixed release of bigint-buffer exists. Whisk imports only getAssociatedTokenAddressSync and TOKEN_PROGRAM_ID from @solana/spl-token and never decodes token account data, which is where @solana/buffer-layout-utils calls toBigIntLE."
   }
 ]
