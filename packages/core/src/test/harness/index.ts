@@ -13,6 +13,7 @@ export {
 export {
   createFakeEvmWallet,
   type EvmApproval,
+  type DecodedEvmCall,
   type EvmBurn,
   type EvmFeeBurn,
   type EvmMint,

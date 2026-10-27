@@ -23,6 +23,15 @@ export type InflightRecord = {
   step: InflightStep;
   sourceTxHash?: string;
   mintTxHash?: string;
+  /**
+   * The `feePolicy` fee this transfer carried, in subunits, and how far it
+   * got. A resumed transfer reports it and never asks for it again.
+   */
+  customFee?: {
+    amount: string;
+    status: "paid" | "unpaid";
+    txHashes?: string[];
+  };
   createdAt: number;
   updatedAt: number;
 };

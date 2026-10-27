@@ -78,10 +78,27 @@ export type SendListeners = {
   onBurnSubmitted?: (txHash: string) => void;
 };
 
+/**
+ * Whether the payer paid the `feePolicy` fee. `unpaid` with no `error` means
+ * the fee was never asked for, because the burn or transfer did not land.
+ * `amount` is the whole fee in USDC, as a decimal string.
+ */
+export type CustomFeeOutcome =
+  | { status: "paid"; txHashes: `0x${string}`[]; amount: string }
+  | {
+      status: "unpaid";
+      amount: string;
+      error?: WhiskError;
+      /** Shares that landed before the payer stopped, if any. */
+      txHashes?: `0x${string}`[];
+    };
+
 export type SendSuccess = {
   kind: "success";
   finalTxHash?: string;
   steps: Step[];
+  /** Present when a `feePolicy` charged this transfer. */
+  customFee?: CustomFeeOutcome;
   /** Merged metadata (config defaults + per-call). Omitted if neither was set. */
   metadata?: WhiskMetadata;
 };
@@ -92,6 +109,8 @@ export type SendFailure = {
   steps: Step[];
   /** The executor's recovery snapshot: burn tx hash, domains, recipient. */
   raw?: unknown;
+  /** Present when a `feePolicy` charged this transfer. */
+  customFee?: CustomFeeOutcome;
   /** Merged metadata (config defaults + per-call). Omitted if neither was set. */
   metadata?: WhiskMetadata;
 };

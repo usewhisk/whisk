@@ -186,7 +186,11 @@ for the full breakdown and the accuracy caveat on variable gas.
 To charge your own flat fee on top, set
 `feePolicy: { value: "0.25", recipient: "0x..." }`. The payer pays it on
 top of the transfer; 90% goes to `recipient` and 10% to the Whisk
-treasury (`WHISK_TREASURY_ADDRESS`).
+treasury (`WHISK_TREASURY_ADDRESS`). The fee is never taken before the
+transfer: a wallet that supports atomic EIP-5792 batches signs both in one
+prompt, and any other wallet is asked for the fee once the burn has landed.
+A payer who rejects that prompt still gets the transfer, so check
+`result.customFee.status` in `onSuccess` before you fulfil an order.
 
 ### Headless entry
 

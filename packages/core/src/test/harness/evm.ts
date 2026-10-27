@@ -8,6 +8,10 @@ import {
   type Abi,
 } from "viem";
 import {
+  UserRejectedError,
+  WalletCapabilityError,
+} from "../../errors/errors.js";
+import {
   messageTransmitterV2Abi,
   tokenMessengerV2Abi,
   usdcAbi,
@@ -16,6 +20,7 @@ import type {
   CallReceipt,
   EvmAdapter,
   EvmCall,
+  SendCallsOptions,
   SendCallsResult,
 } from "../../engine/adapter.js";
 
@@ -67,11 +72,19 @@ export type EvmMint = {
   attestation: Hex;
 };
 
+export type DecodedEvmCall = {
+  to: Hex;
+  functionName: string;
+  args: readonly unknown[];
+};
+
 export type FakeEvmWallet = {
   adapter: EvmAdapter;
   readonly chainId: number;
   readonly switches: readonly number[];
   readonly batches: readonly EvmCall[][];
+  /** The options each `sendCalls` was given, alongside `batches`. */
+  readonly batchOptions: readonly (SendCallsOptions | undefined)[];
   readonly burns: readonly EvmBurn[];
   readonly feeBurns: readonly EvmFeeBurn[];
   readonly transfers: readonly EvmTransfer[];
@@ -83,6 +96,12 @@ export type FakeEvmWallet = {
   revertNext(functionName: string): void;
   /** The next receipt wait throws, as when the tab or connection dies. */
   dropNextReceipt(): void;
+  /**
+   * The payer rejects the next call matching `match`, a function name or a
+   * test on the decoded call. Calls before it in the same request have
+   * already landed, as with a wallet that prompts for each one.
+   */
+  rejectNext(match: string | ((call: DecodedEvmCall) => boolean)): void;
 };
 
 const ABIS: readonly Abi[] = [
@@ -99,6 +118,12 @@ const ABIS: readonly Abi[] = [
 export function createFakeEvmWallet(opts: {
   address?: Hex;
   chainId: number;
+  /**
+   * `"supported"` lands an `atomic` request all or nothing under one hash.
+   * `"refuses"` says it can, then throws `atomic_unsupported` when asked.
+   * Left out, the adapter has no `supportsAtomicBatch`.
+   */
+  atomic?: "supported" | "refuses";
 }): FakeEvmWallet {
   const address = getAddress(
     opts.address ?? "0x0000000000000000000000000000000000000010",
@@ -107,6 +132,7 @@ export function createFakeEvmWallet(opts: {
   let hashCounter = 0;
   const switches: number[] = [];
   const batches: EvmCall[][] = [];
+  const batchOptions: (SendCallsOptions | undefined)[] = [];
   const burns: EvmBurn[] = [];
   const feeBurns: EvmFeeBurn[] = [];
   const transfers: EvmTransfer[] = [];
@@ -116,6 +142,7 @@ export function createFakeEvmWallet(opts: {
   const allowances = new Map<string, bigint>();
   const receipts = new Map<Hex, CallReceipt["status"]>();
   const pendingReverts: string[] = [];
+  const pendingRejections: ((call: DecodedEvmCall) => boolean)[] = [];
   let dropReceipt = false;
 
   const key = (...parts: (string | number)[]) =>
@@ -139,6 +166,55 @@ export function createFakeEvmWallet(opts: {
       );
     }
     return decodeFunctionData({ abi, data: call.data });
+  }
+
+  function rejects(call: EvmCall): boolean {
+    const { functionName, args = [] } = decode(call);
+    const at = pendingRejections.findIndex((match) =>
+      match({ to: call.to, functionName, args }),
+    );
+    if (at === -1) return false;
+    pendingRejections.splice(at, 1);
+    return true;
+  }
+
+  function nextHash(): Hex {
+    hashCounter += 1;
+    return `0x${hashCounter.toString(16).padStart(64, "0")}` as Hex;
+  }
+
+  function sendAtomic(
+    calls: EvmCall[],
+    options: SendCallsOptions,
+  ): SendCallsResult {
+    if (opts.atomic !== "supported") {
+      throw new WalletCapabilityError(
+        "atomic_unsupported",
+        "fake evm: atomic batches are not supported",
+      );
+    }
+    if (calls.some(rejects)) throw new UserRejectedError();
+    const saved = {
+      balances: new Map(balances),
+      allowances: new Map(allowances),
+      lengths: [burns, feeBurns, transfers, approvals, mints].map(
+        (list) => list.length,
+      ),
+    };
+    const landed = calls.every(apply);
+    if (!landed) {
+      balances.clear();
+      saved.balances.forEach((v, k) => balances.set(k, v));
+      allowances.clear();
+      saved.allowances.forEach((v, k) => allowances.set(k, v));
+      [burns, feeBurns, transfers, approvals, mints].forEach((list, i) => {
+        list.length = saved.lengths[i] ?? 0;
+      });
+    }
+    const hash = nextHash();
+    receipts.set(hash, landed ? "success" : "reverted");
+    options.onSubmitted?.(hash, calls.length - 1);
+    return { hashes: [hash] };
   }
 
   // A reverted call changes no state.
@@ -264,18 +340,23 @@ export function createFakeEvmWallet(opts: {
       switches.push(id);
       chainId = id;
     },
-    async sendCalls(
-      calls,
-      options?: { onSubmitted?: (hash: Hex, index: number) => void },
-    ): Promise<SendCallsResult> {
+    ...(opts.atomic && {
+      async supportsAtomicBatch() {
+        return true;
+      },
+    }),
+    async sendCalls(calls, options): Promise<SendCallsResult> {
       batches.push(calls);
-      const hashes = calls.map((call, index) => {
-        hashCounter += 1;
-        const hash = `0x${hashCounter.toString(16).padStart(64, "0")}` as Hex;
+      batchOptions.push(options);
+      if (options?.atomic) return sendAtomic(calls, options);
+      const hashes: Hex[] = [];
+      for (const [index, call] of calls.entries()) {
+        if (rejects(call)) throw new UserRejectedError();
+        const hash = nextHash();
         receipts.set(hash, apply(call) ? "success" : "reverted");
         options?.onSubmitted?.(hash, index);
-        return hash;
-      });
+        hashes.push(hash);
+      }
       return { hashes };
     },
     async waitForReceipt(hash) {
@@ -296,6 +377,7 @@ export function createFakeEvmWallet(opts: {
     },
     switches,
     batches,
+    batchOptions,
     burns,
     feeBurns,
     transfers,
@@ -315,6 +397,13 @@ export function createFakeEvmWallet(opts: {
     },
     dropNextReceipt() {
       dropReceipt = true;
+    },
+    rejectNext(match) {
+      pendingRejections.push(
+        typeof match === "string"
+          ? (call) => call.functionName === match
+          : match,
+      );
     },
   };
 }

@@ -81,7 +81,21 @@ function parseRecord(raw: string | null): InflightRecord | null {
     STEPS.has(r.step) &&
     (r.sourceTxHash === undefined || typeof r.sourceTxHash === "string") &&
     (r.mintTxHash === undefined || typeof r.mintTxHash === "string") &&
+    (r.customFee === undefined || isRecordedFee(r.customFee)) &&
     Number.isFinite(r.createdAt) &&
     Number.isFinite(r.updatedAt);
   return ok ? (value as InflightRecord) : null;
+}
+
+function isRecordedFee(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const fee = value as Record<string, unknown>;
+  return (
+    typeof fee.amount === "string" &&
+    /^\d+$/.test(fee.amount) &&
+    (fee.status === "paid" || fee.status === "unpaid") &&
+    (fee.txHashes === undefined ||
+      (Array.isArray(fee.txHashes) &&
+        fee.txHashes.every((h) => typeof h === "string")))
+  );
 }

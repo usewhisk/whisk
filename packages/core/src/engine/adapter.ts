@@ -32,6 +32,12 @@ export type SendCallsOptions = {
    * hash reports it once, for the last call.
    */
   onSubmitted?: (hash: `0x${string}`, index: number) => void;
+  /**
+   * Land every call or none, as one EIP-5792 batch. Only set after
+   * `supportsAtomicBatch` said yes. An adapter that cannot honour it throws
+   * `WalletCapabilityError("atomic_unsupported")` before sending anything.
+   */
+  atomic?: boolean;
 };
 
 export type SendCallsResult = {
@@ -72,9 +78,16 @@ export interface EvmAdapter {
   switchChain(chainId: number): Promise<void>;
 
   /**
-   * Atomic batching through EIP-5792 is preferred. Without it, calls go in
-   * array order and each receipt must land before the next is submitted.
-   * Throws a `WhiskError` subclass.
+   * Whether `sendCalls` can land a batch on `chainId` all or nothing. The
+   * engine asks before a transfer that carries a merchant fee, and sends the
+   * fee in the same batch only when this says yes. Without it, the fee is a
+   * separate request once the burn has landed.
+   */
+  supportsAtomicBatch?(chainId: number): Promise<boolean>;
+
+  /**
+   * Without `atomic`, calls go in array order and each receipt must land
+   * before the next is submitted. Throws a `WhiskError` subclass.
    */
   sendCalls(
     calls: EvmCall[],

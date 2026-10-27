@@ -6,6 +6,7 @@ import {
   toWhiskError,
   WhiskError,
 } from "../../errors/errors.js";
+import { settleFee, submitWithFee, type FeeCharge } from "../customFee.js";
 import type { Step } from "../../types/step.js";
 import type {
   EvmAdapter,
@@ -20,8 +21,8 @@ export type ExecuteSameChainSendInput = {
   /** USDC subunits. */
   amount: bigint;
   adapter: EvmAdapter;
-  /** Merchant and treasury transfers, sent ahead of the main transfer. */
-  customFeeCalls?: EvmCall[];
+  /** The merchant fee, sent with the transfer or once it has landed. */
+  customFee?: FeeCharge;
 };
 
 /** Never throws; every failure resolves to a `failure` result. */
@@ -50,9 +51,6 @@ export async function executeSameChainSend(
     }),
     value: 0n,
   };
-  const customFeeCalls = input.customFeeCalls ?? [];
-  const submittedCalls: EvmCall[] = [...customFeeCalls, transferCall];
-
   try {
     const live = await input.adapter.getChainId();
     if (live !== input.chain.evmChainId) {
@@ -64,9 +62,13 @@ export async function executeSameChainSend(
   }
 
   let hash: `0x${string}`;
-  const customFeeHashes: `0x${string}`[] = [];
   try {
-    const { hashes } = await input.adapter.sendCalls(submittedCalls);
+    const hashes = await submitWithFee(
+      input.adapter,
+      input.chain.evmChainId,
+      [transferCall],
+      input.customFee,
+    );
     if (hashes.length === 0) {
       const err = toWhiskError(
         new Error("Adapter returned no transaction hash for the transfer."),
@@ -74,42 +76,10 @@ export async function executeSameChainSend(
       );
       return failure(steps, err, "transfer", err.message);
     }
-    // One hash per call, or one for a whole batch. The main transfer is
-    // always last.
-    hash = hashes[hashes.length - 1] as `0x${string}`;
-    if (customFeeCalls.length > 0 && hashes.length > 1) {
-      for (let i = 0; i < customFeeCalls.length; i++) {
-        customFeeHashes.push(hashes[i] as `0x${string}`);
-      }
-    }
+    hash = hashes[0] as `0x${string}`;
   } catch (cause) {
     const err = toWhiskError(cause, "Failed to submit transfer.");
     return failure(steps, err, "transfer", err.message);
-  }
-
-  // A bundled wallet shares `hash`, so the transfer receipt covers the fee
-  // transfers too.
-  for (const customFeeHash of customFeeHashes) {
-    if (customFeeHash === hash) continue;
-    try {
-      const receipt = await input.adapter.waitForReceipt(customFeeHash);
-      if (receipt.status === "reverted") {
-        const err = toWhiskError(
-          new Error(
-            `Merchant fee transfer reverted on-chain (${customFeeHash}).`,
-          ),
-          "Merchant fee transfer reverted on-chain.",
-          "reverted_onchain",
-        );
-        return failure(steps, err, "transfer", err.message, hash);
-      }
-    } catch (cause) {
-      const err = toWhiskError(
-        cause,
-        "Failed waiting for merchant fee receipt.",
-      );
-      return failure(steps, err, "transfer", err.message, hash);
-    }
   }
 
   steps[1] = { name: "transfer", state: "pending", txHash: hash };
@@ -132,6 +102,7 @@ export async function executeSameChainSend(
 
   steps[1] = { name: "transfer", state: "success", txHash: hash };
   listeners?.onStep?.(steps[1]);
+  await settleFee(input.adapter, input.customFee);
 
   return { kind: "success", finalTxHash: hash, steps };
 }

@@ -89,7 +89,7 @@
     "@starknet-io/get-starknet-core": "^4.0.0",
     "@stellar/stellar-sdk": "^14.1.1",
     "@usewhisk/core": "workspace:^",
-    "@wagmi/core": "^2.16.3",
+    "@wagmi/core": "^2.17.0",
     "@web3icons/react": "^4.1.17",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",

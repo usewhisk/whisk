@@ -14,6 +14,7 @@ export type {
   SendResult,
   SendSuccess,
   SendFailure,
+  CustomFeeOutcome,
   MaxSendable,
   ResumeFromTxParams,
   ResumeOptions,
