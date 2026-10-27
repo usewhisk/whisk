@@ -1,5 +1,12 @@
 # @usewhisk/example-node-headless
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [8d36f83]
+  - @usewhisk/core@0.3.0
+
 ## 0.0.4
 
 ### Patch Changes
