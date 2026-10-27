@@ -92,8 +92,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Moderate and low advisories go through Dependabot instead of blocking PRs.
+      # Accepted high findings are listed, one path each, in audit-exceptions.json.
       - name: Audit (high and critical)
-        run: pnpm audit --audit-level=high
+        run: node scripts/audit.mjs
 
   secrets:
     uses: usewhisk/.github/.github/workflows/secrets.yml@main

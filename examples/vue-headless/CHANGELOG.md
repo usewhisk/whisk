@@ -1,5 +1,12 @@
 # @usewhisk/example-vue-headless
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [bf91a52]
+  - @usewhisk/core@0.2.2
+
 ## 0.0.3
 
 ### Patch Changes
