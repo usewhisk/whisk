@@ -1,6 +1,7 @@
 # ADR: Scoped audit exceptions
 
 - **Status:** Accepted (2026-10-26)
+- **Amended by:** `ADR-2026-10-26-audit-exceptions-by-dependent.md` (decisions 2 to 4)
 - **Date:** 2026-10-26
 - **Scope:** CI `dependency audit` job, root `package.json` (`pnpm.overrides`,
   `pnpm.auditConfig`), `apps/docs/package.json`, a new `scripts/audit.mjs` and
