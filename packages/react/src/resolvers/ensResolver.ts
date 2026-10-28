@@ -84,6 +84,9 @@ export function createEnsResolver(options: EnsResolverOptions = {}): Resolver {
       const destination = getChain(ctx.chain);
       const { pattern } = addressFormat(ctx.chain);
       const destinationCoinType = ensCoinTypeForChain(destination);
+      // Without a coin type, viem returns the name's Ethereum address, which
+      // a Starknet felt check accepts. USDC minted there would be lost.
+      if (destinationCoinType === undefined) return null;
 
       const client = getClient();
 
