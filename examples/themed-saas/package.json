@@ -1,6 +1,6 @@
 {
   "name": "@usewhisk/example-themed-saas",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "private": true,
   "description": "Theme override demo. Whisk's CSS tokens replaced with a corporate teal/navy palette to match a SaaS dashboard.",
   "type": "module",
