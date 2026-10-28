@@ -1,6 +1,6 @@
 {
   "name": "@usewhisk/react",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Embeddable Whisk widget for React: send and bridge USDC over Circle CCTP V2 across EVM, Solana, Stellar and Starknet.",
   "license": "MIT",
   "author": "SignorDev (https://github.com/Signor1)",
