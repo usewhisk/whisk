@@ -41,3 +41,4 @@ skills-lock.json
 
 # Transfers the testnet matrix burned and has not finished.
 .testnet-inflight.json
+.mainnet-inflight.json
