@@ -16,7 +16,7 @@
   "dependencies": {
     "@usewhisk/core": "workspace:*",
     "buffer": "^6.0.3",
-    "viem": "^2.57.5",
+    "viem": "^2.57.12",
     "vue": "^3.5.42"
   },
   "devDependencies": {
