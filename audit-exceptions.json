@@ -33,5 +33,12 @@
     "version": "1.1.5",
     "dependent": "@solana/buffer-layout-utils",
     "reason": "No fixed release of bigint-buffer exists. Whisk imports only getAssociatedTokenAddressSync and TOKEN_PROGRAM_ID from @solana/spl-token and never decodes token account data, which is where @solana/buffer-layout-utils calls toBigIntLE."
+  },
+  {
+    "ghsa": "GHSA-qr28-fpjm-wq7f",
+    "package": "decode-uri-component",
+    "version": "0.2.2",
+    "dependent": "query-string",
+    "reason": "The fix, 0.5.1, is ESM only, and query-string 7.1.3 loads decode-uri-component with require() and calls it as a function, so an override would break WalletConnect at runtime. query-string 7.1.3 comes from @walletconnect/utils 2.11.2 (through @creit.tech/stellar-wallets-kit 1.x) and 2.21.0 (through wagmi's connectors); WalletConnect dropped query-string in utils 2.23. It parses WalletConnect pairing URIs, which the app itself makes or the payer brings to their own tab, so the worst case is that tab spending CPU on a crafted URI. Remove this entry once the wallet kit and wagmi upgrades take utils past 2.23."
   }
 ]
