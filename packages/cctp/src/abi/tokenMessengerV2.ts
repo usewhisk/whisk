@@ -49,7 +49,7 @@ export const tokenMessengerV2Abi = [
       { name: "destinationTokenMessenger", type: "bytes32", indexed: false },
       { name: "destinationCaller", type: "bytes32", indexed: false },
       { name: "maxFee", type: "uint256", indexed: false },
-      { name: "minFinalityThreshold", type: "uint32", indexed: false },
+      { name: "minFinalityThreshold", type: "uint32", indexed: true },
       { name: "hookData", type: "bytes", indexed: false },
     ],
   },
