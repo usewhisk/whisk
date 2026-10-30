@@ -19,11 +19,11 @@
   "dependencies": {
     "@usewhisk/cctp": "workspace:*",
     "@usewhisk/core": "workspace:*",
-    "viem": "^2.57.5"
+    "viem": "^2.57.12"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "tsx": "^4.19.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.2"
   }
 }
