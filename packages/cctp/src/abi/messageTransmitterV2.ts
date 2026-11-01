@@ -27,10 +27,10 @@ export const messageTransmitterV2Abi = [
     anonymous: false,
     inputs: [
       { name: "caller", type: "address", indexed: true },
-      { name: "sourceDomain", type: "uint32", indexed: true },
+      { name: "sourceDomain", type: "uint32", indexed: false },
       { name: "nonce", type: "bytes32", indexed: true },
       { name: "sender", type: "bytes32", indexed: false },
-      { name: "finalityThresholdExecuted", type: "uint32", indexed: false },
+      { name: "finalityThresholdExecuted", type: "uint32", indexed: true },
       { name: "messageBody", type: "bytes", indexed: false },
     ],
   },
