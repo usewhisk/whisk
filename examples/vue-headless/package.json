@@ -16,8 +16,8 @@
   "dependencies": {
     "@usewhisk/core": "workspace:*",
     "buffer": "^6.0.3",
-    "viem": "^2.57.5",
-    "vue": "^3.5.42"
+    "viem": "^2.57.16",
+    "vue": "^3.5.45"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.0",
