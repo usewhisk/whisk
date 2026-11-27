@@ -1,5 +1,14 @@
 # @usewhisk/docs
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [6b05935]
+- Updated dependencies [6b05935]
+  - @usewhisk/core@0.3.2
+  - @usewhisk/react@0.3.2
+
 ## 0.0.9
 
 ### Patch Changes
