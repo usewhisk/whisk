@@ -9,6 +9,8 @@ export interface RemoteConfig {
   defaultDestinationChain: Chain | undefined;
   pause: { message: string } | null;
   branding: { name?: string; accent?: string };
+  /** With failClosed, a quote that could not be screened in full is refused. */
+  screening: { failClosed: boolean };
 }
 
 export interface ParsedRemoteConfig {
@@ -25,6 +27,7 @@ const KNOWN = new Set([
   "defaultDestinationChain",
   "pause",
   "branding",
+  "screening",
 ]);
 const ACCENT = /^#[0-9a-f]{6}$/i;
 // Matches the platform's rule, so a message it refuses never shows here either.
@@ -106,6 +109,17 @@ export function parseRemoteConfig(
     }
   }
 
+  let failClosed = false;
+  if (isRecord(value.screening)) {
+    if (typeof value.screening.failClosed === "boolean") {
+      failClosed = value.screening.failClosed;
+    } else if (value.screening.failClosed !== undefined) {
+      ignored.push("screening.failClosed");
+    }
+  } else if (value.screening !== undefined) {
+    ignored.push("screening");
+  }
+
   return {
     config: {
       disabledChains,
@@ -114,6 +128,7 @@ export function parseRemoteConfig(
       defaultDestinationChain: chainOrUndefined(value.defaultDestinationChain),
       pause,
       branding,
+      screening: { failClosed },
     },
     ignored,
   };
@@ -123,6 +138,8 @@ export interface LocalChoice {
   chains: Chain[];
   defaultSourceChain?: Chain | undefined;
   defaultDestinationChain?: Chain | undefined;
+  /** The integrator's own choice to refuse a quote that could not be screened. */
+  failClosed?: boolean | undefined;
 }
 
 export interface NarrowedConfig {
@@ -132,6 +149,7 @@ export interface NarrowedConfig {
   defaultDestinationChain: Chain | undefined;
   pause: { message: string } | null;
   branding: { name?: string; accent?: string };
+  failClosed: boolean;
 }
 
 /**
@@ -172,5 +190,7 @@ export function narrowConfig(
     ),
     pause: remote.pause,
     branding: { ...remote.branding },
+    // Failing closed refuses more payments, never fewer, so either side may ask for it.
+    failClosed: remote.screening.failClosed || local.failClosed === true,
   };
 }

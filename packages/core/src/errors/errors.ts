@@ -17,6 +17,7 @@ export type WhiskErrorCode =
   | "ROUTE_UNAVAILABLE"
   | "QUOTE_EXPIRED"
   | "QUOTE_CHANGED"
+  | "SCREENING_REFUSED"
   | "UNKNOWN";
 
 /** Same values as Circle App Kit's `BridgeStepErrorCategory`. */
@@ -288,6 +289,23 @@ export class QuoteChangedError extends WhiskError {
       retryable: true,
     });
     this.name = "QuoteChangedError";
+  }
+}
+
+/**
+ * Whisk Cloud's screen stopped the quote: `hit` when the payer or recipient
+ * matched a sanctions list, `unscreened` when the app fails closed and the
+ * screen could not be completed. The message names no one, as the payer
+ * reads it.
+ */
+export class ScreeningError extends WhiskError {
+  constructor(public readonly reason: "hit" | "unscreened") {
+    super({
+      code: "SCREENING_REFUSED",
+      message: "This payment can't be completed.",
+      retryable: false,
+    });
+    this.name = "ScreeningError";
   }
 }
 

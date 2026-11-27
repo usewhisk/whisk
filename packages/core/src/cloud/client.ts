@@ -58,6 +58,13 @@ export interface CloudSession {
    * SDK keeps paying on its last verified config, or on local config alone.
    */
   refresh(): Promise<CloudState>;
+  /**
+   * The verified session token for calls to Whisk Cloud, or undefined when
+   * there is none. It shakes hands first when there is no token, when the
+   * token is within a minute of expiry, or when `fresh` is asked for because
+   * Whisk Cloud refused the last one.
+   */
+  token(options?: { fresh?: boolean }): Promise<string | undefined>;
 }
 
 interface Stored {
@@ -69,6 +76,7 @@ interface Stored {
 }
 
 const JWKS_REFETCH_MS = 60_000;
+const TOKEN_MARGIN_MS = 60_000;
 
 /**
  * The SDK side of the Whisk Cloud handshake (ADR Decision 6). A token is
@@ -144,6 +152,11 @@ export function createCloudSession(options: CloudSessionOptions): CloudSession {
     );
   }
 
+  // Held in memory only. Stored state keeps the verified claims for config,
+  // but a call to Whisk Cloud needs a token from this page's own handshake.
+  let live: { token: string; expiresAt: number } | undefined;
+  let handshaking: Promise<CloudState> | undefined;
+
   let current: CloudState = fromStored() ?? {
     source: "local",
     reason: "not-yet",
@@ -175,11 +188,13 @@ export function createCloudSession(options: CloudSessionOptions): CloudSession {
       return fallback("refused", `Whisk Cloud answered ${String(res.status)}.`);
 
     let claims: Awaited<ReturnType<typeof verifySessionToken>>;
+    let token: string;
     try {
       const body = (await res.json()) as { token?: unknown };
       if (typeof body.token !== "string")
         throw new Error("No token in the answer.");
-      claims = await verifySessionToken(body.token, {
+      token = body.token;
+      claims = await verifySessionToken(token, {
         appId: options.appId,
         issuer: cloudUrl,
         keyFor,
@@ -194,6 +209,7 @@ export function createCloudSession(options: CloudSessionOptions): CloudSession {
     const parsed = parseRemoteConfig(claims.config);
     if (!parsed) return fallback("invalid-token", "Unsupported config schema.");
 
+    live = { token, expiresAt: claims.expiresAt };
     const stored: Stored = {
       appId: options.appId,
       env: claims.env,
@@ -211,11 +227,23 @@ export function createCloudSession(options: CloudSessionOptions): CloudSession {
     );
   }
 
+  const refresh = async (): Promise<CloudState> => {
+    handshaking ??= handshake().finally(() => {
+      handshaking = undefined;
+    });
+    current = await handshaking;
+    return current;
+  };
+
   return {
     state: () => current,
-    async refresh() {
-      current = await handshake();
-      return current;
+    refresh,
+    async token(tokenOptions) {
+      if (tokenOptions?.fresh) live = undefined;
+      if (!live || live.expiresAt - now() <= TOKEN_MARGIN_MS) {
+        await refresh();
+      }
+      return live && live.expiresAt > now() ? live.token : undefined;
     },
   };
 }
