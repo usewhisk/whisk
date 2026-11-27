@@ -15,6 +15,7 @@ export {
   RouteUnavailableError,
   QuoteChangedError,
   QuoteExpiredError,
+  ScreeningError,
   toWhiskError,
   cleanErrorMessage,
 } from "./errors.js";
