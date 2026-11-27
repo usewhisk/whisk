@@ -144,6 +144,7 @@ describe("parseRemoteConfig", () => {
       defaultDestinationChain: undefined,
       pause: null,
       branding: { name: "Acme", accent: "#1a2b3c" },
+      screening: { failClosed: false },
     });
   });
 
@@ -168,6 +169,27 @@ describe("parseRemoteConfig", () => {
       "disabledChains",
       "pause",
     ]);
+  });
+});
+
+describe("parseRemoteConfig screening", () => {
+  it("reads failClosed, and reads a config without it as not failing closed", () => {
+    expect(
+      parseRemoteConfig({ ...config, screening: { failClosed: true } })?.config
+        .screening,
+    ).toEqual({ failClosed: true });
+    const without = parseRemoteConfig(config);
+    expect(without?.config.screening).toEqual({ failClosed: false });
+    expect(without?.ignored).toEqual([]);
+  });
+
+  it("leaves out a malformed failClosed and says so", () => {
+    const parsed = parseRemoteConfig({
+      ...config,
+      screening: { failClosed: "yes" },
+    });
+    expect(parsed?.config.screening).toEqual({ failClosed: false });
+    expect(parsed?.ignored).toEqual(["screening.failClosed"]);
   });
 });
 
@@ -221,9 +243,21 @@ describe("narrowConfig", () => {
       "chains",
       "defaultDestinationChain",
       "defaultSourceChain",
+      "failClosed",
       "isRouteAllowed",
       "pause",
     ]);
+  });
+
+  it("fails closed when either the app's remote config or the integrator's code says so", () => {
+    const base = { ...local, chains: [...local.chains] };
+    const remoteSays = (failClosed: boolean) =>
+      remote({ screening: { failClosed } });
+    expect(narrowConfig(base, remoteSays(false)).failClosed).toBe(false);
+    expect(narrowConfig(base, remoteSays(true)).failClosed).toBe(true);
+    expect(
+      narrowConfig({ ...base, failClosed: true }, remoteSays(false)).failClosed,
+    ).toBe(true);
   });
 });
 
@@ -343,5 +377,64 @@ describe("createCloudSession", () => {
       now: () => NOW,
     });
     expect(await other.refresh()).toMatchObject({ source: "local" });
+  });
+
+  describe("token", () => {
+    it("hands out the verified token, shaking hands first when it has none", async () => {
+      const { fetch, calls } = platform();
+      const session = open(fetch);
+      const jwt = await session.token();
+      expect(jwt?.split(".")).toHaveLength(3);
+      expect(session.state()).toMatchObject({ source: "cloud" });
+      expect(await session.token()).toBe(jwt);
+      expect(calls.filter((c) => c.endsWith("/v1/sessions"))).toHaveLength(1);
+    });
+
+    it("never stores the token, so a stored config alone still needs a handshake", async () => {
+      const written: string[] = [];
+      const memory = createMemoryCloudStorage();
+      const storage = {
+        get: (key: string) => memory.get(key),
+        set: (key: string, value: string) => {
+          written.push(value);
+          memory.set(key, value);
+        },
+      };
+      const jwt = await open(platform().fetch, storage).token();
+      expect(jwt).toBeDefined();
+      expect(written.join("")).not.toContain(jwt?.split(".")[2] ?? "");
+      const reloaded = open(platform({ down: true }).fetch, storage);
+      expect(reloaded.state()).toMatchObject({ source: "stored" });
+      expect(await reloaded.token()).toBeUndefined();
+    });
+
+    it("shakes hands again within a minute of expiry, or when asked for a fresh one", async () => {
+      const { fetch, calls } = platform();
+      let now = NOW;
+      const session = createCloudSession({
+        appId: APP,
+        cloudUrl: CLOUD,
+        sdkVersion: "0.4.0",
+        fetch,
+        now: () => now,
+      });
+      await session.token();
+      now = NOW + 839_000;
+      await session.token();
+      expect(calls.filter((c) => c.endsWith("/v1/sessions"))).toHaveLength(1);
+      now = NOW + 841_000;
+      await session.token();
+      expect(calls.filter((c) => c.endsWith("/v1/sessions"))).toHaveLength(2);
+      await session.token({ fresh: true });
+      expect(calls.filter((c) => c.endsWith("/v1/sessions"))).toHaveLength(3);
+    });
+
+    it("has no token when Whisk Cloud is unreachable or the token does not verify", async () => {
+      expect(
+        await open(platform({ down: true }).fetch).token(),
+      ).toBeUndefined();
+      const forged = platform({ jwt: () => token({}, { key: otherKey }) });
+      expect(await open(forged.fetch).token()).toBeUndefined();
+    });
   });
 });
