@@ -1,7 +1,8 @@
 # Whisk roadmap
 
-Whisk is an open-source React widget for USDC payments. It talks to
-Circle's Cross-Chain Transfer Protocol V2 directly. The result is a
+Whisk is an open-source React widget for USDC payments. It moves USDC
+between chains and does not swap tokens. It talks to Circle's
+Cross-Chain Transfer Protocol V2 directly. The result is a
 small dependency footprint, a clean audit surface, and fast iteration
 on new chain support.
 
@@ -126,18 +127,6 @@ complex non-EVM ecosystem to support:
 - Addresses are `strkey` strings (`G…` accounts, `M…` muxed, `C…`
   contracts). Validation differs from EVM.
 
-### Swap (cross-token)
-
-Whisk v1 is USDC-only. Cross-token swap (USDC ↔ ETH, USDC ↔ EURC,
-etc.) ships as its own package when we integrate an aggregator
-(LI.FI, 0x, 1inch, or similar). Decoupled from the payment widget
-because the value props are different: swap is a discovery /
-liquidity surface, payments are a settlement surface.
-
-Why not in v1: the right answer is an aggregator that works on
-mainnet and testnet. That's its own piece of work and lives in a
-dedicated v1.x package.
-
 ### Unified Balance / Circle Gateway
 
 Gateway is Circle's chain-abstracted USDC pool — deposit on one
@@ -228,6 +217,10 @@ These are deliberate omissions, not deferrals:
   (USDC.e, etc.) are out of scope.
 - **Non-USDC stablecoins.** EURC, PYUSD, etc. are not in v1. We may
   add them after v1 ships, but USDC is the focus.
+- **Token swaps.** Whisk is a settlement surface for USDC. A swap
+  brings price, slippage and liquidity risk the product deliberately
+  does not take on, so a payer who holds another token swaps it first,
+  in their own wallet or app.
 - **Whisk-owned relayer.** Circle's Orbit forwarder handles the
   destination mint for us. We don't build our own relayer
   infrastructure.

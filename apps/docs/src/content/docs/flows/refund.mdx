@@ -176,6 +176,5 @@ warehouse.
   fires `refund` twice for the same order, both go through.
   Use a unique key on your `(orderId, refundId)` pair before
   calling.
-- **No multi-token refunds.** USDC only, matching the rest of
-  the engine. If the customer paid in a different token, you'd
-  do a swap then a refund — two engine calls, not one.
+- **USDC only.** Whisk moves USDC and does not swap tokens, so
+  every payment, and every refund, is in USDC.

@@ -28,9 +28,8 @@ import { FramedSection } from "./framed-section";
 
 /**
  * Auto-scrolling marquee of the chains Whisk routes USDC across. The list
- * mirrors Circle App Kit's Bridge-supported mainnet chains (the protocol
- * Whisk wraps) — Whisk runs on the matching testnet for each today, with
- * mainnet behind the gate. Doubled content + a linear `x` translate gives
+ * mirrors the mainnet chains CCTP V2 reaches. Whisk runs on the matching
+ * testnet for each today, with mainnet behind the gate. Doubled content + a linear `x` translate gives
  * a seamless infinite loop.
  *
  * Reduced-motion users get a static, paginated grid instead.

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Box, Layers3, Wand2 } from "lucide-react";
+import { Box, Wand2 } from "lucide-react";
 import { NetworkArc, NetworkBase, NetworkOptimism } from "@web3icons/react";
 import { FramedSection } from "./framed-section";
 import { CodeWindow, type CodeLine } from "./code-window";
@@ -39,13 +39,13 @@ export function HowItWorks({ className }: { className?: string }) {
           <Step
             n="01"
             title="Install and wrap your app"
-            body="Add the two packages. Wrap your tree in <WhiskProvider /> with your Circle App Kit key. That's the entire setup."
+            body="Add the two packages. Wrap your tree in <WhiskProvider /> with the chains you accept. That's the entire setup."
             visual={<InstallStepVisual />}
           />
           <Step
             n="02"
             title="Pick the surfaces you need"
-            body="Drop in <WhiskSend /> for the styled card, <SwapTab /> for the trade surface, or call useWhisk / useWhiskSwap if you want to build your own UI on the engine."
+            body="Drop in <WhiskSend /> for the styled card, or call useWhisk if you want to build your own UI on the engine."
             visual={<SurfacesStepVisual />}
             reverse
           />
@@ -121,9 +121,9 @@ function InstallStepVisual() {
       { t: "<", c: "bracket" },
       { t: "WhiskProvider", c: "comp" },
       { t: " " },
-      { t: "kitKey", c: "attr" },
+      { t: "config", c: "attr" },
       { t: "=", c: "bracket" },
-      { t: '"…"', c: "string" },
+      { t: "{config}" },
       { t: ">", c: "bracket" },
     ],
     [{ t: "      {children}" }],
@@ -152,15 +152,9 @@ function SurfacesStepVisual() {
   }> = [
     {
       name: "WhiskSend",
-      snippet: "<WhiskSend kitKey={…} />",
-      sub: "Styled send + bridge + swap card",
+      snippet: "<WhiskSend />",
+      sub: "Styled send + bridge card",
       Icon: Box,
-    },
-    {
-      name: "SwapTab",
-      snippet: "<SwapTab kitKey={…} />",
-      sub: "Same-chain trade surface, standalone",
-      Icon: Layers3,
     },
     {
       name: "useWhisk",

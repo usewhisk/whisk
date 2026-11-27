@@ -91,12 +91,12 @@ export function Footer() {
           <span>
             Made with{" "}
             <a
-              href="https://docs.arc.network/app-kit"
+              href="https://developers.circle.com/cctp"
               target="_blank"
               rel="noreferrer"
               className="underline-offset-4 hover:text-foreground hover:underline"
             >
-              Circle App Kit
+              Circle CCTP
             </a>
           </span>
         </div>

@@ -5,6 +5,7 @@ import {
   NetworkError,
   UserRejectedError,
   toWhiskError,
+  cleanErrorMessage,
 } from "./errors.js";
 
 describe("toWhiskError", () => {
@@ -53,16 +54,15 @@ describe("toWhiskError", () => {
     expect(result.message).toBe("execution reverted.");
   });
 
-  it("gives a friendly message when no swap route exists", () => {
-    const result = toWhiskError(
-      new Error(
-        "Stablecoin Service createSwap failed: Route or resource not found. " +
-          "Details: No route available",
-      ),
+  it("has no special message for a routing API's no-route text, which no CCTP path produces", () => {
+    const original = new Error(
+      "Stablecoin Service createSwap failed: Route or resource not found. " +
+        "Details: No route available",
     );
-    expect(result.message).toBe(
-      "No quote available for this pair right now. Try again in a moment or use a different amount.",
-    );
+    const result = toWhiskError(original);
+    expect(result.code).toBe("UNKNOWN");
+    expect(result.message).toBe(cleanErrorMessage(original.message));
+    expect(result.cause).toBe(original);
   });
 
   it("classifies transient network failures", () => {

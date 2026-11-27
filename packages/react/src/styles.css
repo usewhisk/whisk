@@ -700,51 +700,6 @@
   outline: none;
 }
 
-[data-whisk] .whisk-swap-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-
-[data-whisk] .whisk-swap-row__amount {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-[data-whisk] .whisk-swap-row__token {
-  flex: 0 0 auto;
-  min-width: 6.25rem;
-}
-
-[data-whisk] .whisk-swap-flip {
-  appearance: none;
-  border: 1px solid var(--whisk-border);
-  background: var(--whisk-bg);
-  border-radius: 999px;
-  width: 1.875rem;
-  height: 1.875rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--whisk-fg-muted);
-  transition:
-    color 120ms ease,
-    border-color 120ms ease,
-    transform 120ms ease;
-}
-
-[data-whisk] .whisk-swap-flip:hover {
-  color: var(--whisk-fg);
-  border-color: color-mix(in srgb, var(--whisk-fg) 18%, transparent);
-  transform: rotate(180deg);
-}
-
-[data-whisk] .whisk-swap-flip:focus-visible {
-  outline: 2px solid var(--whisk-primary);
-  outline-offset: 2px;
-}
-
 [data-whisk] .whisk-summary {
   display: flex;
   flex-direction: column;

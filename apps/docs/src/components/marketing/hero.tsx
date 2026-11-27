@@ -36,7 +36,7 @@ export function Hero({ className }: { className?: string }) {
 
         <p className="mt-5 max-w-xl text-balance text-base text-foreground/75 sm:text-lg">
           Drop <code>{`<WhiskSend />`}</code> into your app and your users can
-          send or bridge USDC across any chain App Kit supports. Wallet connect,
+          send or bridge USDC across any chain CCTP V2 reaches. Wallet connect,
           ENS lookup, and CCTP bridging stay inside the widget so you stay out
           of the plumbing.
         </p>

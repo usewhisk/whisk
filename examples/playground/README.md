@@ -42,7 +42,7 @@ src/app/
 pnpm install
 pnpm --filter @usewhisk/core build   # one-time, for the workspace dep
 cp examples/nextjs-basic/.env.example examples/nextjs-basic/.env.local
-# paste a WalletConnect Cloud project ID + (optional) a Circle Kit key
+# paste a WalletConnect Cloud project ID
 pnpm --filter @usewhisk/example-nextjs-basic dev
 ```
 
@@ -53,13 +53,12 @@ Open <http://localhost:3000>.
 | Var | Required | Effect |
 | --- | --- | --- |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | optional | Unlocks WalletConnect in the connect modal. Without it, only injected wallets (MetaMask, Coinbase, Rabby) light up. |
-| `NEXT_PUBLIC_CIRCLE_KIT_KEY` | optional | Enables the Swap tab. Without it, the Swap toggle in the control panel is disabled and the widget only renders Transfer. |
 
 ## What's wired
 
-- **All 19 testnets** in the chain picker, Solana Devnet included. The Solana path rides on a hand-built `TransactionPartialSigner` in `useWhiskAdapter` that sidesteps App Kit's stock-factory signing bug.
+- **All 19 testnets** in the chain picker, Solana Devnet included.
 - **EVM wallets:** MetaMask, Coinbase Wallet, Rabby, any injected EIP-1193 provider. WalletConnect lights up with a project ID.
-- **Live config panel:** theme · wordmark · swap tab · lock amount / recipient / source / destination · address book quick-picks · JSON inspector for the current config object.
+- **Live config panel:** theme · wordmark · lock amount / recipient / source / destination · address book quick-picks · JSON inspector for the current config object.
 - **Five presets:** Open form, E-commerce checkout, Donate button, Invoice payment link, Payroll row. Picking one rewrites the entire form so you can flip through integration shapes in seconds.
 - **Event log:** every `onStateChange / onSuccess / onError` event with a timestamp and kind chip. Newest at the top. `aria-live="polite"` for screen readers.
 
