@@ -16,18 +16,23 @@ function files(path, pattern) {
 function offending(paths, banned, allowed = []) {
   const found = [];
   for (const file of paths) {
-    readFileSync(file, "utf8")
-      .split("\n")
-      .forEach((line, i) => {
-        if (allowed.some((ok) => ok.test(line))) return;
-        for (const pattern of banned) {
-          if (pattern.test(line)) {
-            found.push(
-              `${relative(root, file)}:${String(i + 1)}: ${line.trim()}`,
-            );
-          }
+    const lines = readFileSync(file, "utf8").split("\n");
+    lines.forEach((line, i) => {
+      if (allowed.some((ok) => ok.test(line))) return;
+      // JSX text wraps, so a phrase can start on one line and end on the next.
+      const next = lines[i + 1]?.trim() ?? "";
+      const joined = `${line.trim()} ${next}`;
+      for (const pattern of banned) {
+        if (
+          pattern.test(line) ||
+          (pattern.test(joined) && !pattern.test(next))
+        ) {
+          found.push(
+            `${relative(root, file)}:${String(i + 1)}: ${line.trim()}`,
+          );
         }
-      });
+      }
+    });
   }
   return found;
 }
@@ -47,8 +52,8 @@ test("the docs site's pages and metadata make no swap or App Kit claim", () => {
         /SwapTab/,
         /useWhiskSwap/,
         /kitKey/i,
-        /kit key/i,
-        /App Kit/,
+        /kit\s+key/i,
+        /App\s+Kit/,
         /\bswaps?\b/i,
       ],
       [/display: "swap"/],

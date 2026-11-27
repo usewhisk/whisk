@@ -45,8 +45,8 @@ export function Footer() {
         <div className="sm:max-w-xs">
           <Logo />
           <p className="mt-3 text-sm text-foreground/75 md:text-base">
-            Drop-in USDC send & bridge widget for React. Built on Circle App
-            Kit.
+            Drop-in USDC send & bridge widget for React. Built directly on
+            Circle&apos;s CCTP V2.
           </p>
         </div>
 
