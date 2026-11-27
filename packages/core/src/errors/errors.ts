@@ -318,16 +318,6 @@ const REJECTION_PATTERNS = /user rejected|user denied|rejected by user/i;
 const REJECTION_MESSAGE = "You cancelled the transaction in your wallet.";
 
 /**
- * Swap and routing APIs say this when no quote exists for the pair,
- * direction, or size. Common on testnet, where liquidity is thin and often
- * one-directional.
- */
-const NO_ROUTE_PATTERNS =
-  /no route|route or resource not found|route not found/i;
-const NO_ROUTE_MESSAGE =
-  "No quote available for this pair right now. Try again in a moment or use a different amount.";
-
-/**
  * viem and App Kit errors append a verbose dump to a short first line
  * ("Request Arguments: …", "Details: …", "Version: viem@x"). Surface only the
  * human part: the first line, minus App Kit's "Unknown blockchain error on
@@ -398,14 +388,6 @@ export function toWhiskError(
 
   if (REJECTION_PATTERNS.test(message)) {
     return new UserRejectedError(REJECTION_MESSAGE, err);
-  }
-  if (NO_ROUTE_PATTERNS.test(message)) {
-    return new WhiskError({
-      code: "UNKNOWN",
-      message: NO_ROUTE_MESSAGE,
-      retryable: false,
-      cause: err,
-    });
   }
   if (TRANSIENT_PATTERNS.test(message)) {
     return new NetworkError(cleanErrorMessage(message), err);

@@ -175,8 +175,8 @@ export function RecipesShowcase({ className }: { className?: string }) {
             Each tab is a basic integration that shows how Whisk slots into a
             different kind of product. They aren't finished apps. They're
             starting points you can clone and adapt. Whisk isn't limited to
-            these use cases. It fits anywhere a USDC send, bridge, or swap
-            belongs.
+            these use cases. It fits anywhere a USDC payment or cross-chain
+            transfer belongs.
           </p>
         </header>
 

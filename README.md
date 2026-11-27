@@ -18,9 +18,9 @@ Drop-in React component: same-chain sends and cross-ecosystem bridges over CCTP 
 
 ## What is Whisk?
 
-Whisk is a drop-in React component for USDC payments. One React
-component, four ecosystems, native CCTP V2 Fast Transfers under the
-hood:
+Whisk is a drop-in React component for USDC payments. It moves USDC
+between chains and does not swap tokens. One React component, four
+ecosystems, native CCTP V2 Fast Transfers under the hood:
 
 - **Send** USDC to any address on the same chain
 - **Bridge** USDC across chains and ecosystems via CCTP V2

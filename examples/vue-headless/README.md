@@ -34,9 +34,9 @@ flow.
   `useWhiskEngine`, similar to the React example.
 - Two chains (Base Sepolia → Arc Testnet) wired in the engine.
   Add to `chains:` in `useWhiskEngine.ts` to widen.
-- No swap, no Unified Balance, no refund — those are all
-  available on the same `engine` object, this recipe just
-  doesn't surface them. Same composable pattern works for each.
+- No refund flow. `refund` is on the same `engine` object; this
+  recipe just doesn't surface it. The same composable pattern
+  works for it.
 
 ## What you don't get vs `@usewhisk/react`
 

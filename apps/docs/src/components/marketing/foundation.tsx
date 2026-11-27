@@ -10,7 +10,7 @@ import { FramedSection } from "./framed-section";
  * "Built on a solid foundation" — the trust strip.
  *
  * Two prominent stack tiles call out the two things that *actually*
- * power Whisk: Circle (App Kit + CCTP) and Arc Network. Underneath, a
+ * power Whisk: Circle (CCTP V2) and Arc Network. Underneath, a
  * thin band of animated stats backs them up with numbers.
  */
 export function Foundation({ className }: { className?: string }) {
@@ -37,7 +37,7 @@ export function Foundation({ className }: { className?: string }) {
         <div className="mt-16 grid gap-6 lg:grid-cols-2">
           <BigTile
             name="Circle"
-            tag="App Kit · CCTP · Iris"
+            tag="CCTP V2 · Iris · Forwarder"
             body="The wallet engine, the chain support, and the cross-chain transfer protocol. Whisk talks to Circle's SDK so you don't have to integrate three things separately."
             mark={
               <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-background ring-1 ring-border/60">

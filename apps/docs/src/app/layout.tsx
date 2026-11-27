@@ -57,7 +57,7 @@ export const metadata: Metadata = {
     template: "%s · Whisk",
   },
   description:
-    "A React widget that sends, bridges, and swaps USDC across any chain. Built on Circle App Kit. Open source under MIT.",
+    "A React widget that sends and bridges USDC across chains over Circle's CCTP V2. Open source under MIT.",
   keywords: [
     "Whisk",
     "USDC",
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     "stablecoin payments",
     "cross-chain",
     "payment widget",
-    "Circle App Kit",
+    "Circle",
     "CCTP",
     "Web3",
   ],
@@ -99,7 +99,7 @@ export const metadata: Metadata = {
     siteName: "Whisk",
     title: "Whisk · React widget for USDC payments across chains",
     description:
-      "Send, bridge, and swap USDC across any chain with one React widget. Built on Circle App Kit, open source under MIT.",
+      "Send and bridge USDC across chains with one React widget, straight over Circle's CCTP V2. Open source under MIT.",
     url: SITE_URL,
     images: [
       {
@@ -114,7 +114,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Whisk · React widget for USDC payments across chains",
     description:
-      "One React widget for USDC payments across chains. Handles sends, bridges, and swaps. Built on Circle App Kit. MIT licensed.",
+      "One React widget for USDC payments across chains. Sends and bridges USDC over Circle's CCTP V2. MIT licensed.",
     images: [
       {
         url: "/thumbnail.png",

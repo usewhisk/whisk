@@ -193,8 +193,7 @@ function StageConnect() {
         <span className="font-semibold">Connect to continue</span>
       </div>
       <p className="mx-auto max-w-xs text-xs text-foreground/75">
-        Send, bridge, or swap USDC across any chain. Whisk never holds your
-        keys.
+        Send or bridge USDC across chains. Whisk never holds your keys.
       </p>
       <PrimaryButton>Connect wallet</PrimaryButton>
     </motion.div>

@@ -34,7 +34,7 @@ const AUDIENCES: Audience[] = [
     bullets: [
       {
         title: "Headless or styled, your call",
-        body: "Mount the card, or call useWhisk / useWhiskSwap and own the UI. Same engine, your design system.",
+        body: "Mount the card, or call useWhisk and own the UI. Same engine, your design system.",
         Icon: Code2,
       },
       {
@@ -53,7 +53,7 @@ const AUDIENCES: Audience[] = [
     id: "companies",
     label: "Companies",
     blurb:
-      "Ship a USDC send, bridge, or swap surface this sprint without standing up a wallet team. Whisk is the production payment layer, on day one.",
+      "Ship a USDC send or cross-chain payment this sprint without standing up a wallet team. Whisk is the production payment layer, on day one.",
     bullets: [
       {
         title: "Production-grade safety net",
@@ -67,7 +67,7 @@ const AUDIENCES: Audience[] = [
       },
       {
         title: "Wallet support without the maintenance",
-        body: "Every wallet App Kit supports (MetaMask, WalletConnect, Coinbase, Phantom) without you tracking provider upgrades.",
+        body: "MetaMask, WalletConnect, Coinbase, Phantom and the other common wallets, without you tracking provider upgrades.",
         Icon: Wallet,
       },
     ],

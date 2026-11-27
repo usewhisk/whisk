@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 
 const FEATURES = [
   {
-    title: "Every chain App Kit supports",
+    title: "Every chain CCTP V2 reaches",
     body: "18 testnets, 21 mainnets. Arc, Base, Arbitrum, Optimism, Linea, Sonic, Sei, HyperEVM, Monad, and on. One widget, one config.",
     Icon: Globe2,
     span: "md:col-span-2",
@@ -63,7 +63,7 @@ const FEATURES = [
   },
   {
     title: "Hooks if you want them",
-    body: "Skip the styled card and call `useWhisk`, `useWhiskSwap`, `useWhiskAccount` directly. Same engine, your UI.",
+    body: "Skip the styled card and call `useWhisk` and `useWhiskAccount` directly. Same engine, your UI.",
     Icon: Code2,
     span: "md:col-span-1",
     visual: <HeadlessVisual />,
