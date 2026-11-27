@@ -81,7 +81,7 @@ describe("buildCustomFeeEntries", () => {
     expect(entries[0]?.recipient).toBe(MERCHANT);
   });
 
-  it("ignores `bps` (reserved for Swap)", () => {
+  it("ignores `bps`, a percentage fee not built yet", () => {
     expect(
       buildCustomFeeEntries({ bps: 50, recipient: MERCHANT }, "USDC"),
     ).toEqual([]);
