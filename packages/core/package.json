@@ -86,7 +86,7 @@
     "tsx": "^4.22.4",
     "typescript": "^5.7.2",
     "viem": "^2.57.5",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.5"
   },
   "peerDependencies": {
     "viem": ">=2.57.5 <3"
